@@ -1,0 +1,163 @@
+# Dependencies
+node_modules/
+backend/venv/
+backend/.venv/
+.venv/
+**/node_modules/
+
+# Build outputs
+frontend/dist/
+frontend/build/
+backend/__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+backend/.env*
+frontend/.env*
+**/.env*
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+backend/*.log
+frontend/*.log
+
+# Test coverage
+coverage/
+frontend/coverage/
+backend/htmlcov/
+backend/.coverage
+backend/coverage.xml
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+backend/*.db
+backend/activity_detail.db
+backend/stridedelta.db
+stridedelta.db
+
+# Production deployment
+backend/instance/
+backend/tmp/
+
+# Python specific
+*.egg-info/
+backend/dist/
+backend/build/
+.pytest_cache/
+backend/.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Frontend specific
+frontend/.next/
+frontend/out/
+frontend/.nuxt/
+frontend/.vercel
+
+# Temporary files
+temp/
+tmp/
+*.tmp
+
+# Archive (keep structure but ignore content)
+archive/**/*
+!archive/.gitkeep
+!archive/README.md
+
+# Models and data (can be large)
+models/*.joblib
+models/*.pkl
+data/raw/*.json
+data/processed/
+AutoViz_Plots/
+
+# Data files
+backend/data/
+backend/raw_calendar*.json
+backend/parsed_sessions/
+backend/imported_calendar*.json
+backend/problematic_activities.csv
+
+# Process IDs
+.backend_pid
+.frontend_pid
+.db_viewer_pid
+
+# Pip artifacts
+backend/=*
+
+# GPX test files
+*.gpx
+
+# Test output files at root
+test_*.sh
+test_*.html
+test_*.py
+plan.csv
+
+# Shell scripts with potential secrets at root
+reset_strava_connection.sh
+restart_clean.sh
+start_app_network.sh
+stop_app.sh
+
+# Test files
+test_import.csv
+backend/test_*.py
+backend/fix_*.py
+backend/get_*.py
+backend/update_*.py
+backend/diagnose_*.py
+backend/recreate_*.py
+backend/create_*.py
+backend/analyze_*.py
+backend/normalize_*.py
+backend/reset_*.py
+
+# Scripts utilitaires contenant des données sensibles
+configure_strava_secret.sh
+fix_strava_auth.sh
+check_services.sh
+
+# Ralph loop logs
+.ralph-logs/
+
+# Documentation files (temporaires)
+*.md
+!README.md
+!CLAUDE.md
+!PRODUCTION_PLAN.md
+!PLAN_GUIDE.md
+!LICENSE
+!docs/**/*.md

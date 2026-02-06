@@ -1,0 +1,1488 @@
+{
+  "pipeline_execution": {
+    "input_file": "input_file",
+    "total_events_processed": 44,
+    "sessions_parsed": 44,
+    "sessions_corrected": 44,
+    "execution_timestamp": "2025-07-28T02:57:28.097893"
+  },
+  "parsing_results": {
+    "confidence_scores": {
+      "average": 0.7340909090909089,
+      "min": 0.7,
+      "max": 0.8999999999999999
+    },
+    "types_detected": {
+      "Endurance": 33,
+      "Salle": 1,
+      "Course": 9,
+      "Allure": 1
+    },
+    "intensities_detected": {
+      "Faible": 41,
+      "Élevée": 3
+    }
+  },
+  "corrections_applied": {
+    "total_corrections": 4,
+    "corrections_by_type": {
+      "distance": 4
+    },
+    "corrections_applied": [
+      "Distance estimée corrigée",
+      "Distance estimée corrigée",
+      "Distance estimée corrigée",
+      "Distance estimée corrigée"
+    ]
+  },
+  "validation_results": {
+    "total_sessions": 44,
+    "valid_sessions": 27,
+    "sessions_with_issues": 17,
+    "total_issues": 34,
+    "issues_by_category": {
+      "structure_validation": 31,
+      "type_detection": 3
+    },
+    "sessions_validation": [
+      {
+        "session_summary": "🏃 Endurance active 50min",
+        "session_date": "2025-07-22T18:00:00Z",
+        "issues": [
+          "Doublons potentiels détectés dans les séries principales",
+          "Durée totale des séries (100min) dépasse la durée de la session (50min)"
+        ],
+        "validation_score": 0.6000000000000001,
+        "confidence_score": 0.7
+      },
+      {
+        "session_summary": "🏃 Endurance active 50min",
+        "session_date": "2025-07-23T17:00:00Z",
+        "issues": [
+          "Doublons potentiels détectés dans les séries principales",
+          "Durée totale des séries (100min) dépasse la durée de la session (50min)"
+        ],
+        "validation_score": 0.6000000000000001,
+        "confidence_score": 0.7
+      },
+      {
+        "session_summary": "💪 Salle",
+        "session_date": "2025-07-24T08:00:00Z",
+        "issues": [],
+        "validation_score": 0.0,
+        "confidence_score": 0.7999999999999999
+      },
+      {
+        "session_summary": "🏃 Seuil 2x2km + 4x1min",
+        "session_date": "2025-07-25T13:15:00Z",
+        "issues": [
+          "Intensité 'Élevée' incohérente avec le type 'Endurance'",
+          "Doublons potentiels détectés dans les séries principales"
+        ],
+        "validation_score": 0.5,
+        "confidence_score": 0.7999999999999999
+      },
+      {
+        "session_summary": "🏃 Endurance 1h",
+        "session_date": "2025-07-27T06:00:00Z",
+        "issues": [],
+        "validation_score": 0.0,
+        "confidence_score": 0.7
+      },
+      {
+        "session_summary": "🏃 Endurance 1h",
+        "session_date": "2025-07-29T06:00:00Z",
+        "issues": [],
+        "validation_score": 0.0,
+        "confidence_score": 0.7
+      },
+      {
+        "session_summary": "🏃 Rando/Course 2h30",
+        "session_date": "2025-07-30T06:00:00Z",
+        "issues": [],
+        "validation_score": 0.0,
+        "confidence_score": 0.7999999999999999
+      },
+      {
+        "session_summary": "🏃 Pyramide 4min + 5min + 6min + 5min + 4min",
+        "session_date": "2025-08-01T06:00:00Z",
+        "issues": [
+          "Doublons potentiels détectés dans les séries principales",
+          "Durée totale des séries (128min) dépasse la durée de la session (49min)"
+        ],
+        "validation_score": 0.6000000000000001,
+        "confidence_score": 0.7
+      },
+      {
+        "session_summary": "🏃 Endurance 1h",
+        "session_date": "2025-08-03T06:00:00Z",
+        "issues": [],
+        "validation_score": 0.0,
+        "confidence_score": 0.7
+      },
+      {
+        "session_summary": "🏃 Endurance 50min",
+        "session_date": "2025-08-05T06:00:00Z",
+        "issues": [
+          "Doublons potentiels détectés dans les séries principales",
+          "Durée totale des séries (100min) dépasse la durée de la session (50min)"
+        ],
+        "validation_score": 0.6000000000000001,
+        "confidence_score": 0.7
+      },
+      {
+        "session_summary": "🏃 Rando/Course 1h30",
+        "session_date": "2025-08-06T06:00:00Z",
+        "issues": [],
+        "validation_score": 0.0,
+        "confidence_score": 0.7999999999999999
+      },
+      {
+        "session_summary": "🏃 Seuil 4x4min",
+        "session_date": "2025-08-08T06:00:00Z",
+        "issues": [
+          "Doublons potentiels détectés dans les séries principales",
+          "Durée totale des séries (59min) dépasse la durée de la session (47min)"
+        ],
+        "validation_score": 0.6000000000000001,
+        "confidence_score": 0.7
+      },
+      {
+        "session_summary": "🏃 Endurance 1h",
+        "session_date": "2025-08-10T06:00:00Z",
+        "issues": [],
+        "validation_score": 0.0,
+        "confidence_score": 0.7
+      },
+      {
+        "session_summary": "🏃 Endurance 1h",
+        "session_date": "2025-08-12T06:00:00Z",
+        "issues": [],
+        "validation_score": 0.0,
+        "confidence_score": 0.7
+      },
+      {
+        "session_summary": "🏃 Rando/Course 3h",
+        "session_date": "2025-08-13T06:00:00Z",
+        "issues": [],
+        "validation_score": 0.0,
+        "confidence_score": 0.7999999999999999
+      },
+      {
+        "session_summary": "🏃 Allure Semi : 2x10min + 4x30sec",
+        "session_date": "2025-08-15T06:00:00Z",
+        "issues": [
+          "Intensité 'Élevée' incohérente avec le type 'Endurance'",
+          "Doublons potentiels détectés dans les séries principales",
+          "Durée totale des séries (60min) dépasse la durée de la session (51min)"
+        ],
+        "validation_score": 0.8,
+        "confidence_score": 0.7999999999999999
+      },
+      {
+        "session_summary": "🏃 Endurance 50min",
+        "session_date": "2025-08-17T06:00:00Z",
+        "issues": [
+          "Doublons potentiels détectés dans les séries principales",
+          "Durée totale des séries (100min) dépasse la durée de la session (50min)"
+        ],
+        "validation_score": 0.6000000000000001,
+        "confidence_score": 0.7
+      },
+      {
+        "session_summary": "🏃 Endurance 50min",
+        "session_date": "2025-08-19T06:00:00Z",
+        "issues": [
+          "Doublons potentiels détectés dans les séries principales",
+          "Durée totale des séries (100min) dépasse la durée de la session (50min)"
+        ],
+        "validation_score": 0.6000000000000001,
+        "confidence_score": 0.7
+      },
+      {
+        "session_summary": "🏃 Rando/Course 2h",
+        "session_date": "2025-08-20T06:00:00Z",
+        "issues": [],
+        "validation_score": 0.0,
+        "confidence_score": 0.7999999999999999
+      },
+      {
+        "session_summary": "🏃 Allure Semi : 8km + 4x30sec",
+        "session_date": "2025-08-22T06:00:00Z",
+        "issues": [],
+        "validation_score": 0.0,
+        "confidence_score": 0.7
+      },
+      {
+        "session_summary": "🏃 Endurance 55min",
+        "session_date": "2025-08-24T06:00:00Z",
+        "issues": [
+          "Doublons potentiels détectés dans les séries principales",
+          "Durée totale des séries (110min) dépasse la durée de la session (55min)"
+        ],
+        "validation_score": 0.6000000000000001,
+        "confidence_score": 0.7
+      },
+      {
+        "session_summary": "🏃 Endurance 1h",
+        "session_date": "2025-08-26T06:00:00Z",
+        "issues": [],
+        "validation_score": 0.0,
+        "confidence_score": 0.7
+      },
+      {
+        "session_summary": "🏃 Rando/Course 3h",
+        "session_date": "2025-08-27T06:00:00Z",
+        "issues": [],
+        "validation_score": 0.0,
+        "confidence_score": 0.7999999999999999
+      },
+      {
+        "session_summary": "🏃 Allure Semi : 2x5km",
+        "session_date": "2025-08-29T06:00:00Z",
+        "issues": [],
+        "validation_score": 0.0,
+        "confidence_score": 0.7
+      },
+      {
+        "session_summary": "🏃 Endurance 1h",
+        "session_date": "2025-08-31T06:00:00Z",
+        "issues": [],
+        "validation_score": 0.0,
+        "confidence_score": 0.7
+      },
+      {
+        "session_summary": "🏃 Endurance 55min",
+        "session_date": "2025-09-02T06:00:00Z",
+        "issues": [
+          "Doublons potentiels détectés dans les séries principales",
+          "Durée totale des séries (110min) dépasse la durée de la session (55min)"
+        ],
+        "validation_score": 0.6000000000000001,
+        "confidence_score": 0.7
+      },
+      {
+        "session_summary": "🏃 Rando/Course 2h",
+        "session_date": "2025-09-03T06:00:00Z",
+        "issues": [],
+        "validation_score": 0.0,
+        "confidence_score": 0.7999999999999999
+      },
+      {
+        "session_summary": "🏃 Seuil 2x6min",
+        "session_date": "2025-09-05T06:00:00Z",
+        "issues": [
+          "Doublons potentiels détectés dans les séries principales",
+          "Durée totale des séries (56min) dépasse la durée de la session (44min)"
+        ],
+        "validation_score": 0.6000000000000001,
+        "confidence_score": 0.7
+      },
+      {
+        "session_summary": "🏃 Endurance 1h",
+        "session_date": "2025-09-07T06:00:00Z",
+        "issues": [],
+        "validation_score": 0.0,
+        "confidence_score": 0.7
+      },
+      {
+        "session_summary": "🏃 Endurance 50min",
+        "session_date": "2025-09-09T06:00:00Z",
+        "issues": [
+          "Doublons potentiels détectés dans les séries principales",
+          "Durée totale des séries (100min) dépasse la durée de la session (50min)"
+        ],
+        "validation_score": 0.6000000000000001,
+        "confidence_score": 0.7
+      },
+      {
+        "session_summary": "🏃 Rando/Course 3h",
+        "session_date": "2025-09-10T06:00:00Z",
+        "issues": [],
+        "validation_score": 0.0,
+        "confidence_score": 0.7999999999999999
+      },
+      {
+        "session_summary": "🏃 Seuil 10min + 4x3min",
+        "session_date": "2025-09-12T06:00:00Z",
+        "issues": [
+          "Doublons potentiels détectés dans les séries principales",
+          "Durée totale des séries (64min) dépasse la durée de la session (57min)"
+        ],
+        "validation_score": 0.6000000000000001,
+        "confidence_score": 0.7
+      },
+      {
+        "session_summary": "🏃 Endurance 1h",
+        "session_date": "2025-09-14T06:00:00Z",
+        "issues": [],
+        "validation_score": 0.0,
+        "confidence_score": 0.7
+      },
+      {
+        "session_summary": "🏃 Endurance active 1h",
+        "session_date": "2025-09-16T06:00:00Z",
+        "issues": [],
+        "validation_score": 0.0,
+        "confidence_score": 0.7
+      },
+      {
+        "session_summary": "🏃 Rando/Course 1h30",
+        "session_date": "2025-09-17T06:00:00Z",
+        "issues": [],
+        "validation_score": 0.0,
+        "confidence_score": 0.7999999999999999
+      },
+      {
+        "session_summary": "🏃 Allure Semi : 3x12min",
+        "session_date": "2025-09-19T06:00:00Z",
+        "issues": [
+          "Doublons potentiels détectés dans les séries principales",
+          "Durée totale des séries (96min) dépasse la durée de la session (71min)"
+        ],
+        "validation_score": 0.6000000000000001,
+        "confidence_score": 0.7
+      },
+      {
+        "session_summary": "🏃 Endurance 1h",
+        "session_date": "2025-09-21T06:00:00Z",
+        "issues": [],
+        "validation_score": 0.0,
+        "confidence_score": 0.7
+      },
+      {
+        "session_summary": "🏃 Endurance 1h",
+        "session_date": "2025-09-23T06:00:00Z",
+        "issues": [],
+        "validation_score": 0.0,
+        "confidence_score": 0.7
+      },
+      {
+        "session_summary": "🏃 Rando/Course 1h30",
+        "session_date": "2025-09-24T06:00:00Z",
+        "issues": [],
+        "validation_score": 0.0,
+        "confidence_score": 0.7999999999999999
+      },
+      {
+        "session_summary": "🏃 Allure Semi : 4km + 4x30sec",
+        "session_date": "2025-09-26T06:00:00Z",
+        "issues": [
+          "Intensité 'Élevée' incohérente avec le type 'Endurance'"
+        ],
+        "validation_score": 0.2,
+        "confidence_score": 0.7999999999999999
+      },
+      {
+        "session_summary": "🏃 Endurance 1h",
+        "session_date": "2025-09-28T06:00:00Z",
+        "issues": [],
+        "validation_score": 0.0,
+        "confidence_score": 0.7
+      },
+      {
+        "session_summary": "🏃 Endurance active 50min",
+        "session_date": "2025-10-01T06:00:00Z",
+        "issues": [
+          "Doublons potentiels détectés dans les séries principales",
+          "Durée totale des séries (100min) dépasse la durée de la session (50min)"
+        ],
+        "validation_score": 0.6000000000000001,
+        "confidence_score": 0.7
+      },
+      {
+        "session_summary": "🏃 Allure Semi : 1500m",
+        "session_date": "2025-10-02T06:00:00Z",
+        "issues": [],
+        "validation_score": 0.0,
+        "confidence_score": 0.8999999999999999
+      },
+      {
+        "session_summary": "🏃 Veille de course : Lignes droites 4x15sec",
+        "session_date": "2025-10-03T06:00:00Z",
+        "issues": [],
+        "validation_score": 0.0,
+        "confidence_score": 0.7
+      }
+    ],
+    "validation_rate": 0.6136363636363636,
+    "average_validation_score": 0.22499999999999992
+  },
+  "sessions_details": [
+    {
+      "summary": "🏃 Endurance active 50min",
+      "date": "2025-07-22T18:00:00Z",
+      "type": "Endurance",
+      "intensity": "Faible",
+      "confidence_score": 0.7,
+      "corrections": [],
+      "main_sets": [
+        {
+          "type": "bloc",
+          "duration_minutes": 50,
+          "pace": null,
+          "repetitions": 1
+        },
+        {
+          "type": "bloc",
+          "duration_minutes": 50,
+          "pace": null,
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "summary": "🏃 Endurance active 50min",
+      "date": "2025-07-23T17:00:00Z",
+      "type": "Endurance",
+      "intensity": "Faible",
+      "confidence_score": 0.7,
+      "corrections": [],
+      "main_sets": [
+        {
+          "type": "bloc",
+          "duration_minutes": 50,
+          "pace": null,
+          "repetitions": 1
+        },
+        {
+          "type": "bloc",
+          "duration_minutes": 50,
+          "pace": null,
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "summary": "💪 Salle",
+      "date": "2025-07-24T08:00:00Z",
+      "type": "Salle",
+      "intensity": "Faible",
+      "confidence_score": 0.7999999999999999,
+      "corrections": [],
+      "main_sets": [
+        {
+          "type": "endurance",
+          "duration_minutes": 90,
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "summary": "🏃 Seuil 2x2km + 4x1min",
+      "date": "2025-07-25T13:15:00Z",
+      "type": "Endurance",
+      "intensity": "Élevée",
+      "confidence_score": 0.7999999999999999,
+      "corrections": [
+        "Distance estimée corrigée"
+      ],
+      "main_sets": [
+        {
+          "type": "intervalle",
+          "repetitions": 4,
+          "duration_minutes": 1,
+          "pace": null,
+          "recovery": "2min",
+          "total_duration": 10
+        },
+        {
+          "type": "intervalle",
+          "repetitions": 4,
+          "duration_minutes": 1,
+          "pace": "4:19/km (environ 190bpm) avec 1min de récupération entre chaque 1min + 5min entre 6:40 et 7:00 par km (environ 134-142bpm)",
+          "recovery": "2min",
+          "total_duration": 10
+        },
+        {
+          "type": "bloc",
+          "duration_minutes": 25,
+          "pace": null,
+          "repetitions": 1
+        },
+        {
+          "type": "bloc",
+          "duration_minutes": 2,
+          "pace": null,
+          "repetitions": 1
+        },
+        {
+          "type": "bloc",
+          "duration_minutes": 2,
+          "pace": null,
+          "repetitions": 1
+        },
+        {
+          "type": "bloc",
+          "duration_minutes": 5,
+          "pace": null,
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "summary": "🏃 Endurance 1h",
+      "date": "2025-07-27T06:00:00Z",
+      "type": "Endurance",
+      "intensity": "Faible",
+      "confidence_score": 0.7,
+      "corrections": [],
+      "main_sets": [
+        {
+          "type": "endurance",
+          "duration_minutes": 60,
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "summary": "🏃 Endurance 1h",
+      "date": "2025-07-29T06:00:00Z",
+      "type": "Endurance",
+      "intensity": "Faible",
+      "confidence_score": 0.7,
+      "corrections": [],
+      "main_sets": [
+        {
+          "type": "endurance",
+          "duration_minutes": 60,
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "summary": "🏃 Rando/Course 2h30",
+      "date": "2025-07-30T06:00:00Z",
+      "type": "Course",
+      "intensity": "Faible",
+      "confidence_score": 0.7999999999999999,
+      "corrections": [],
+      "main_sets": [
+        {
+          "type": "endurance",
+          "duration_minutes": 150,
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "summary": "🏃 Pyramide 4min + 5min + 6min + 5min + 4min",
+      "date": "2025-08-01T06:00:00Z",
+      "type": "Endurance",
+      "intensity": "Faible",
+      "confidence_score": 0.7,
+      "corrections": [],
+      "main_sets": [
+        {
+          "type": "bloc",
+          "duration_minutes": 4,
+          "pace": null,
+          "repetitions": 1
+        },
+        {
+          "type": "bloc",
+          "duration_minutes": 5,
+          "pace": null,
+          "repetitions": 1
+        },
+        {
+          "type": "bloc",
+          "duration_minutes": 6,
+          "pace": null,
+          "repetitions": 1
+        },
+        {
+          "type": "bloc",
+          "duration_minutes": 5,
+          "pace": null,
+          "repetitions": 1
+        },
+        {
+          "type": "bloc",
+          "duration_minutes": 4,
+          "pace": null,
+          "repetitions": 1
+        },
+        {
+          "type": "bloc",
+          "duration_minutes": 20,
+          "pace": null,
+          "repetitions": 1
+        },
+        {
+          "type": "bloc",
+          "duration_minutes": 4,
+          "pace": "5:03/km (environ 171bpm) + 1min30 de récupération + 5min en 5:03/km (environ 171bpm) + 2min de récupération + 6min en 5:03/km (environ 171bpm) + 2min30 de récupération + 5min en 5:03/km (environ 171bpm) + 2min de récupération + 4min en 5:03/km (environ 171bpm) + 5min entre 6:40 et 7:00 par km (environ 134-142bpm)",
+          "repetitions": 1
+        },
+        {
+          "type": "pyramide",
+          "duration_minutes": 4,
+          "repetitions": 1
+        },
+        {
+          "type": "pyramide",
+          "duration_minutes": 5,
+          "repetitions": 1
+        },
+        {
+          "type": "pyramide",
+          "duration_minutes": 6,
+          "repetitions": 1
+        },
+        {
+          "type": "pyramide",
+          "duration_minutes": 5,
+          "repetitions": 1
+        },
+        {
+          "type": "pyramide",
+          "duration_minutes": 4,
+          "repetitions": 1
+        },
+        {
+          "type": "pyramide",
+          "duration_minutes": 20,
+          "repetitions": 1
+        },
+        {
+          "type": "pyramide",
+          "duration_minutes": 4,
+          "repetitions": 1
+        },
+        {
+          "type": "pyramide",
+          "duration_minutes": 1,
+          "repetitions": 1
+        },
+        {
+          "type": "pyramide",
+          "duration_minutes": 5,
+          "repetitions": 1
+        },
+        {
+          "type": "pyramide",
+          "duration_minutes": 2,
+          "repetitions": 1
+        },
+        {
+          "type": "pyramide",
+          "duration_minutes": 6,
+          "repetitions": 1
+        },
+        {
+          "type": "pyramide",
+          "duration_minutes": 2,
+          "repetitions": 1
+        },
+        {
+          "type": "pyramide",
+          "duration_minutes": 5,
+          "repetitions": 1
+        },
+        {
+          "type": "pyramide",
+          "duration_minutes": 2,
+          "repetitions": 1
+        },
+        {
+          "type": "pyramide",
+          "duration_minutes": 4,
+          "repetitions": 1
+        },
+        {
+          "type": "pyramide",
+          "duration_minutes": 5,
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "summary": "🏃 Endurance 1h",
+      "date": "2025-08-03T06:00:00Z",
+      "type": "Endurance",
+      "intensity": "Faible",
+      "confidence_score": 0.7,
+      "corrections": [],
+      "main_sets": [
+        {
+          "type": "endurance",
+          "duration_minutes": 60,
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "summary": "🏃 Endurance 50min",
+      "date": "2025-08-05T06:00:00Z",
+      "type": "Endurance",
+      "intensity": "Faible",
+      "confidence_score": 0.7,
+      "corrections": [],
+      "main_sets": [
+        {
+          "type": "bloc",
+          "duration_minutes": 50,
+          "pace": null,
+          "repetitions": 1
+        },
+        {
+          "type": "bloc",
+          "duration_minutes": 50,
+          "pace": null,
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "summary": "🏃 Rando/Course 1h30",
+      "date": "2025-08-06T06:00:00Z",
+      "type": "Course",
+      "intensity": "Faible",
+      "confidence_score": 0.7999999999999999,
+      "corrections": [],
+      "main_sets": [
+        {
+          "type": "endurance",
+          "duration_minutes": 90,
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "summary": "🏃 Seuil 4x4min",
+      "date": "2025-08-08T06:00:00Z",
+      "type": "Endurance",
+      "intensity": "Faible",
+      "confidence_score": 0.7,
+      "corrections": [],
+      "main_sets": [
+        {
+          "type": "intervalle",
+          "repetitions": 4,
+          "duration_minutes": 4,
+          "pace": null,
+          "recovery": "2min",
+          "total_duration": 22
+        },
+        {
+          "type": "intervalle",
+          "repetitions": 4,
+          "duration_minutes": 4,
+          "pace": "5:03/km (environ 171bpm) avec 2min de récupération entre chaque 4min + 5min entre 6:40 et 7:00 par km (environ 134-142bpm)",
+          "recovery": "2min",
+          "total_duration": 22
+        },
+        {
+          "type": "bloc",
+          "duration_minutes": 20,
+          "pace": null,
+          "repetitions": 1
+        },
+        {
+          "type": "bloc",
+          "duration_minutes": 2,
+          "pace": null,
+          "repetitions": 1
+        },
+        {
+          "type": "bloc",
+          "duration_minutes": 5,
+          "pace": null,
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "summary": "🏃 Endurance 1h",
+      "date": "2025-08-10T06:00:00Z",
+      "type": "Endurance",
+      "intensity": "Faible",
+      "confidence_score": 0.7,
+      "corrections": [],
+      "main_sets": [
+        {
+          "type": "endurance",
+          "duration_minutes": 60,
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "summary": "🏃 Endurance 1h",
+      "date": "2025-08-12T06:00:00Z",
+      "type": "Endurance",
+      "intensity": "Faible",
+      "confidence_score": 0.7,
+      "corrections": [],
+      "main_sets": [
+        {
+          "type": "endurance",
+          "duration_minutes": 60,
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "summary": "🏃 Rando/Course 3h",
+      "date": "2025-08-13T06:00:00Z",
+      "type": "Course",
+      "intensity": "Faible",
+      "confidence_score": 0.7999999999999999,
+      "corrections": [],
+      "main_sets": [
+        {
+          "type": "endurance",
+          "duration_minutes": 180,
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "summary": "🏃 Allure Semi : 2x10min + 4x30sec",
+      "date": "2025-08-15T06:00:00Z",
+      "type": "Endurance",
+      "intensity": "Élevée",
+      "confidence_score": 0.7999999999999999,
+      "corrections": [],
+      "main_sets": [
+        {
+          "type": "intervalle",
+          "repetitions": 2,
+          "duration_minutes": 10,
+          "pace": null,
+          "recovery": "2min",
+          "total_duration": 22
+        },
+        {
+          "type": "intervalle",
+          "repetitions": 2,
+          "duration_minutes": 10,
+          "pace": "5:17/km (environ 165bpm) avec 2min de récupération entre chaque 10min + 2min de récupération + 4x30sec en 4:19/km (environ 190bpm) avec 30sec de récupération entre chaque 30sec + 5min entre 6:40 et 7:00 par km (environ 134-142bpm)",
+          "recovery": "2min",
+          "total_duration": 22
+        },
+        {
+          "type": "bloc",
+          "duration_minutes": 0,
+          "pace": null,
+          "repetitions": 1
+        },
+        {
+          "type": "bloc",
+          "duration_minutes": 20,
+          "pace": null,
+          "repetitions": 1
+        },
+        {
+          "type": "bloc",
+          "duration_minutes": 0,
+          "pace": "5:17/km (environ 165bpm) avec 2min de récupération entre chaque 10min + 2min de récupération + 4x30sec en 4:19/km (environ 190bpm) avec 30sec de récupération entre chaque 30sec + 5min entre 6:40 et 7:00 par km (environ 134-142bpm)",
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "summary": "🏃 Endurance 50min",
+      "date": "2025-08-17T06:00:00Z",
+      "type": "Endurance",
+      "intensity": "Faible",
+      "confidence_score": 0.7,
+      "corrections": [],
+      "main_sets": [
+        {
+          "type": "bloc",
+          "duration_minutes": 50,
+          "pace": null,
+          "repetitions": 1
+        },
+        {
+          "type": "bloc",
+          "duration_minutes": 50,
+          "pace": null,
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "summary": "🏃 Endurance 50min",
+      "date": "2025-08-19T06:00:00Z",
+      "type": "Endurance",
+      "intensity": "Faible",
+      "confidence_score": 0.7,
+      "corrections": [],
+      "main_sets": [
+        {
+          "type": "bloc",
+          "duration_minutes": 50,
+          "pace": null,
+          "repetitions": 1
+        },
+        {
+          "type": "bloc",
+          "duration_minutes": 50,
+          "pace": null,
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "summary": "🏃 Rando/Course 2h",
+      "date": "2025-08-20T06:00:00Z",
+      "type": "Course",
+      "intensity": "Faible",
+      "confidence_score": 0.7999999999999999,
+      "corrections": [],
+      "main_sets": [
+        {
+          "type": "endurance",
+          "duration_minutes": 120,
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "summary": "🏃 Allure Semi : 8km + 4x30sec",
+      "date": "2025-08-22T06:00:00Z",
+      "type": "Endurance",
+      "intensity": "Faible",
+      "confidence_score": 0.7,
+      "corrections": [
+        "Distance estimée corrigée"
+      ],
+      "main_sets": [
+        {
+          "type": "bloc",
+          "duration_minutes": 30,
+          "pace": null,
+          "repetitions": 1
+        },
+        {
+          "type": "bloc",
+          "duration_minutes": 3,
+          "pace": null,
+          "repetitions": 1
+        },
+        {
+          "type": "bloc",
+          "duration_minutes": 5,
+          "pace": null,
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "summary": "🏃 Endurance 55min",
+      "date": "2025-08-24T06:00:00Z",
+      "type": "Endurance",
+      "intensity": "Faible",
+      "confidence_score": 0.7,
+      "corrections": [],
+      "main_sets": [
+        {
+          "type": "bloc",
+          "duration_minutes": 55,
+          "pace": null,
+          "repetitions": 1
+        },
+        {
+          "type": "bloc",
+          "duration_minutes": 55,
+          "pace": null,
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "summary": "🏃 Endurance 1h",
+      "date": "2025-08-26T06:00:00Z",
+      "type": "Endurance",
+      "intensity": "Faible",
+      "confidence_score": 0.7,
+      "corrections": [],
+      "main_sets": [
+        {
+          "type": "endurance",
+          "duration_minutes": 60,
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "summary": "🏃 Rando/Course 3h",
+      "date": "2025-08-27T06:00:00Z",
+      "type": "Course",
+      "intensity": "Faible",
+      "confidence_score": 0.7999999999999999,
+      "corrections": [],
+      "main_sets": [
+        {
+          "type": "endurance",
+          "duration_minutes": 180,
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "summary": "🏃 Allure Semi : 2x5km",
+      "date": "2025-08-29T06:00:00Z",
+      "type": "Endurance",
+      "intensity": "Faible",
+      "confidence_score": 0.7,
+      "corrections": [
+        "Distance estimée corrigée"
+      ],
+      "main_sets": [
+        {
+          "type": "bloc",
+          "duration_minutes": 20,
+          "pace": null,
+          "repetitions": 1
+        },
+        {
+          "type": "bloc",
+          "duration_minutes": 4,
+          "pace": null,
+          "repetitions": 1
+        },
+        {
+          "type": "bloc",
+          "duration_minutes": 5,
+          "pace": null,
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "summary": "🏃 Endurance 1h",
+      "date": "2025-08-31T06:00:00Z",
+      "type": "Endurance",
+      "intensity": "Faible",
+      "confidence_score": 0.7,
+      "corrections": [],
+      "main_sets": [
+        {
+          "type": "endurance",
+          "duration_minutes": 60,
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "summary": "🏃 Endurance 55min",
+      "date": "2025-09-02T06:00:00Z",
+      "type": "Endurance",
+      "intensity": "Faible",
+      "confidence_score": 0.7,
+      "corrections": [],
+      "main_sets": [
+        {
+          "type": "bloc",
+          "duration_minutes": 55,
+          "pace": null,
+          "repetitions": 1
+        },
+        {
+          "type": "bloc",
+          "duration_minutes": 55,
+          "pace": null,
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "summary": "🏃 Rando/Course 2h",
+      "date": "2025-09-03T06:00:00Z",
+      "type": "Course",
+      "intensity": "Faible",
+      "confidence_score": 0.7999999999999999,
+      "corrections": [],
+      "main_sets": [
+        {
+          "type": "endurance",
+          "duration_minutes": 120,
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "summary": "🏃 Seuil 2x6min",
+      "date": "2025-09-05T06:00:00Z",
+      "type": "Endurance",
+      "intensity": "Faible",
+      "confidence_score": 0.7,
+      "corrections": [],
+      "main_sets": [
+        {
+          "type": "intervalle",
+          "repetitions": 2,
+          "duration_minutes": 6,
+          "pace": null,
+          "recovery": "2min",
+          "total_duration": 14
+        },
+        {
+          "type": "intervalle",
+          "repetitions": 2,
+          "duration_minutes": 6,
+          "pace": "5:03/km (environ 171bpm) avec 2min de récupération entre chaque 6min + 5min entre 6:40 et 7:00 par km (environ 134-142bpm)",
+          "recovery": "2min",
+          "total_duration": 14
+        },
+        {
+          "type": "bloc",
+          "duration_minutes": 25,
+          "pace": null,
+          "repetitions": 1
+        },
+        {
+          "type": "bloc",
+          "duration_minutes": 2,
+          "pace": null,
+          "repetitions": 1
+        },
+        {
+          "type": "bloc",
+          "duration_minutes": 5,
+          "pace": null,
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "summary": "🏃 Endurance 1h",
+      "date": "2025-09-07T06:00:00Z",
+      "type": "Endurance",
+      "intensity": "Faible",
+      "confidence_score": 0.7,
+      "corrections": [],
+      "main_sets": [
+        {
+          "type": "endurance",
+          "duration_minutes": 60,
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "summary": "🏃 Endurance 50min",
+      "date": "2025-09-09T06:00:00Z",
+      "type": "Endurance",
+      "intensity": "Faible",
+      "confidence_score": 0.7,
+      "corrections": [],
+      "main_sets": [
+        {
+          "type": "bloc",
+          "duration_minutes": 50,
+          "pace": null,
+          "repetitions": 1
+        },
+        {
+          "type": "bloc",
+          "duration_minutes": 50,
+          "pace": null,
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "summary": "🏃 Rando/Course 3h",
+      "date": "2025-09-10T06:00:00Z",
+      "type": "Course",
+      "intensity": "Faible",
+      "confidence_score": 0.7999999999999999,
+      "corrections": [],
+      "main_sets": [
+        {
+          "type": "endurance",
+          "duration_minutes": 180,
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "summary": "🏃 Seuil 10min + 4x3min",
+      "date": "2025-09-12T06:00:00Z",
+      "type": "Endurance",
+      "intensity": "Faible",
+      "confidence_score": 0.7,
+      "corrections": [],
+      "main_sets": [
+        {
+          "type": "intervalle",
+          "repetitions": 4,
+          "duration_minutes": 3,
+          "pace": null,
+          "recovery": "2min",
+          "total_duration": 18
+        },
+        {
+          "type": "intervalle",
+          "repetitions": 4,
+          "duration_minutes": 3,
+          "pace": "4:58/km (environ 173bpm) avec 1min30 de récupération entre chaque 3min + 10min entre 6:40 et 7:00 par km (environ 134-142bpm)",
+          "recovery": "2min",
+          "total_duration": 18
+        },
+        {
+          "type": "bloc",
+          "duration_minutes": 10,
+          "pace": null,
+          "repetitions": 1
+        },
+        {
+          "type": "bloc",
+          "duration_minutes": 20,
+          "pace": null,
+          "repetitions": 1
+        },
+        {
+          "type": "bloc",
+          "duration_minutes": 10,
+          "pace": "5:03/km (environ 171bpm) + 3min de récupération + 4x3min en 4:58/km (environ 173bpm) avec 1min30 de récupération entre chaque 3min + 10min entre 6:40 et 7:00 par km (environ 134-142bpm)",
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "summary": "🏃 Endurance 1h",
+      "date": "2025-09-14T06:00:00Z",
+      "type": "Endurance",
+      "intensity": "Faible",
+      "confidence_score": 0.7,
+      "corrections": [],
+      "main_sets": [
+        {
+          "type": "endurance",
+          "duration_minutes": 60,
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "summary": "🏃 Endurance active 1h",
+      "date": "2025-09-16T06:00:00Z",
+      "type": "Endurance",
+      "intensity": "Faible",
+      "confidence_score": 0.7,
+      "corrections": [],
+      "main_sets": [
+        {
+          "type": "endurance",
+          "duration_minutes": 60,
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "summary": "🏃 Rando/Course 1h30",
+      "date": "2025-09-17T06:00:00Z",
+      "type": "Course",
+      "intensity": "Faible",
+      "confidence_score": 0.7999999999999999,
+      "corrections": [],
+      "main_sets": [
+        {
+          "type": "endurance",
+          "duration_minutes": 90,
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "summary": "🏃 Allure Semi : 3x12min",
+      "date": "2025-09-19T06:00:00Z",
+      "type": "Endurance",
+      "intensity": "Faible",
+      "confidence_score": 0.7,
+      "corrections": [],
+      "main_sets": [
+        {
+          "type": "intervalle",
+          "repetitions": 3,
+          "duration_minutes": 12,
+          "pace": null,
+          "recovery": "2min",
+          "total_duration": 40
+        },
+        {
+          "type": "intervalle",
+          "repetitions": 3,
+          "duration_minutes": 12,
+          "pace": "5:17/km (environ 165bpm) avec 5min de récupération entre chaque 12min + 5min entre 6:40 et 7:00 par km (environ 134-142bpm)",
+          "recovery": "2min",
+          "total_duration": 40
+        },
+        {
+          "type": "bloc",
+          "duration_minutes": 2,
+          "pace": null,
+          "repetitions": 1
+        },
+        {
+          "type": "bloc",
+          "duration_minutes": 20,
+          "pace": null,
+          "repetitions": 1
+        },
+        {
+          "type": "bloc",
+          "duration_minutes": 2,
+          "pace": "5:17/km (environ 165bpm) avec 5min de récupération entre chaque 12min + 5min entre 6:40 et 7:00 par km (environ 134-142bpm)",
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "summary": "🏃 Endurance 1h",
+      "date": "2025-09-21T06:00:00Z",
+      "type": "Endurance",
+      "intensity": "Faible",
+      "confidence_score": 0.7,
+      "corrections": [],
+      "main_sets": [
+        {
+          "type": "endurance",
+          "duration_minutes": 60,
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "summary": "🏃 Endurance 1h",
+      "date": "2025-09-23T06:00:00Z",
+      "type": "Endurance",
+      "intensity": "Faible",
+      "confidence_score": 0.7,
+      "corrections": [],
+      "main_sets": [
+        {
+          "type": "endurance",
+          "duration_minutes": 60,
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "summary": "🏃 Rando/Course 1h30",
+      "date": "2025-09-24T06:00:00Z",
+      "type": "Course",
+      "intensity": "Faible",
+      "confidence_score": 0.7999999999999999,
+      "corrections": [],
+      "main_sets": [
+        {
+          "type": "endurance",
+          "duration_minutes": 90,
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "summary": "🏃 Allure Semi : 4km + 4x30sec",
+      "date": "2025-09-26T06:00:00Z",
+      "type": "Endurance",
+      "intensity": "Élevée",
+      "confidence_score": 0.7999999999999999,
+      "corrections": [
+        "Distance estimée corrigée"
+      ],
+      "main_sets": [
+        {
+          "type": "bloc",
+          "duration_minutes": 30,
+          "pace": null,
+          "repetitions": 1
+        },
+        {
+          "type": "bloc",
+          "duration_minutes": 3,
+          "pace": null,
+          "repetitions": 1
+        },
+        {
+          "type": "bloc",
+          "duration_minutes": 5,
+          "pace": null,
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "summary": "🏃 Endurance 1h",
+      "date": "2025-09-28T06:00:00Z",
+      "type": "Endurance",
+      "intensity": "Faible",
+      "confidence_score": 0.7,
+      "corrections": [],
+      "main_sets": [
+        {
+          "type": "endurance",
+          "duration_minutes": 60,
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "summary": "🏃 Endurance active 50min",
+      "date": "2025-10-01T06:00:00Z",
+      "type": "Endurance",
+      "intensity": "Faible",
+      "confidence_score": 0.7,
+      "corrections": [],
+      "main_sets": [
+        {
+          "type": "bloc",
+          "duration_minutes": 50,
+          "pace": null,
+          "repetitions": 1
+        },
+        {
+          "type": "bloc",
+          "duration_minutes": 50,
+          "pace": null,
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "summary": "🏃 Allure Semi : 1500m",
+      "date": "2025-10-02T06:00:00Z",
+      "type": "Allure",
+      "intensity": "Faible",
+      "confidence_score": 0.8999999999999999,
+      "corrections": [],
+      "main_sets": [
+        {
+          "type": "bloc",
+          "duration_minutes": 30,
+          "pace": null,
+          "repetitions": 1
+        },
+        {
+          "type": "bloc",
+          "duration_minutes": 5,
+          "pace": null,
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "summary": "🏃 Veille de course : Lignes droites 4x15sec",
+      "date": "2025-10-03T06:00:00Z",
+      "type": "Endurance",
+      "intensity": "Faible",
+      "confidence_score": 0.7,
+      "corrections": [],
+      "main_sets": [
+        {
+          "type": "bloc",
+          "duration_minutes": 20,
+          "pace": null,
+          "repetitions": 1
+        }
+      ]
+    }
+  ]
+}
