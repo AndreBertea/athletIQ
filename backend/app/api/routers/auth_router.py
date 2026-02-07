@@ -158,12 +158,13 @@ async def refresh_token(request: Request):
         from app.core.settings import get_settings
         settings = get_settings()
         is_prod = settings.ENVIRONMENT == "production"
+        samesite_value = "none" if is_prod else "lax"
         response.set_cookie(
             key="access_token",
             value=new_access,
             httponly=True,
             secure=is_prod,
-            samesite="lax",
+            samesite=samesite_value,
             max_age=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60,
             path="/",
         )

@@ -72,13 +72,15 @@ def set_auth_cookies(response: JSONResponse, access_token: str, refresh_token: s
     from app.core.settings import get_settings
     settings = get_settings()
     is_prod = settings.ENVIRONMENT == "production"
+    # Cross-site (frontend/backend sur des domaines differents) => SameSite=None + Secure
+    samesite_value = "none" if is_prod else "lax"
 
     response.set_cookie(
         key="access_token",
         value=access_token,
         httponly=True,
         secure=is_prod,
-        samesite="lax",
+        samesite=samesite_value,
         max_age=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         path="/",
     )
@@ -87,9 +89,9 @@ def set_auth_cookies(response: JSONResponse, access_token: str, refresh_token: s
         value=refresh_token,
         httponly=True,
         secure=is_prod,
-        samesite="lax",
+        samesite=samesite_value,
         max_age=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS * 86400,
-        path="/api/v1/auth",
+        path="/",
     )
     return response
 
@@ -99,7 +101,8 @@ def clear_auth_cookies(response: JSONResponse) -> JSONResponse:
     from app.core.settings import get_settings
     settings = get_settings()
     is_prod = settings.ENVIRONMENT == "production"
+    samesite_value = "none" if is_prod else "lax"
 
-    response.delete_cookie(key="access_token", path="/", httponly=True, secure=is_prod, samesite="lax")
-    response.delete_cookie(key="refresh_token", path="/api/v1/auth", httponly=True, secure=is_prod, samesite="lax")
+    response.delete_cookie(key="access_token", path="/", httponly=True, secure=is_prod, samesite=samesite_value)
+    response.delete_cookie(key="refresh_token", path="/", httponly=True, secure=is_prod, samesite=samesite_value)
     return response
