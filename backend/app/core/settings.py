@@ -124,6 +124,7 @@ class Settings(BaseSettings):
             if self.ENVIRONMENT == "production":
                 self.ALLOWED_ORIGINS = [
                     "https://athletiq.vercel.app",
+                    "https://athlet-iq-beta.vercel.app",
                 ]
             else:
                 self.ALLOWED_ORIGINS = [
@@ -132,6 +133,10 @@ class Settings(BaseSettings):
                     "http://localhost:4000",
                     "http://127.0.0.1:4000",
                 ]
+        # Toujours inclure FRONTEND_URL dans les origines autorisees
+        frontend = self.FRONTEND_URL.rstrip("/")
+        if frontend and frontend not in self.ALLOWED_ORIGINS:
+            self.ALLOWED_ORIGINS.append(frontend)
         return self
     
     # Encryption (pour les tokens Strava stockés)
