@@ -18,6 +18,7 @@ from app.domain.entities.enrichment_queue import EnrichmentQueue, EnrichmentStat
 from app.domain.services.detailed_strava_service import detailed_strava_service
 from app.domain.services.round_robin_scheduler import RoundRobinScheduler
 from app.domain.services.segmentation_service import segment_activity
+from app.domain.services.weather_service import fetch_weather_for_activity
 
 
 logger = logging.getLogger(__name__)
@@ -205,6 +206,13 @@ class AutoEnrichmentService:
                         logger.info(f"Activite {activity_id}: {segment_count} segments crees apres enrichissement")
                 except Exception as e:
                     logger.warning(f"Segmentation echouee pour activite {activity_id} (non-bloquant): {e}")
+
+                try:
+                    weather_ok = await fetch_weather_for_activity(session, activity)
+                    if weather_ok:
+                        logger.info(f"Activite {activity_id}: meteo enrichie apres segmentation")
+                except Exception as e:
+                    logger.warning(f"Meteo echouee pour activite {activity_id} (non-bloquant): {e}")
 
             return success
         finally:

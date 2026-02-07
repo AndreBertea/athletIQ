@@ -18,6 +18,8 @@ cryptography>=41.0.0
 # HTTP Client & OAuth
 requests>=2.31.0
 httpx>=0.25.2
+garth>=0.4.0
+garminconnect>=0.2.0
 
 # Rate Limiting
 slowapi>=0.1.9
@@ -38,6 +40,7 @@ email-validator>=2.2.0
 # Data Processing (compatibility avec Python 3.13)
 pandas>=2.2.0
 numpy>=2.0.0
+fitparse>=0.0.14
 
 # Development & Testing
 pytest>=7.4.3

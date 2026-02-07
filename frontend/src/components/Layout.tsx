@@ -1,7 +1,7 @@
 import React from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { LogOut, Activity, BarChart3, Calendar, Link2 } from 'lucide-react'
+import { LogOut, Activity, BarChart3, Calendar, Link2, Watch } from 'lucide-react'
 
 interface LayoutProps {
   children: React.ReactNode
@@ -22,6 +22,7 @@ export default function Layout({ children }: LayoutProps) {
     { name: 'Activités', href: '/activites', icon: Activity },
     { name: 'Plans d\'entraînement', href: '/plans', icon: Calendar },
     { name: 'Connexion Strava', href: '/strava-connect', icon: Link2 },
+    { name: 'Connexion Garmin', href: '/garmin-connect', icon: Watch },
   ]
 
   return (

@@ -1,3 +1,6 @@
+# Local scripts (contiennent des secrets)
+*.command
+
 # Dependencies
 node_modules/
 backend/venv/

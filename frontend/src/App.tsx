@@ -13,6 +13,7 @@ const WorkoutPlans = React.lazy(() => import('./pages/WorkoutPlans'))
 const DetailedData = React.lazy(() => import('./pages/DetailedData'))
 const StravaConnect = React.lazy(() => import('./pages/StravaConnect'))
 const GoogleConnect = React.lazy(() => import('./pages/GoogleConnect'))
+const GarminConnect = React.lazy(() => import('./pages/GarminConnect'))
 
 // Protected Route wrapper
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -120,6 +121,16 @@ function App() {
               <ProtectedRoute>
                 <Layout>
                   <GoogleConnect />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/garmin-connect"
+            element={
+              <ProtectedRoute>
+                <Layout>
+                  <GarminConnect />
                 </Layout>
               </ProtectedRoute>
             }

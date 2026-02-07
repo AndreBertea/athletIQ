@@ -18,6 +18,9 @@ from app.domain.entities.enrichment_queue import EnrichmentQueue
 from app.domain.entities.segment import Segment
 from app.domain.entities.segment_features import SegmentFeatures
 from app.domain.entities.activity_weather import ActivityWeather
+from app.domain.entities.user import GarminAuth
+from app.domain.entities.garmin_daily import GarminDaily
+from app.domain.entities.training_load import TrainingLoad
 from app.core.database import engine
 from sqlmodel import SQLModel
 

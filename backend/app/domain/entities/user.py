@@ -36,12 +36,13 @@ class User(UserBase, table=True):
     """Entité User complète pour la base de données"""
     id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True)
     hashed_password: str
-    
+
     # Relations
     activities: List["Activity"] = Relationship(back_populates="user")
     workout_plans: List["WorkoutPlan"] = Relationship(back_populates="user")
     strava_auth: Optional["StravaAuth"] = Relationship(back_populates="user")
     google_auth: Optional["GoogleAuth"] = Relationship(back_populates="user")
+    garmin_auth: Optional["GarminAuth"] = Relationship(back_populates="user")
 
 
 class UserCreate(UserBase):
@@ -116,10 +117,35 @@ class GoogleAuth(SQLModel, table=True):
     user: "User" = Relationship(back_populates="google_auth")
 
 
+class GarminAuth(SQLModel, table=True):
+    """Authentification Garmin Connect d'un utilisateur"""
+    id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True)
+    user_id: UUID = Field(foreign_key="user.id", unique=True, index=True)
+    garmin_display_name: Optional[str] = None
+    oauth_token_encrypted: str
+    token_created_at: datetime = Field(default_factory=datetime.utcnow)
+    last_sync_at: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+    # Relations
+    user: "User" = Relationship(back_populates="garmin_auth")
+
+
+class GarminAuthRead(SQLModel):
+    """Schéma pour lire l'auth Garmin (sans token)"""
+    id: UUID
+    garmin_display_name: Optional[str]
+    token_created_at: datetime
+    last_sync_at: Optional[datetime]
+    created_at: datetime
+    updated_at: datetime
+
+
 class StravaAuthRead(StravaAuthBase):
     """Schéma pour lire l'auth Strava (sans tokens)"""
     id: UUID
     strava_athlete_id: int
     scope: str
     created_at: datetime
-    updated_at: datetime 
+    updated_at: datetime

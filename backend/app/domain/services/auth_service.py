@@ -9,7 +9,8 @@ from datetime import datetime
 from app.auth.jwt import jwt_manager, password_manager, TokenResponse
 from app.auth.strava_oauth import strava_oauth
 from app.auth.google_oauth import google_oauth
-from app.domain.entities import User, UserCreate, StravaAuth, GoogleAuth
+from app.auth.garmin_auth import garmin_auth
+from app.domain.entities import User, UserCreate, StravaAuth, GoogleAuth, GarminAuth
 
 logger = logging.getLogger(__name__)
 
@@ -252,6 +253,67 @@ class AuthService:
             logger.info("Token Google rafraichi avec succes")
 
         return google_oauth.decrypt_token(google_auth_record.access_token_encrypted)
+
+    # ---- Garmin Connect ----
+
+    def handle_garmin_login(self, session: Session, user_id: str, email: str, password: str) -> dict:
+        """
+        Login Garmin one-time : authentifie via Garth, stocke le token chiffre.
+        Email et mot de passe ne sont JAMAIS stockes.
+        """
+        encrypted_token = garmin_auth.login(email, password)
+
+        existing = session.exec(
+            select(GarminAuth).where(GarminAuth.user_id == UUID(user_id))
+        ).first()
+
+        if existing:
+            existing.oauth_token_encrypted = encrypted_token
+            existing.token_created_at = datetime.utcnow()
+            existing.updated_at = datetime.utcnow()
+        else:
+            new_auth = GarminAuth(
+                user_id=UUID(user_id),
+                oauth_token_encrypted=encrypted_token,
+                token_created_at=datetime.utcnow(),
+            )
+            session.add(new_auth)
+
+        session.commit()
+        logger.info(f"Garmin connecte pour user {user_id}")
+
+        return {"connected": True, "message": "Garmin Connect lie avec succes"}
+
+    def get_garmin_status(self, session: Session, user_id: str) -> dict:
+        """Retourne le statut de connexion Garmin pour un utilisateur."""
+        garmin_auth_record = session.exec(
+            select(GarminAuth).where(GarminAuth.user_id == UUID(user_id))
+        ).first()
+
+        if not garmin_auth_record:
+            return {"connected": False}
+
+        return {
+            "connected": True,
+            "garmin_display_name": garmin_auth_record.garmin_display_name,
+            "token_created_at": garmin_auth_record.token_created_at,
+            "last_sync_at": garmin_auth_record.last_sync_at,
+        }
+
+    def disconnect_garmin(self, session: Session, user_id: str) -> dict:
+        """Supprime l'authentification Garmin d'un utilisateur."""
+        garmin_auth_record = session.exec(
+            select(GarminAuth).where(GarminAuth.user_id == UUID(user_id))
+        ).first()
+
+        if not garmin_auth_record:
+            raise ValueError("Aucune connexion Garmin trouvee")
+
+        session.delete(garmin_auth_record)
+        session.commit()
+        logger.info(f"Garmin deconnecte pour user {user_id}")
+
+        return {"connected": False, "message": "Garmin Connect deconnecte"}
 
 
 auth_service = AuthService()
