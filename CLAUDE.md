@@ -13,19 +13,21 @@ athletIQ est une application d'analyse sportive connectee a Strava.
 
 **A CHAQUE DEBUT D'ITERATION ou de nouvelle session, tu DOIS :**
 
-1. Lire `/Users/andrebertea/Projects/athletIQ/PRODUCTION_PLAN.md` pour connaitre l'etat d'avancement du plan de production
+1. Lire `/Users/andrebertea/Projects/athletIQ/DATA_AQI_PLAN.md` (plan d'acquisition de donnees — **focus actuel**)
 2. Identifier les taches `[ ]` (a faire) et `[~]` (en cours)
-3. Ne travailler QUE sur la tache assignee ou la prochaine tache non terminee dans l'ordre des phases
-4. Mettre a jour le statut de la tache dans `PRODUCTION_PLAN.md` :
+3. Ne travailler QUE sur la tache assignee ou la prochaine tache non terminee dans l'ordre des etapes
+4. Mettre a jour le statut de la tache dans `DATA_AQI_PLAN.md` :
    - `[~]` quand tu commences a travailler dessus
    - `[x]` quand c'est termine et verifie
 5. Ajouter une ligne dans le "Journal des modifications" en bas du fichier
+
+> **Note :** Le plan de production (`PRODUCTION_PLAN.md`) est termine (Phases 1-4 completes). Le focus est desormais sur le pipeline de donnees (`DATA_AQI_PLAN.md`).
 
 ## Fichiers cles du projet
 
 | Fichier | Role |
 |---------|------|
-| `backend/app/api/routes.py` | Toutes les routes API (~1350 lignes, a decouper) |
+| `backend/app/api/routers/` | Routes API decoupees : auth, activity, plan, sync, data |
 | `backend/app/core/settings.py` | Configuration backend (env vars, valeurs par defaut) |
 | `backend/app/core/database.py` | Connexion SQLModel/SQLAlchemy |
 | `backend/app/auth/jwt.py` | Gestion JWT + hashing mots de passe |
@@ -42,7 +44,8 @@ athletIQ est une application d'analyse sportive connectee a Strava.
 | `frontend/src/services/` | Couche d'appels API (axios) |
 | `docker-compose.dev.yml` | Orchestration Docker dev |
 | `.github/workflows/ci-cd.yml` | Pipeline CI/CD |
-| `PRODUCTION_PLAN.md` | **Plan de mise en production (LIRE EN PREMIER)** |
+| `DATA_AQI_PLAN.md` | **Plan d'acquisition de donnees (LIRE EN PREMIER — focus actuel)** |
+| `PRODUCTION_PLAN.md` | Plan de mise en production (Phases 1-4 terminees) |
 
 ## Problemes connus et pieges
 
@@ -60,4 +63,4 @@ athletIQ est une application d'analyse sportive connectee a Strava.
 - **Securite** : ne jamais exposer de secrets dans le code. Utiliser les variables d'environnement
 - **Scope** : ne pas sur-ingenierer. Faire le minimum necessaire pour la tache en cours
 - **Tests** : verifier que les tests passent apres chaque modification (`pytest` backend, `npm test` frontend)
-- **Mise a jour du plan** : toujours mettre a jour PRODUCTION_PLAN.md apres avoir termine une tache
+- **Mise a jour du plan** : toujours mettre a jour DATA_AQI_PLAN.md apres avoir termine une tache

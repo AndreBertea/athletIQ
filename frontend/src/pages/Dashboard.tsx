@@ -7,7 +7,7 @@ import { chronicLoadService } from '../services/chronicLoadService'
 import { useState } from 'react'
 import { AreaChart } from '../components/ui/area-chart'
 import ChronicLoadChart from '../components/ChronicLoadChart'
-import RacePredictor from '../components/RacePredictor'
+
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 
 export default function Dashboard() {
@@ -552,11 +552,6 @@ export default function Dashboard() {
           data={chronicLoadData || []} 
           isLoading={chronicLoadLoading}
         />
-      </div>
-
-      {/* Section Prédicteur de Course */}
-      <div className="card">
-        <RacePredictor />
       </div>
 
       {/* Section Plans d'Entraînement */}

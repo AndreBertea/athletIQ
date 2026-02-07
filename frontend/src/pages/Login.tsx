@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useAuth } from '../contexts/AuthContext'
+import { useToast } from '../contexts/ToastContext'
 import { Eye, EyeOff, AlertCircle } from 'lucide-react'
 
 const loginSchema = z.object({
@@ -29,6 +30,7 @@ export default function Login() {
   const [loading, setLoading] = useState(false)
   
   const { user, login, signup } = useAuth()
+  const toast = useToast()
   const navigate = useNavigate()
 
   const loginForm = useForm<LoginFormData>({
@@ -50,6 +52,7 @@ export default function Login() {
     
     try {
       await login(data.email, data.password)
+      toast.success('Connexion réussie')
       navigate('/')
     } catch (err: any) {
       // Gérer les erreurs de validation Pydantic
@@ -76,6 +79,7 @@ export default function Login() {
     
     try {
       await signup(data.email, data.password, data.fullName)
+      toast.success('Compte créé avec succès')
       navigate('/')
     } catch (err: any) {
       // Gérer les erreurs de validation Pydantic

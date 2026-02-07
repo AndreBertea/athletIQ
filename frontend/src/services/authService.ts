@@ -33,18 +33,10 @@ class AuthService {
     headers: {
       'Content-Type': 'application/json',
     },
+    withCredentials: true,
   })
 
   constructor() {
-    // Interceptor pour ajouter le token d'auth
-    this.api.interceptors.request.use((config) => {
-      const token = localStorage.getItem('access_token')
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`
-      }
-      return config
-    })
-
     // Interceptor pour gérer le refresh token automatique
     this.api.interceptors.response.use(
       (response) => response,
@@ -55,19 +47,11 @@ class AuthService {
           originalRequest._retry = true
 
           try {
-            const refreshToken = localStorage.getItem('refresh_token')
-            if (refreshToken) {
-              const response = await this.refreshToken(refreshToken)
-              localStorage.setItem('access_token', response.access_token)
-              
-              // Retry la requête originale avec le nouveau token
-              originalRequest.headers.Authorization = `Bearer ${response.access_token}`
-              return this.api(originalRequest)
-            }
+            await this.refreshToken()
+            // Retry la requête originale (le cookie est mis à jour automatiquement)
+            return this.api(originalRequest)
           } catch (refreshError) {
             // Refresh token invalide, rediriger vers login
-            localStorage.removeItem('access_token')
-            localStorage.removeItem('refresh_token')
             window.location.href = '/login'
           }
         }
@@ -104,11 +88,17 @@ class AuthService {
     return response.data
   }
 
-  async refreshToken(refreshToken: string): Promise<{ access_token: string }> {
-    const response = await this.api.post('/auth/refresh', {
-      refresh_token: refreshToken,
-    })
+  async refreshToken(): Promise<{ access_token: string }> {
+    const response = await this.api.post('/auth/refresh')
     return response.data
+  }
+
+  async logout(): Promise<void> {
+    try {
+      await this.api.post('/auth/logout')
+    } catch {
+      // Ignorer les erreurs de logout (ex: réseau)
+    }
   }
 
   async getStravaStatus(): Promise<StravaStatus> {
@@ -161,4 +151,4 @@ class AuthService {
   }
 }
 
-export const authService = new AuthService() 
+export const authService = new AuthService()

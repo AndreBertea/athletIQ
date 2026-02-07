@@ -3,32 +3,59 @@ Application FastAPI principale pour AthlétIQ
 Point d'entrée de l'API backend
 """
 import logging
+from logging.handlers import RotatingFileHandler
 import sys
 import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.requests import Request
+from starlette.middleware.base import BaseHTTPMiddleware
+from slowapi.errors import RateLimitExceeded
+import sentry_sdk
 
 from app.core.settings import get_settings
-from app.api.routes import router
+from app.api.routers import router, limiter
 from app.core.database import create_db_and_tables
 from app.core.redis import check_redis_health
 from app.domain.services.auto_enrichment_service import auto_enrichment_service
 
 settings = get_settings()
 
+# Initialiser Sentry (uniquement si SENTRY_DSN est configure)
+if settings.SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=settings.SENTRY_DSN,
+        environment=settings.ENVIRONMENT,
+        traces_sample_rate=0.2 if settings.ENVIRONMENT == "production" else 1.0,
+        send_default_pii=False,
+    )
+
 # Configuration du logging conditionnée par ENVIRONMENT
 _log_level = getattr(logging, settings.LOG_LEVEL, logging.INFO)
 
-_handlers: list[logging.Handler] = [logging.StreamHandler(sys.stdout)]
+_handler = logging.StreamHandler(sys.stdout)
+
+if settings.ENVIRONMENT == "production":
+    from pythonjsonlogger import jsonlogger
+    _handler.setFormatter(jsonlogger.JsonFormatter(
+        "%(asctime)s %(name)s %(levelname)s %(message)s",
+        rename_fields={"asctime": "timestamp", "levelname": "level"},
+    ))
+else:
+    _handler.setFormatter(logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    ))
+
+_handlers: list[logging.Handler] = [_handler]
 if settings.ENVIRONMENT != "production":
-    _handlers.append(logging.FileHandler('app.log'))
+    _handlers.append(RotatingFileHandler(
+        'app.log', maxBytes=5_000_000, backupCount=3,
+    ))
 
 logging.basicConfig(
     level=_log_level,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=_handlers,
 )
 
@@ -76,6 +103,64 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Rate limiting
+app.state.limiter = limiter
+
+
+async def _custom_rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+    """Retourne un 429 propre avec headers Retry-After et X-RateLimit-*."""
+    response = JSONResponse(
+        status_code=429,
+        content={
+            "detail": "Trop de requetes",
+            "message": f"Rate limit exceeded: {exc.detail}",
+        },
+    )
+    response = request.app.state.limiter._inject_headers(
+        response, request.state.view_rate_limit
+    )
+    return response
+
+
+app.add_exception_handler(RateLimitExceeded, _custom_rate_limit_handler)
+
+# Middlewares de securite en production
+if settings.ENVIRONMENT == "production":
+    class HTTPSRedirectMiddleware(BaseHTTPMiddleware):
+        async def dispatch(self, request: Request, call_next):
+            if request.headers.get("x-forwarded-proto") == "http":
+                url = request.url.replace(scheme="https")
+                return RedirectResponse(url, status_code=301)
+            return await call_next(request)
+
+    class SecureCookiesMiddleware(BaseHTTPMiddleware):
+        """Force le flag Secure sur tous les cookies en production."""
+        async def dispatch(self, request: Request, call_next):
+            response = await call_next(request)
+            if "set-cookie" in response.headers:
+                new_cookies = []
+                for header_value in response.headers.getlist("set-cookie"):
+                    if "; secure" not in header_value.lower():
+                        header_value += "; Secure"
+                    new_cookies.append(header_value)
+                del response.headers["set-cookie"]
+                for cookie in new_cookies:
+                    response.headers.append("set-cookie", cookie)
+            return response
+
+    class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+        """Ajoute les headers de securite sur toutes les reponses en production."""
+        async def dispatch(self, request: Request, call_next):
+            response = await call_next(request)
+            response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
+            response.headers["X-Content-Type-Options"] = "nosniff"
+            response.headers["X-Frame-Options"] = "DENY"
+            return response
+
+    app.add_middleware(SecurityHeadersMiddleware)
+    app.add_middleware(SecureCookiesMiddleware)
+    app.add_middleware(HTTPSRedirectMiddleware)
+
 # Configuration CORS
 app.add_middleware(
     CORSMiddleware,
@@ -90,6 +175,7 @@ app.add_middleware(
 app.include_router(router, prefix="/api/v1")
 
 @app.get("/health")
+@limiter.exempt
 async def health_check():
     """Point de santé de l'API"""
     redis_ok = check_redis_health()

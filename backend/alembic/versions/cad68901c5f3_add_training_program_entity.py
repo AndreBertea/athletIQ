@@ -9,6 +9,7 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+import sqlmodel
 
 
 # revision identifiers, used by Alembic.
@@ -41,7 +42,11 @@ def upgrade() -> None:
     sa.ForeignKeyConstraint(['user_id'], ['user.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
-    op.drop_table('processed_activities')
+    # processed_activities may not exist on fresh databases
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    if 'processed_activities' in inspector.get_table_names():
+        op.drop_table('processed_activities')
     op.add_column('workoutplan', sa.Column('training_program_id', sqlmodel.sql.sqltypes.GUID(), nullable=True))
     op.create_foreign_key(None, 'workoutplan', 'trainingprogram', ['training_program_id'], ['id'])
     # ### end Alembic commands ###

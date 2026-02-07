@@ -56,13 +56,12 @@ export default function ActivityTypeEditor({ activity, onSave, onCancel }: Activ
       formData.append('activity_type', selectedType)
       
       // Utiliser l'API URL complète
-      const apiUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:4100'}/api/v1/activities/${activity.id}/type`
-      
-      const response = await fetch(apiUrl, {
+      const VITE_API_URL = (import.meta as any).env?.VITE_API_URL
+      const apiUrl = VITE_API_URL ? `${VITE_API_URL}/api/v1` : '/api/v1'
+
+      const response = await fetch(`${apiUrl}/activities/${activity.id}/type`, {
         method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('access_token')}`
-        },
+        credentials: 'include',
         body: formData
       })
 

@@ -18,6 +18,7 @@ import {
 
 import { workoutPlanService, workoutPlanUtils, type WorkoutPlan, type WorkoutPlanCreate, type WorkoutPlanUpdate } from '../services/workoutPlanService'
 import { googleCalendarService, type GoogleCalendar } from '../services/googleCalendarService'
+import { useToast } from '../contexts/ToastContext'
 import ConfirmationModal from '../components/ConfirmationModal'
 import CSVImportModal from '../components/CSVImportModal'
 import GoogleCalendarModal from '../components/GoogleCalendarModal'
@@ -38,6 +39,7 @@ export default function WorkoutPlans() {
     planId?: string
   }>({ isOpen: false, type: null })
 
+  const toast = useToast()
   const queryClient = useQueryClient()
 
   // Récupération des calendriers Google
@@ -71,15 +73,23 @@ export default function WorkoutPlans() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['workout-plans'] })
       setShowCreateModal(false)
+      toast.success('Plan créé avec succès')
+    },
+    onError: () => {
+      toast.error('Erreur lors de la création du plan')
     }
   })
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, updates }: { id: string; updates: WorkoutPlanUpdate }) => 
+    mutationFn: ({ id, updates }: { id: string; updates: WorkoutPlanUpdate }) =>
       workoutPlanService.updateWorkoutPlan(id, updates),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['workout-plans'] })
       setEditingPlan(null)
+      toast.success('Plan modifié avec succès')
+    },
+    onError: () => {
+      toast.error('Erreur lors de la modification du plan')
     }
   })
 
@@ -88,17 +98,25 @@ export default function WorkoutPlans() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['workout-plans'] })
       setConfirmationModal({ isOpen: false, type: null })
+      toast.success('Plan supprimé')
+    },
+    onError: () => {
+      toast.error('Erreur lors de la suppression du plan')
     }
   })
 
   const toggleCompletionMutation = useMutation({
     mutationFn: ({ id, isCompleted }: { id: string; isCompleted: boolean }) =>
-      isCompleted 
+      isCompleted
         ? workoutPlanService.markAsCompleted(id)
         : workoutPlanService.markAsIncomplete(id),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['workout-plans'] })
       setConfirmationModal({ isOpen: false, type: null })
+      toast.info(variables.isCompleted ? 'Plan marqué comme terminé' : 'Plan marqué comme non terminé')
+    },
+    onError: () => {
+      toast.error('Erreur lors de la mise à jour du statut')
     }
   })
 

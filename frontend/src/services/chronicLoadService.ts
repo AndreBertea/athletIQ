@@ -114,8 +114,10 @@ class ChronicLoadService {
    */
   async getChronicLoadData(startDate: string, endDate: string): Promise<ChronicLoadData[]> {
     try {
-      // Récupérer toutes les activités (augmenter la limite pour 6 mois)
-      const activities = await activityService.getActivities({ limit: 1000 })
+      // Récupérer les activités avec une marge de 28 jours pour le calcul de la charge chronique
+      const fetchFrom = new Date(startDate)
+      fetchFrom.setDate(fetchFrom.getDate() - 28)
+      const activities = await activityService.getAllActivities(undefined, fetchFrom.toISOString().split('T')[0])
       
       // Filtrer les activités de course à pied et trail
       const runningActivities = activities.filter(activity => 

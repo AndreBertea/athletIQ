@@ -41,26 +41,23 @@ export interface GoogleCalendarImportResult {
 
 
 
-// Configuration axios avec token d'authentification
-const getAuthHeaders = () => {
-  const token = localStorage.getItem('access_token')
-  return token ? { Authorization: `Bearer ${token}` } : {}
-}
+const api = axios.create({
+  baseURL: API_URL,
+  withCredentials: true,
+})
 
 // Service pour Google Calendar
 export const googleCalendarService = {
   // Initier la connexion OAuth Google
   async initiateGoogleLogin(): Promise<{ authorization_url: string }> {
     try {
-      const response = await axios.get(`${API_URL}/auth/google/login`, {
-        headers: getAuthHeaders()
-      })
+      const response = await api.get('/auth/google/login')
       console.log('Réponse Google login:', response.data)
-      
+
       if (!response.data.auth_url) {
         throw new Error('URL d\'autorisation manquante dans la réponse')
       }
-      
+
       return { authorization_url: response.data.auth_url }
     } catch (error) {
       console.error('Erreur lors de l\'initiation Google login:', error)
@@ -70,34 +67,25 @@ export const googleCalendarService = {
 
   // Vérifier le statut de la connexion Google
   async getGoogleStatus(): Promise<GoogleAuthStatus> {
-    const response = await axios.get(`${API_URL}/auth/google/status`, {
-      headers: getAuthHeaders()
-    })
+    const response = await api.get('/auth/google/status')
     return response.data
   },
 
   // Rafraîchir automatiquement le token Google
   async refreshGoogleToken(): Promise<{ success: boolean; message: string; expires_at?: string }> {
-    const response = await axios.post(`${API_URL}/auth/google/refresh`, {}, {
-      headers: getAuthHeaders()
-    })
+    const response = await api.post('/auth/google/refresh')
     return response.data
   },
 
   // Récupérer la liste des calendriers Google
   async getGoogleCalendars(): Promise<GoogleCalendar[]> {
-    const response = await axios.get(`${API_URL}/google-calendar/calendars`, {
-      headers: getAuthHeaders()
-    })
+    const response = await api.get('/google-calendar/calendars')
     return response.data.calendars
   },
 
   // Exporter les plans d'entraînement vers Google Calendar
   async exportWorkoutPlansToGoogle(calendarId: string = "primary"): Promise<GoogleCalendarExportResult> {
-    const response = await axios.post(`${API_URL}/google-calendar/export`, 
-      { calendar_id: calendarId },
-      { headers: getAuthHeaders() }
-    )
+    const response = await api.post('/google-calendar/export', { calendar_id: calendarId })
     return response.data
   },
 
@@ -112,11 +100,8 @@ export const googleCalendarService = {
     if (startDate) params.append('start_date', startDate)
     if (endDate) params.append('end_date', endDate)
 
-    const response = await axios.post(`${API_URL}/google-calendar/import`, params, {
-      headers: {
-        ...getAuthHeaders(),
-        'Content-Type': 'application/x-www-form-urlencoded'
-      }
+    const response = await api.post('/google-calendar/import', params, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
     })
     return response.data
   },

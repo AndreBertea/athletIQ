@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { vi } from 'vitest'
 import Login from '../pages/Login'
 import { AuthProvider } from '../contexts/AuthContext'
+import { ToastProvider } from '../contexts/ToastContext'
 
 // Mock du service d'auth
 vi.mock('../services/authService', () => ({
@@ -12,6 +13,7 @@ vi.mock('../services/authService', () => ({
     signup: vi.fn(),
     getCurrentUser: vi.fn(),
     refreshToken: vi.fn(),
+    logout: vi.fn(),
     getStravaStatus: vi.fn(),
     initiateStravaLogin: vi.fn(),
   },
@@ -30,9 +32,11 @@ const renderWithProviders = (component: React.ReactElement) => {
   return render(
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <AuthProvider>
-          {component}
-        </AuthProvider>
+        <ToastProvider>
+          <AuthProvider>
+            {component}
+          </AuthProvider>
+        </ToastProvider>
       </BrowserRouter>
     </QueryClientProvider>
   )
@@ -41,16 +45,6 @@ const renderWithProviders = (component: React.ReactElement) => {
 describe('Login Component', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    // Mock localStorage
-    const localStorageMock = {
-      getItem: vi.fn(),
-      setItem: vi.fn(),
-      removeItem: vi.fn(),
-    }
-    Object.defineProperty(window, 'localStorage', {
-      value: localStorageMock,
-      writable: true,
-    })
   })
 
   test('renders login form by default', () => {

@@ -4,11 +4,13 @@ import { useQuery } from '@tanstack/react-query'
 import { Calendar, CheckCircle, XCircle, AlertCircle, Loader2 } from 'lucide-react'
 
 import { googleCalendarService, type GoogleAuthStatus } from '../services/googleCalendarService'
+import { useToast } from '../contexts/ToastContext'
 
 export default function GoogleConnect() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const [isConnecting, setIsConnecting] = useState(false)
+  const toast = useToast()
 
   // Récupérer les paramètres de l'URL
   const success = searchParams.get('success')
@@ -39,7 +41,7 @@ export default function GoogleConnect() {
       window.location.href = authorization_url
     } catch (error: any) {
       console.error('Erreur lors de l\'initiation de la connexion Google:', error)
-      alert(`Erreur de connexion Google: ${error.message || 'Erreur inconnue'}`)
+      toast.error(`Erreur de connexion Google: ${error.message || 'Erreur inconnue'}`)
       setIsConnecting(false)
     }
   }

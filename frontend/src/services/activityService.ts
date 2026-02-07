@@ -60,10 +60,19 @@ interface EnrichResult {
   quota_status: StravaQuotaStatus
 }
 
+interface PaginatedResponse<T> {
+  items: T[]
+  total: number
+  page: number
+  per_page: number
+  pages: number
+}
+
 interface GetActivitiesParams {
-  limit?: number
-  offset?: number
+  page?: number
+  per_page?: number
   activity_type?: string
+  date_from?: string
 }
 
 // ============ DONNÉES ENRICHIES (activity_detail.db) ============
@@ -104,22 +113,29 @@ class ActivityService {
     headers: {
       'Content-Type': 'application/json',
     },
+    withCredentials: true,
   })
 
-  constructor() {
-    // Interceptor pour ajouter le token d'auth
-    this.api.interceptors.request.use((config) => {
-      const token = localStorage.getItem('access_token')
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`
-      }
-      return config
-    })
-  }
-
-  async getActivities(params: GetActivitiesParams = {}): Promise<Activity[]> {
+  async getActivities(params: GetActivitiesParams = {}): Promise<PaginatedResponse<Activity>> {
     const response = await this.api.get('/activities', { params })
     return response.data
+  }
+
+  async getAllActivities(activityType?: string, dateFrom?: string): Promise<Activity[]> {
+    const allItems: Activity[] = []
+    let page = 1
+    const perPage = 200
+    let totalPages = 1
+    do {
+      const params: GetActivitiesParams = { page, per_page: perPage }
+      if (activityType) params.activity_type = activityType
+      if (dateFrom) params.date_from = dateFrom
+      const data = await this.getActivities(params)
+      allItems.push(...data.items)
+      totalPages = data.pages
+      page++
+    } while (page <= totalPages)
+    return allItems
   }
 
   async getActivity(id: string): Promise<Activity> {
@@ -186,9 +202,26 @@ class ActivityService {
     return response.data
   }
 
-  async getEnrichedActivities(params: GetActivitiesParams = {}): Promise<EnrichedActivity[]> {
+  async getEnrichedActivities(params: GetActivitiesParams = {}): Promise<PaginatedResponse<EnrichedActivity>> {
     const response = await this.api.get('/activities/enriched', { params })
     return response.data
+  }
+
+  async getAllEnrichedActivities(sportType?: string, dateFrom?: string): Promise<EnrichedActivity[]> {
+    const allItems: EnrichedActivity[] = []
+    let page = 1
+    const perPage = 200
+    let totalPages = 1
+    do {
+      const params: any = { page, per_page: perPage }
+      if (sportType) params.sport_type = sportType
+      if (dateFrom) params.date_from = dateFrom
+      const data = await this.getEnrichedActivities(params)
+      allItems.push(...data.items)
+      totalPages = data.pages
+      page++
+    } while (page <= totalPages)
+    return allItems
   }
 
   async getEnrichedActivityStats(periodDays: number = 30): Promise<EnrichedActivityStats> {

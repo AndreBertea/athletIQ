@@ -79,6 +79,12 @@ class Settings(BaseSettings):
         description="Origines autorisées pour CORS (configuré automatiquement selon ENVIRONMENT si vide)"
     )
 
+    # Monitoring (Sentry)
+    SENTRY_DSN: str = Field(
+        default="",
+        description="DSN Sentry pour le error tracking (vide = Sentry desactive)"
+    )
+
     # Redis
     REDIS_URL: str = Field(
         default="redis://localhost:6379",

@@ -159,5 +159,7 @@ check_services.sh
 !CLAUDE.md
 !PRODUCTION_PLAN.md
 !PLAN_GUIDE.md
+!PLAN_GUIDE_AQUI.md
+!DATA_AQI_PLAN.md
 !LICENSE
 !docs/**/*.md

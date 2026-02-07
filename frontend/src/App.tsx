@@ -1,15 +1,18 @@
-import React from 'react'
+import React, { Suspense } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { Calendar } from 'lucide-react'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { ToastProvider } from './contexts/ToastContext'
+import ErrorBoundary from './components/ErrorBoundary'
 import Login from './pages/Login'
-import Dashboard from './pages/Dashboard'
-import Activities from './pages/Activities'
-import WorkoutPlans from './pages/WorkoutPlans'
-import DetailedData from './pages/DetailedData'
-import StravaConnect from './pages/StravaConnect'
-import GoogleConnect from './pages/GoogleConnect'
 import Layout from './components/Layout'
+
+const Dashboard = React.lazy(() => import('./pages/Dashboard'))
+const Activities = React.lazy(() => import('./pages/Activities'))
+const WorkoutPlans = React.lazy(() => import('./pages/WorkoutPlans'))
+const DetailedData = React.lazy(() => import('./pages/DetailedData'))
+const StravaConnect = React.lazy(() => import('./pages/StravaConnect'))
+const GoogleConnect = React.lazy(() => import('./pages/GoogleConnect'))
 
 // Protected Route wrapper
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -28,16 +31,25 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 function App() {
   return (
-    <AuthProvider>
-      <div className="min-h-screen bg-gray-50">
-        <Routes>
+    <ErrorBoundary>
+      <ToastProvider>
+      <AuthProvider>
+        <div className="min-h-screen bg-gray-50">
+          <Suspense fallback={
+            <div className="min-h-screen flex items-center justify-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500"></div>
+            </div>
+          }>
+          <Routes>
           <Route path="/login" element={<Login />} />
           <Route
             path="/"
             element={
               <ProtectedRoute>
                 <Layout>
-                  <Dashboard />
+                  <ErrorBoundary sectionName="Tableau de bord">
+                    <Dashboard />
+                  </ErrorBoundary>
                 </Layout>
               </ProtectedRoute>
             }
@@ -47,7 +59,9 @@ function App() {
             element={
               <ProtectedRoute>
                 <Layout>
-                  <Activities />
+                  <ErrorBoundary sectionName="Activités">
+                    <Activities />
+                  </ErrorBoundary>
                 </Layout>
               </ProtectedRoute>
             }
@@ -57,7 +71,9 @@ function App() {
             element={
               <ProtectedRoute>
                 <Layout>
-                  <WorkoutPlans />
+                  <ErrorBoundary sectionName="Plans d'entraînement">
+                    <WorkoutPlans />
+                  </ErrorBoundary>
                 </Layout>
               </ProtectedRoute>
             }
@@ -112,8 +128,11 @@ function App() {
           <Route path="/activities" element={<Navigate to="/activites" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+          </Suspense>
       </div>
-    </AuthProvider>
+      </AuthProvider>
+      </ToastProvider>
+    </ErrorBoundary>
   )
 }
 

@@ -163,6 +163,23 @@ class CSVImportService:
         except ValueError:
             return None
     
+    def import_from_upload(self, session: Session, file_content: bytes, filename: str, user_id: UUID) -> Dict[str, Any]:
+        """Importe des plans depuis un fichier CSV uploade.
+
+        Valide l'extension, decode le contenu, parse et importe en DB.
+        Leve ValueError si le fichier est invalide ou vide.
+        """
+        if not filename.endswith('.csv'):
+            raise ValueError("Le fichier doit etre au format CSV")
+
+        csv_content = file_content.decode('utf-8')
+        plans = self.parse_csv_content(csv_content, user_id)
+
+        if not plans:
+            raise ValueError("Aucun plan valide trouve dans le fichier CSV")
+
+        return self.import_plans_to_database(session, plans, user_id)
+
     def import_plans_to_database(self, session: Session, plans: List[WorkoutPlanCreate], user_id: UUID) -> Dict[str, Any]:
         """
         Importe les plans dans la base de données

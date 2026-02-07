@@ -162,6 +162,83 @@ npm test
 - [Documentation API](docs/api.md)
 - [Architecture](docs/architecture.md)
 
+## Webhooks Strava
+
+athletIQ utilise les webhooks Strava pour recevoir les nouvelles activites en temps reel (creation, modification, suppression). Cela evite de devoir synchroniser manuellement.
+
+### Pre-requis
+
+- L'application backend doit etre deployee et accessible publiquement (HTTPS requis par Strava)
+- Avoir un `STRAVA_CLIENT_ID` et un `STRAVA_CLIENT_SECRET` valides
+- Avoir un access token Strava avec le scope `read` (ou `read_all`)
+
+### Etape 1 : Configurer les variables d'environnement
+
+Dans le `.env` du backend, definir :
+
+```env
+# Token aleatoire de votre choix, utilise pour valider la subscription
+STRAVA_WEBHOOK_VERIFY_TOKEN=<choisir-un-token-aleatoire-fort>
+```
+
+### Etape 2 : Enregistrer la subscription webhook
+
+Depuis un terminal, envoyer la requete suivante a l'API Strava :
+
+```bash
+curl -X POST https://www.strava.com/api/v3/push_subscriptions \
+  -F client_id=<VOTRE_STRAVA_CLIENT_ID> \
+  -F client_secret=<VOTRE_STRAVA_CLIENT_SECRET> \
+  -F callback_url=https://<VOTRE_DOMAINE_BACKEND>/api/v1/webhooks/strava \
+  -F verify_token=<LE_MEME_TOKEN_QUE_STRAVA_WEBHOOK_VERIFY_TOKEN>
+```
+
+Strava va envoyer un `GET` a votre `callback_url` avec un challenge. Le backend repond automatiquement si le `verify_token` correspond.
+
+En cas de succes, Strava retourne un JSON avec un `id` (subscription ID) :
+
+```json
+{"id": 328992}
+```
+
+### Etape 3 : Configurer le subscription ID
+
+Ajouter l'ID retourne dans le `.env` du backend :
+
+```env
+STRAVA_WEBHOOK_SUBSCRIPTION_ID=328992
+```
+
+Cela permet au backend de rejeter les evenements provenant d'une subscription inconnue.
+
+### Verification
+
+Pour verifier que la subscription est active :
+
+```bash
+curl -G https://www.strava.com/api/v3/push_subscriptions \
+  -d client_id=<VOTRE_STRAVA_CLIENT_ID> \
+  -d client_secret=<VOTRE_STRAVA_CLIENT_SECRET>
+```
+
+### Suppression
+
+Pour supprimer une subscription existante :
+
+```bash
+curl -X DELETE "https://www.strava.com/api/v3/push_subscriptions/<SUBSCRIPTION_ID>" \
+  -F client_id=<VOTRE_STRAVA_CLIENT_ID> \
+  -F client_secret=<VOTRE_STRAVA_CLIENT_SECRET>
+```
+
+### Notes importantes
+
+- Strava n'autorise qu'**une seule subscription** par application. Pour en creer une nouvelle, supprimer l'ancienne d'abord.
+- Le backend doit repondre au challenge GET **sous 2 secondes**. Si l'app est sur un service free-tier (ex: Render free), le cold start peut faire echouer la premiere tentative. Reveiller le service (via `/health`) avant de lancer l'enregistrement.
+- Les evenements POST sont traites en arriere-plan (fire-and-forget) pour garantir la reponse HTTP 200 sous 2 secondes.
+- Les types d'evenements geres : `activity.create`, `activity.update`, `activity.delete`.
+- Sur `activity.create`, l'activite est automatiquement ajoutee dans la file d'enrichissement.
+
 ## 🤝 Contribution
 
 1. Fork le projet

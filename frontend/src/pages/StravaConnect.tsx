@@ -7,6 +7,7 @@ import { authService } from '../services/authService'
 import { activityService } from '../services/activityService'
 import ConfirmationModal from '../components/ConfirmationModal'
 import { Link } from 'react-router-dom'
+import { useToast } from '../contexts/ToastContext'
 
 export default function StravaConnect() {
   const [syncStatus, setSyncStatus] = useState<string>('')
@@ -17,6 +18,7 @@ export default function StravaConnect() {
     type: 'delete-strava' | 'delete-all' | 'delete-account' | 'export' | null
   }>({ isOpen: false, type: null })
   const queryClient = useQueryClient()
+  const toast = useToast()
 
   const { data: stravaStatus, isLoading, refetch } = useQuery({
     queryKey: ['strava-status'],
@@ -51,15 +53,14 @@ export default function StravaConnect() {
   const enrichBatchMutation = useMutation({
     mutationFn: (maxActivities: number) => activityService.enrichBatchActivities(maxActivities),
     onSuccess: (data) => {
-      console.log(`✅ ${data.message}`)
-      // Attendre un peu puis rafraîchir le statut
+      toast.success(data.message)
       setTimeout(() => {
         refetchEnrichment()
       }, 2000)
     },
     onError: (error: any) => {
       console.error('Erreur enrichissement:', error)
-      console.error(`❌ Erreur: ${error.response?.data?.detail || 'Échec de l\'enrichissement'}`)
+      toast.error(error.response?.data?.detail || 'Échec de l\'enrichissement')
     }
   })
 
@@ -88,6 +89,7 @@ export default function StravaConnect() {
     },
     onError: (error) => {
       console.error('Erreur lors de la connexion Strava:', error)
+      toast.error('Erreur lors de la connexion Strava')
     }
   })
 
@@ -111,7 +113,9 @@ export default function StravaConnect() {
       queryClient.invalidateQueries({ queryKey: ['activity-stats'] })
     },
     onError: (error: any) => {
-      setSyncStatus(`❌ Erreur: ${error.response?.data?.detail || 'Échec de la synchronisation'}`)
+      const msg = error.response?.data?.detail || 'Échec de la synchronisation'
+      setSyncStatus(`Erreur: ${msg}`)
+      toast.error(msg)
     }
   })
 
@@ -119,36 +123,43 @@ export default function StravaConnect() {
   const deleteStravaMutation = useMutation({
     mutationFn: () => authService.deleteStravaData(),
     onSuccess: (data) => {
-      setRgpdStatus(`Données Strava supprimées: ${data.deleted_activities} activités supprimées`)
+      const msg = `Données Strava supprimées: ${data.deleted_activities} activités supprimées`
+      setRgpdStatus(msg)
+      toast.success(msg)
       queryClient.invalidateQueries({ queryKey: ['strava-status'] })
       queryClient.invalidateQueries({ queryKey: ['activities'] })
       setConfirmationModal({ isOpen: false, type: null })
     },
     onError: (error: any) => {
-      setRgpdStatus(`Erreur: ${error.response?.data?.detail || 'Échec de la suppression'}`)
+      const msg = error.response?.data?.detail || 'Échec de la suppression'
+      setRgpdStatus(`Erreur: ${msg}`)
+      toast.error(msg)
     }
   })
 
   const deleteAllDataMutation = useMutation({
     mutationFn: () => authService.deleteAllUserData(),
     onSuccess: (data) => {
-      setRgpdStatus(`Toutes les données supprimées: ${data.deleted_activities} activités, ${data.deleted_workout_plans} plans d'entraînement`)
+      const msg = `Toutes les données supprimées: ${data.deleted_activities} activités, ${data.deleted_workout_plans} plans d'entraînement`
+      setRgpdStatus(msg)
+      toast.success(msg)
       queryClient.invalidateQueries({ queryKey: ['strava-status'] })
       queryClient.invalidateQueries({ queryKey: ['activities'] })
       queryClient.invalidateQueries({ queryKey: ['workout-plans'] })
       setConfirmationModal({ isOpen: false, type: null })
     },
     onError: (error: any) => {
-      setRgpdStatus(`Erreur: ${error.response?.data?.detail || 'Échec de la suppression'}`)
+      const msg = error.response?.data?.detail || 'Échec de la suppression'
+      setRgpdStatus(`Erreur: ${msg}`)
+      toast.error(msg)
     }
   })
 
   const deleteAccountMutation = useMutation({
     mutationFn: () => authService.deleteAccount(),
-    onSuccess: () => {
-      // Déconnecter l'utilisateur et rediriger vers la page d'accueil
-      localStorage.removeItem('access_token')
-      localStorage.removeItem('refresh_token')
+    onSuccess: async () => {
+      // Les cookies sont supprimés côté serveur via l'endpoint logout
+      try { await authService.logout() } catch { /* ignore */ }
       window.location.href = '/'
     },
     onError: (error: any) => {

@@ -70,19 +70,16 @@ export interface WorkoutPlanUpdate {
 
 
 
-// Configuration axios avec token d'authentification
-const getAuthHeaders = () => {
-  const token = localStorage.getItem('access_token')
-  return token ? { Authorization: `Bearer ${token}` } : {}
-}
+const api = axios.create({
+  baseURL: API_URL,
+  withCredentials: true,
+})
 
 // Service pour les plans d'entraînement
 export const workoutPlanService = {
   // Créer un nouveau plan d'entraînement
   async createWorkoutPlan(plan: WorkoutPlanCreate): Promise<WorkoutPlan> {
-    const response = await axios.post(`${API_URL}/workout-plans`, plan, {
-      headers: getAuthHeaders()
-    })
+    const response = await api.post('/workout-plans', plan)
     return response.data
   },
 
@@ -93,34 +90,25 @@ export const workoutPlanService = {
     workout_type?: string
     is_completed?: boolean
   }): Promise<WorkoutPlan[]> {
-    const response = await axios.get(`${API_URL}/workout-plans`, {
-      headers: getAuthHeaders(),
-      params
-    })
+    const response = await api.get('/workout-plans', { params })
     return response.data
   },
 
   // Récupérer un plan d'entraînement spécifique
   async getWorkoutPlan(id: string): Promise<WorkoutPlan> {
-    const response = await axios.get(`${API_URL}/workout-plans/${id}`, {
-      headers: getAuthHeaders()
-    })
+    const response = await api.get(`/workout-plans/${id}`)
     return response.data
   },
 
   // Mettre à jour un plan d'entraînement
   async updateWorkoutPlan(id: string, updates: WorkoutPlanUpdate): Promise<WorkoutPlan> {
-    const response = await axios.patch(`${API_URL}/workout-plans/${id}`, updates, {
-      headers: getAuthHeaders()
-    })
+    const response = await api.patch(`/workout-plans/${id}`, updates)
     return response.data
   },
 
   // Supprimer un plan d'entraînement
   async deleteWorkoutPlan(id: string): Promise<void> {
-    await axios.delete(`${API_URL}/workout-plans/${id}`, {
-      headers: getAuthHeaders()
-    })
+    await api.delete(`/workout-plans/${id}`)
   },
 
 
@@ -154,13 +142,7 @@ export const workoutPlanService = {
     const formData = new FormData()
     formData.append('file', file)
 
-    const response = await axios.post(`${API_URL}/workout-plans/import-csv`, formData, {
-      headers: {
-        ...getAuthHeaders()
-        // Ne pas définir Content-Type pour multipart/form-data
-        // Le navigateur le fait automatiquement avec la boundary
-      }
-    })
+    const response = await api.post('/workout-plans/import-csv', formData)
     return response.data
   }
 }

@@ -17,6 +17,7 @@ from app.domain.entities.activity import Activity
 from app.domain.entities.enrichment_queue import EnrichmentQueue, EnrichmentStatus
 from app.domain.services.detailed_strava_service import detailed_strava_service
 from app.domain.services.round_robin_scheduler import RoundRobinScheduler
+from app.domain.services.segmentation_service import segment_activity
 
 
 logger = logging.getLogger(__name__)
@@ -195,7 +196,17 @@ class AutoEnrichmentService:
                 logger.info(f"Activite {activity_id} deja enrichie")
                 return True
 
-            return detailed_strava_service.enrich_activity_with_details(session, user_id, activity)
+            success = detailed_strava_service.enrich_activity_with_details(session, user_id, activity)
+
+            if success:
+                try:
+                    segment_count = segment_activity(session, activity)
+                    if segment_count > 0:
+                        logger.info(f"Activite {activity_id}: {segment_count} segments crees apres enrichissement")
+                except Exception as e:
+                    logger.warning(f"Segmentation echouee pour activite {activity_id} (non-bloquant): {e}")
+
+            return success
         finally:
             session.close()
 
@@ -271,6 +282,21 @@ class AutoEnrichmentService:
             return self.scheduler.get_user_queue_position(session, UUID(user_id))
         finally:
             session.close()
+
+    def get_user_queue_position_with_status(self, user_id: str) -> Dict[str, Any]:
+        """Retourne la position de l'utilisateur avec le statut global de la queue."""
+        position = self.get_user_queue_position(user_id)
+        position["queue_status"] = self.get_queue_status()
+        return position
+
+    def start_enrichment_for_user(self, user_id: str) -> Dict[str, Any]:
+        """Ajoute les activites non-enrichies a la queue et retourne le resultat complet."""
+        added_count = self.add_user_activities_to_queue(user_id)
+        return {
+            "message": "Enrichissement automatique demarre",
+            "activities_added_to_queue": added_count,
+            "queue_status": self.get_queue_status(),
+        }
 
 
 # Instance globale

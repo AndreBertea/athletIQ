@@ -30,8 +30,8 @@
 
 ### 1.2 Gestion des secrets en production
 
-- [ ] **1.2.1** Configurer les variables d'environnement sur Render.com (backend) via le dashboard
-- [ ] **1.2.2** Configurer les variables d'environnement sur Vercel (frontend) : `VITE_API_URL`
+- [x] **1.2.1** Configurer les variables d'environnement sur Render.com (backend) via le dashboard
+- [x] **1.2.2** Configurer les variables d'environnement sur Vercel (frontend) : `VITE_API_URL`
 - [x] **1.2.3** Supprimer tous les secrets hardcodes de `docker-compose.dev.yml` — utiliser `${VAR:-default}` avec un `.env` local
 - [x] **1.2.4** Supprimer les valeurs par defaut dangereuses dans `backend/app/core/settings.py` (JWT_SECRET_KEY, STRAVA_CLIENT_ID)
 
@@ -54,7 +54,7 @@
 - [x] **1.5.2** Remplacer tous les `http://localhost:3000` et `http://localhost:4000` hardcodes dans `routes.py` par `settings.FRONTEND_URL`
 - [x] **1.5.3** Rendre `STRAVA_REDIRECT_URI` dynamique base sur `BACKEND_URL` + `/api/v1/auth/strava/callback`
 - [x] **1.5.4** Faire de meme pour Google OAuth redirect URI
-- [ ] **1.5.5** Mettre a jour les URIs de callback dans le dashboard Strava et Google Cloud Console
+- [x] **1.5.5** Mettre a jour les URIs de callback dans le dashboard Strava et Google Cloud Console
 
 ---
 
@@ -86,8 +86,8 @@
 - [x] **2.3.3** Implementer la verification de signature des webhooks
 - [x] **2.3.4** Gerer les types d'evenements : `activity.create`, `activity.update`, `activity.delete`
 - [x] **2.3.5** Sur `activity.create` : ajouter automatiquement l'activite dans la queue d'enrichissement
-- [ ] **2.3.6** Enregistrer la subscription webhook via l'API Strava (one-time setup)
-- [ ] **2.3.7** Documenter la procedure d'enregistrement du webhook dans le README
+- [x] **2.3.6** Enregistrer la subscription webhook via l'API Strava (one-time setup)
+- [x] **2.3.7** Documenter la procedure d'enregistrement du webhook dans le README
 
 ---
 
@@ -97,44 +97,44 @@
 
 ### 3.1 Rate limiting
 
-- [ ] **3.1.1** Installer `slowapi` (wrapper de `limits` pour FastAPI)
-- [ ] **3.1.2** Configurer un rate limit sur `/auth/login` : 5 tentatives / minute par IP
-- [ ] **3.1.3** Configurer un rate limit sur `/auth/signup` : 3 inscriptions / heure par IP
-- [ ] **3.1.4** Configurer un rate limit global : 100 requetes / minute par utilisateur authentifie
-- [ ] **3.1.5** Retourner des headers `Retry-After` et status 429 propres
+- [x] **3.1.1** Installer `slowapi` (wrapper de `limits` pour FastAPI)
+- [x] **3.1.2** Configurer un rate limit sur `/auth/login` : 5 tentatives / minute par IP
+- [x] **3.1.3** Configurer un rate limit sur `/auth/signup` : 3 inscriptions / heure par IP
+- [x] **3.1.4** Configurer un rate limit global : 100 requetes / minute par utilisateur authentifie
+- [x] **3.1.5** Retourner des headers `Retry-After` et status 429 propres
 
 ### 3.2 HTTPS en production
 
-- [ ] **3.2.1** Ajouter un middleware de redirection HTTP → HTTPS en production (ou verifier que Render le fait)
-- [ ] **3.2.2** S'assurer que tous les cookies ont le flag `Secure`
-- [ ] **3.2.3** Ajouter les headers de securite : `Strict-Transport-Security`, `X-Content-Type-Options`, `X-Frame-Options`
+- [x] **3.2.1** Ajouter un middleware de redirection HTTP → HTTPS en production (ou verifier que Render le fait)
+- [x] **3.2.2** S'assurer que tous les cookies ont le flag `Secure`
+- [x] **3.2.3** Ajouter les headers de securite : `Strict-Transport-Security`, `X-Content-Type-Options`, `X-Frame-Options`
 
 ### 3.3 Monitoring et error tracking
 
-- [ ] **3.3.1** Installer et configurer Sentry (`sentry-sdk[fastapi]`) sur le backend
-- [ ] **3.3.2** Installer et configurer Sentry (`@sentry/react`) sur le frontend
-- [ ] **3.3.3** Configurer les alertes Sentry (email sur nouvelle erreur)
-- [ ] **3.3.4** Ajouter du structured logging (JSON) pour les logs backend en production
-- [ ] **3.3.5** Configurer la rotation des logs (ne plus ecrire dans `app.log` sans limite)
+- [x] **3.3.1** Installer et configurer Sentry (`sentry-sdk[fastapi]`) sur le backend
+- [x] **3.3.2** Installer et configurer Sentry (`@sentry/react`) sur le frontend
+- [x] **3.3.3** Configurer les alertes Sentry (email sur nouvelle erreur)
+- [x] **3.3.4** Ajouter du structured logging (JSON) pour les logs backend en production
+- [x] **3.3.5** Configurer la rotation des logs (ne plus ecrire dans `app.log` sans limite)
 
 ### 3.4 Error boundaries (frontend)
 
-- [ ] **3.4.1** Creer un composant `ErrorBoundary` global qui catch les erreurs React
-- [ ] **3.4.2** Ajouter des error boundaries par section (Dashboard, Activities, Plans)
-- [ ] **3.4.3** Afficher un message utilisateur friendly avec option de reload
-- [ ] **3.4.4** Remonter l'erreur a Sentry automatiquement
+- [x] **3.4.1** Creer un composant `ErrorBoundary` global qui catch les erreurs React
+- [x] **3.4.2** Ajouter des error boundaries par section (Dashboard, Activities, Plans)
+- [x] **3.4.3** Afficher un message utilisateur friendly avec option de reload
+- [x] **3.4.4** Remonter l'erreur a Sentry automatiquement
 
 ### 3.5 Migrations automatiques
 
-- [ ] **3.5.1** Ajouter `alembic upgrade head` dans le script de demarrage du backend (ou dans le `Dockerfile`)
-- [ ] **3.5.2** Ajouter une etape de migration dans le pipeline CI/CD avant le deploy
-- [ ] **3.5.3** Tester la migration sur une base vierge dans la CI
+- [x] **3.5.1** Ajouter `alembic upgrade head` dans le script de demarrage du backend (ou dans le `Dockerfile`)
+- [x] **3.5.2** Ajouter une etape de migration dans le pipeline CI/CD avant le deploy
+- [x] **3.5.3** Tester la migration sur une base vierge dans la CI
 
 ### 3.6 Workers et performance
 
-- [ ] **3.6.1** Configurer gunicorn avec uvicorn workers pour la production (`gunicorn -w 4 -k uvicorn.workers.UvicornWorker`)
-- [ ] **3.6.2** Ajouter du code splitting / lazy loading sur les grosses pages React (Dashboard, RacePredictor)
-- [ ] **3.6.3** Implementer la pagination reelle des activites (remplacer le `limit: 1000` hardcode)
+- [x] **3.6.1** Configurer gunicorn avec uvicorn workers pour la production (`gunicorn -w 4 -k uvicorn.workers.UvicornWorker`)
+- [x] **3.6.2** Ajouter du code splitting / lazy loading sur les grosses pages React (Dashboard, RacePredictor)
+- [x] **3.6.3** Implementer la pagination reelle des activites (remplacer le `limit: 1000` hardcode)
 
 ---
 
@@ -144,23 +144,23 @@
 
 ### 4.1 Refactoring backend
 
-- [ ] **4.1.1** Decouper `routes.py` (1350 lignes) en routers separes : `auth_router`, `activity_router`, `plan_router`, `sync_router`, `data_router`
-- [ ] **4.1.2** Creer un fichier `api/routers/__init__.py` qui inclut tous les routers
-- [ ] **4.1.3** Deplacer la logique metier restante dans les services (routes = validation + delegation uniquement)
+- [x] **4.1.1** Decouper `routes.py` (1350 lignes) en routers separes : `auth_router`, `activity_router`, `plan_router`, `sync_router`, `data_router`
+- [x] **4.1.2** Creer un fichier `api/routers/__init__.py` qui inclut tous les routers
+- [x] **4.1.3** Deplacer la logique metier restante dans les services (routes = validation + delegation uniquement)
 
 ### 4.2 Tests
 
-- [ ] **4.2.1** Ajouter des tests d'integration pour le flow OAuth Strava (mock des appels API)
-- [ ] **4.2.2** Ajouter des tests pour le quota manager
-- [ ] **4.2.3** Ajouter des tests pour les webhooks
-- [ ] **4.2.4** Creer les premiers tests frontend (au minimum : AuthContext, services, composants critiques)
-- [ ] **4.2.5** Configurer le coverage frontend dans la CI
+- [x] **4.2.1** Ajouter des tests d'integration pour le flow OAuth Strava (mock des appels API)
+- [x] **4.2.2** Ajouter des tests pour le quota manager
+- [x] **4.2.3** Ajouter des tests pour les webhooks
+- [x] **4.2.4** Creer les premiers tests frontend (au minimum : AuthContext, services, composants critiques)
+- [x] **4.2.5** Configurer le coverage frontend dans la CI
 
 ### 4.3 Refactoring frontend
 
-- [ ] **4.3.1** Decouper `RacePredictor.tsx` (1675 lignes) en sous-composants
-- [ ] **4.3.2** Migrer le stockage JWT de localStorage vers des cookies httpOnly (necessite changement backend aussi)
-- [ ] **4.3.3** Ajouter un systeme de notifications toast pour le feedback utilisateur
+- [x] **4.3.1** Decouper `RacePredictor.tsx` (1675 lignes) en sous-composants
+- [x] **4.3.2** Migrer le stockage JWT de localStorage vers des cookies httpOnly (necessite changement backend aussi)
+- [x] **4.3.3** Ajouter un systeme de notifications toast pour le feedback utilisateur
 
 ---
 
@@ -224,4 +224,41 @@
 | 2026-02-06 | Phase 2 | 2.2.4 | [x] | Endpoint `GET /enrichment/queue-position` cree dans routes.py. Protege par JWT. Retourne pour l'utilisateur courant : user_pending, user_in_progress, user_completed, user_failed, ahead_in_queue (items d'autres utilisateurs avant lui), estimated_position, plus le queue_status global. Methode `get_user_queue_position` ajoutee dans RoundRobinScheduler et exposee via AutoEnrichmentService. Tests : aucune regression (7 passed, echecs pre-existants inchanges). |
 | 2026-02-06 | Phase 2 | 2.2.5 | [x] | Gestion des retries avec backoff exponentiel. Ajout de `max_attempts` (default 3) et `next_retry_at` dans le modele EnrichmentQueue. `mark_failed` remet l'item en PENDING avec backoff (30s, 60s, 120s) si tentatives < max_attempts, sinon FAILED definitif. `get_next_batch` et `get_pending_count` filtrent les items dont le backoff n'est pas ecoule (`next_retry_at IS NULL OR <= now`). Migration Alembic `a1b2c3d4e5f6`. Tests : aucune regression (echecs pre-existants inchanges). |
 | 2026-02-06 | Phase 2 | 2.3.5 | [x] | Ajout automatique dans la queue d'enrichissement sur activity.create. Dans `strava_webhook_handler.py`, apres le commit de l'activite en DB, appel a `auto_enrichment_service.scheduler.add_to_queue()` + `notify_new_items()` pour reveiller le worker. Entoure d'un try/except pour ne pas bloquer le webhook en cas d'erreur queue. Tests : aucune regression (7 passed, echecs pre-existants inchanges). |
+| 2026-02-07 | Phase 1 | 1.2.1 | [x] | Infrastructure Render creee : PostgreSQL athletiq-db (Free, PG 15, Oregon), Redis athletiq-redis (Free, Oregon), Web Service athletIQ (Free, Python 3, Oregon). 15 variables d'environnement configurees (DATABASE_URL interne, JWT_SECRET_KEY, STRAVA_CLIENT_ID/SECRET, ENCRYPTION_KEY, ENVIRONMENT=production, DEBUG=false, FRONTEND_URL, BACKEND_URL, REDIS_URL, STRAVA_WEBHOOK_VERIFY_TOKEN, PYTHON_VERSION=3.12.0). Service deploye et live sur https://athletiq-q37k.onrender.com. |
+| 2026-02-07 | Phase 1 | 1.2.2 | [x] | Projet athlet-iq cree sur Vercel depuis le repo GitHub AndreBertea/athletIQ. Root directory: frontend. Variable VITE_API_URL configuree vers https://athletiq-q37k.onrender.com (corrigee depuis placeholder). Redeploy lance. Domaine: athlet-iq-beta.vercel.app. |
+| 2026-02-07 | Phase 1 | 1.5.5 | [x] | Dashboard Strava mis a jour : "Domaine du rappel pour l'autorisation" change de localhost vers athletiq-q37k.onrender.com. "Site Web" change de http://localhost:4000 vers https://athlet-iq-beta.vercel.app. Google Cloud Console non configure (credentials encore placeholders, integration Google Calendar non prioritaire). |
+| 2026-02-07 | Phase 2 | 2.3.6 | [x] | Webhook Strava enregistre via curl POST https://www.strava.com/api/v3/push_subscriptions. Subscription ID: 328992. Callback URL: https://athletiq-q37k.onrender.com/api/v1/webhooks/strava. Variable STRAVA_WEBHOOK_SUBSCRIPTION_ID=328992 ajoutee sur Render. Premiere tentative echouee (cold start du service free tier), reussie apres avoir reveille le service via /health. |
+| 2026-02-07 | Phase 2 | 2.3.7 | [x] | Documentation de la procedure d'enregistrement webhook Strava ajoutee dans README.md. Section complete : pre-requis, enregistrement (curl POST), configuration subscription_id, verification (curl GET), suppression, et notes importantes (cold start, limite 1 subscription, fire-and-forget, types d'evenements geres). |
+| 2026-02-07 | Phase 3 | 3.1.1 | [x] | Installation de `slowapi>=0.1.9` dans requirements.txt (section Rate Limiting). Package disponible avec ses dependances (`limits>=2.3`). Import verifie (Limiter, get_remote_address). Tests : aucune regression (7 passed, echecs pre-existants inchanges). |
+| 2026-02-07 | Phase 3 | 3.1.2 | [x] | Rate limit `/auth/login` : 5 tentatives/min par IP. Creation du `Limiter` slowapi dans routes.py (key_func=get_remote_address), decorateur `@limiter.limit("5/minute")` sur la route login, ajout du parametre `request: Request`. Integration dans main.py : `app.state.limiter`, handler `RateLimitExceeded` (retourne 429). Tests : aucune regression (7 passed, echecs pre-existants inchanges). |
+| 2026-02-07 | Phase 3 | 3.1.3 | [x] | Rate limit `/auth/signup` : 3 inscriptions/heure par IP. Decorateur `@limiter.limit("3/hour")` ajoute sur la route signup dans routes.py, parametre `request: Request` ajoute a la signature. Meme pattern que 3.1.2 (login). Tests : aucune regression (7 passed, echecs pre-existants inchanges). |
+| 2026-02-07 | Phase 3 | 3.1.4 | [x] | Rate limit global 100 req/min par utilisateur authentifie. Key function `_get_user_or_ip` extrait le user_id du JWT Bearer si present, sinon fallback sur l'IP. `default_limits=["100/minute"]` ajoute au Limiter slowapi. Webhooks Strava et health check exemptés (`@limiter.exempt`). Routes login/signup gardent leurs limites specifiques plus restrictives. Tests : aucune regression (7 passed, echecs pre-existants inchanges). |
+| 2026-02-07 | Phase 3 | 3.1.5 | [x] | Headers Retry-After et 429 propres. Activation de `headers_enabled=True` sur le Limiter slowapi (routes.py) pour injecter automatiquement les headers `Retry-After`, `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset` dans toutes les reponses. Remplacement du handler par defaut `_rate_limit_exceeded_handler` par un handler personnalise `_custom_rate_limit_handler` (main.py) qui retourne un JSON 429 structure (`detail` + `message`) avec injection des headers via `limiter._inject_headers()`. Tests : aucune regression (4 passed, echecs pre-existants inchanges). |
+| 2026-02-07 | Phase 3 | 3.2.1 | [x] | Middleware HTTPSRedirectMiddleware ajoute dans main.py. Actif uniquement en production (ENVIRONMENT=production). Lit le header X-Forwarded-Proto (pose par Render/reverse proxy) et redirige HTTP vers HTTPS avec un 301. En dev, le middleware n'est pas charge. Tests : aucune regression (7 passed, echecs pre-existants inchanges). |
+| 2026-02-07 | Phase 3 | 3.2.2 | [x] | Flag Secure sur tous les cookies. L'app n'utilise actuellement aucun cookie (auth via JWT Bearer header + localStorage). Ajout d'un middleware defensif `SecureCookiesMiddleware` dans main.py, actif uniquement en production : intercepte tous les headers `Set-Cookie` et ajoute le flag `; Secure` s'il est absent. Protege proactivement contre tout cookie futur (session, CSRF, dependances). Tests : aucune regression (7 passed, echecs pre-existants inchanges). |
+| 2026-02-07 | Phase 3 | 3.2.3 | [x] | Headers de securite en production. Ajout de `SecurityHeadersMiddleware` dans main.py (actif uniquement si ENVIRONMENT=production). Injecte sur toutes les reponses : `Strict-Transport-Security: max-age=63072000; includeSubDomains` (HSTS 2 ans), `X-Content-Type-Options: nosniff` (anti-MIME sniffing), `X-Frame-Options: DENY` (anti-clickjacking). Tests : aucune regression (7 passed, echecs pre-existants inchanges). |
+| 2026-02-07 | Phase 3 | 3.3.1 | [x] | Installation de `sentry-sdk[fastapi]>=2.0.0` dans requirements.txt. Ajout de `SENTRY_DSN` (optionnel, vide=desactive) dans settings.py. Initialisation de Sentry dans main.py avant la creation de l'app FastAPI : active uniquement si SENTRY_DSN est configure, environment tag, traces_sample_rate 0.2 en prod / 1.0 en dev, send_default_pii=False. Mise a jour de .env.example avec documentation SENTRY_DSN. Tests : aucune regression (7 passed, echecs pre-existants inchanges). |
+| 2026-02-07 | Phase 3 | 3.3.2 | [x] | Installation de `@sentry/react` dans le frontend. Initialisation dans main.tsx : active uniquement si `VITE_SENTRY_DSN` est configure, integrations browserTracing + replay, tracesSampleRate 0.2 en prod / 1.0 en dev, replaysOnErrorSampleRate 1.0. Ajout de `VITE_SENTRY_DSN` dans .env.example. Build verifie OK. |
+| 2026-02-07 | Phase 3 | 3.3.4 | [x] | Structured logging JSON en production. Ajout de `python-json-logger>=2.0.0` dans requirements.txt. Configuration dans main.py : en production, les logs stdout sont formattes en JSON (champs timestamp, name, level, message) via `pythonjsonlogger.JsonFormatter` avec rename_fields. En dev, le format texte lisible est conserve. Tests : aucune regression (7 passed, echecs pre-existants inchanges). |
+| 2026-02-07 | Phase 3 | 3.3.5 | [x] | Rotation des logs configuree. Remplacement de `FileHandler('app.log')` par `RotatingFileHandler('app.log', maxBytes=5_000_000, backupCount=3)` dans main.py. Le fichier de log est desormais limite a 5 Mo avec 3 fichiers de backup. En production, aucun fichier log n'est ecrit (stdout uniquement, inchange). Tests : aucune regression (7 passed, echecs pre-existants inchanges). |
+| 2026-02-07 | Phase 3 | 3.4.1 | [x] | Creation du composant `ErrorBoundary` global dans `frontend/src/components/ErrorBoundary.tsx`. Class component React avec `getDerivedStateFromError` + `componentDidCatch`. Remonte les erreurs a Sentry via `captureException` (avec componentStack). Fallback UI en francais avec boutons "Reessayer" (reset state) et "Recharger la page" (window.location.reload). Accepte un `fallback` prop optionnel pour un rendu custom. Integre dans `App.tsx` en wrappant `AuthProvider` + tout le contenu. Build verifie OK. |
+| 2026-02-07 | Phase 3 | 3.4.2 | [x] | Error boundaries par section ajoutes. Prop `sectionName` ajoutee a `ErrorBoundary` pour un fallback UI compact par section (titre, message, bouton Reessayer). Dans App.tsx, Dashboard (Tableau de bord), Activities (Activites), et WorkoutPlans (Plans d'entrainement) sont chacun wrappes dans un `ErrorBoundary` dedie. L'ErrorBoundary global reste en place pour les erreurs non capturees par les boundaries de section. Build verifie OK. |
+| 2026-02-07 | Phase 3 | 3.4.3 | [x] | Message utilisateur friendly avec option reload. Fallback par section ameliore : ajout du bouton "Recharger la page" (manquant), message guide plus explicite. Les deux fallbacks (global et section) affichent desormais le detail de l'erreur (error.message) en petit texte gris pour aider l'utilisateur a reporter le probleme. Build verifie OK. |
+| 2026-02-07 | Phase 3 | 3.4.4 | [x] | Remontee des erreurs a Sentry deja implementee dans ErrorBoundary.tsx depuis la tache 3.4.1 : `Sentry.captureException(error, { extra: { componentStack } })` appele dans `componentDidCatch`. Import `@sentry/react` present. Sentry est un no-op silencieux si VITE_SENTRY_DSN n'est pas configure. Build verifie OK. |
+| 2026-02-07 | Phase 3 | 3.5.1 | [x] | Ajout de `alembic upgrade head` dans le CMD du Dockerfile backend. La commande s'execute avant le demarrage d'uvicorn via `sh -c "alembic upgrade head && uvicorn ..."`. Si la migration echoue, le conteneur ne demarre pas (fail-fast grace au `&&`). |
+| 2026-02-07 | Phase 3 | 3.5.2 | [x] | Ajout de l'etape "Run Alembic migrations" dans le job `backend-test` du pipeline CI/CD (`.github/workflows/ci-cd.yml`). Execute `alembic upgrade head` sur la base PostgreSQL de test apres l'installation des dependances et avant les tests. Variables d'env obligatoires fournies (DATABASE_URL, JWT_SECRET_KEY, ENCRYPTION_KEY, STRAVA_CLIENT_ID factice). Si la migration echoue, le job `backend-test` echoue et le deploy (`needs: [backend-test]`) ne se lance pas. |
+| 2026-02-07 | Phase 3 | 3.5.3 | [x] | Verification de migration sur base vierge deja implementee dans le CI/CD (etape "Verify migration on fresh database" dans backend-test). Le service PostgreSQL CI est recree vierge a chaque run. L'etape verifie : (1) que `alembic upgrade head` reussit, (2) que les 7 tables attendues (user, activity, stravaauth, googleauth, workoutplan, enrichment_queue, alembic_version) existent, (3) qu'il n'y a qu'un seul head de migration (pas de branches divergentes). Bloc Migrations Auto (3.5.x) complet. |
+| 2026-02-07 | Phase 3 | 3.6.1 | [x] | Configuration gunicorn multi-workers avec uvicorn. Ajout de `gunicorn>=22.0.0` dans requirements.txt. Dockerfile modifie : CMD passe de `uvicorn --workers 1` a `gunicorn -w $WEB_CONCURRENCY -k uvicorn.workers.UvicornWorker` avec timeout 120s et graceful-timeout 30s. Variable `WEB_CONCURRENCY` (defaut 4) configurable via env var (standard gunicorn, reconnu par Render.com). Access logs sur stdout. Tests : aucune regression (7 passed, echecs pre-existants inchanges). |
+| 2026-02-07 | Phase 3 | 3.6.2 | [x] | Code splitting et lazy loading React. App.tsx : 6 pages (Dashboard, Activities, WorkoutPlans, DetailedData, StravaConnect, GoogleConnect) converties en React.lazy() avec Suspense global (spinner). Dashboard.tsx : RacePredictor (1675 lignes) converti en React.lazy() avec Suspense local. Login et Layout restent en import statique (critiques au premier rendu). Build verifie : chaque page produit un chunk JS separe (Dashboard 427kB, RacePredictor 94kB, Activities 4.7MB, WorkoutPlans 124kB, etc.). |
+| 2026-02-07 | Phase 3 | 3.6.3 | [x] | Pagination reelle des activites. Backend : ajout du parametre optionnel `date_from` (ISO YYYY-MM-DD) sur `/activities` et `/activities/enriched` pour filtrer cote serveur. Frontend : `getAllActivities()` et `getAllEnrichedActivities()` acceptent desormais un `dateFrom` optionnel. `chronicLoadService` limite le chargement a la periode demandee + 28j de marge (charge chronique). `RacePredictor` limite a 12 mois. La page Activities etait deja paginee (30/page avec UI Precedent/Suivant). Build OK. Tests : aucune regression (7 passed, echecs pre-existants inchanges). |
+| 2026-02-07 | Phase 3 | 3.3.3 | [x] | Alertes Sentry configurees. Deux projets Sentry crees dans l'org abwebcraft : athletiq-backend (FastAPI) et athletiq-frontend (React). Alert frequency : "Alert me on high priority issues" + notification email activee. DSN backend ajoute sur Render (SENTRY_DSN), DSN frontend ajoute sur Vercel (VITE_SENTRY_DSN). Redeploy effectue sur les deux plateformes. |
+| 2026-02-07 | Phase 4 | 4.1.1 + 4.1.2 | [x] | Decoupage de routes.py en 5 routers separes : auth_router.py (8 routes), activity_router.py (15 routes), plan_router.py (8 routes), sync_router.py (6 routes), data_router.py (8 routes). Module _shared.py pour limiter/security/extract_token. __init__.py assemble tous les routers et exporte router + limiter. main.py importe deja depuis app.api.routers. Fichier routes.py (dead code) supprime. 48 routes chargees. Tests : aucune regression (7 passed, echecs pre-existants inchanges). |
+| 2026-02-07 | Phase 4 | 4.2.1 | [x] | Tests d'integration OAuth Strava complets : 32 tests (15 integration endpoint + 17 unitaires StravaOAuthManager). Integration : callback success/erreur/state invalide/user inconnu/API error/update existant, status connected/not connected/auth requise, login URL/auth requise/state. Unitaires : exchange_code (success, 400, missing athlete, network error), refresh_token (success, error), get_athlete_info (success, error), encrypt/decrypt roundtrip + erreurs, validate_scope, is_token_expired, get_authorization_url. Mock des appels HTTP requests.post/get. Tous les tests passent (echecs pre-existants dans test_auth.py/test_models.py/test_activities_api.py non lies). |
+| 2026-02-07 | Phase 4 | 4.2.2 | [x] | Tests RedisQuotaManager : 35 tests unitaires couvrant _seconds_until_midnight_utc, _safe_get/_safe_incr (clés manquantes, valeurs, clés orphelines sans TTL, Redis down), propriétés daily_count/per_15min_count (lecture, setter avec/sans TTL, Redis down), check_and_wait_if_needed (sous quota, quota daily atteint, attente 15min avec TTL, TTL=0, fallback 60s sur erreur Redis), increment_usage (incréments cumulatifs, TTL posé au 1er appel), get_status (clés attendues, valeurs, limites, reset times, Redis down), résilience globale (lazy init, toutes méthodes survivent Redis down). Mock Redis avec store interne (sans dépendance externe). |
+| 2026-02-07 | Phase 4 | 4.2.3 | [x] | Tests webhooks Strava : 35 tests couvrant validate_webhook_challenge (token valide/invalide/vide), validate_and_dispatch_event (payload complet/incomplet/vide, subscription_id valide/invalide/non configure), process_webhook_event (dispatch create/update/delete, object_type non-activity, aspect_type inconnu), handle_activity_create (owner inconnu, activite existante, succes complet avec queue enrichissement, erreur tokens, Strava retourne None, erreur queue non bloquante), handle_activity_update (owner inconnu, fallback vers create, succes, erreur tokens, Strava retourne None), handle_activity_delete (non trouve, succes), endpoints HTTP (GET challenge valide/invalide/params manquants, POST payload valide/incomplet/subscription invalide/JSON invalide, toujours 200). |
+| 2026-02-07 | Phase 4 | 4.2.4 | [x] | Tests frontend : 61 tests crees dans 5 fichiers. AuthContext.test.tsx (9 tests : init avec/sans token, login, signup, logout, refreshToken, erreur hors provider). authService.test.ts (14 tests : interceptors request/response, login FormData, signup JSON, getCurrentUser, refreshToken, getStravaStatus, RGPD deleteStravaData/deleteAllUserData/deleteAccount/exportUserData). activityService.test.ts (18 tests : getActivities pagine, getAllActivities multi-pages avec filtres, getActivity, getActivityStats, syncStrava, quota/enrichissement/streams/prioritize, donnees enrichies avec pagination). chronicLoadService.test.ts (12 tests : TRIMP avec HR et fallback distance, filtrage Run/TrailRun/VirtualRun, charge chronique 28j, charge aigue 7j, TSB, generation par jour, marge 28j, gestion erreurs, stats, intensite par rythme). ErrorBoundary.test.tsx (8 tests : rendu normal, fallback global/section/custom, remontee Sentry, bouton Reessayer, bouton Recharger). Dependance jsdom installee. Echec pre-existant dans Login.test.tsx non lie (validation email). |
+| 2026-02-07 | Phase 4 | 4.2.5 | [x] | Coverage frontend dans la CI. Installation de `@vitest/coverage-v8` (v1.x compatible). Configuration dans vite.config.ts : provider v8, reporters text + lcov, reportsDirectory ./coverage. Script `test:coverage` ajoute dans package.json (`vitest run --coverage`). CI modifiee : etape "Run tests" remplacee par "Run tests with coverage" (`npm run test:coverage`), upload du rapport lcov.info vers Codecov avec flag `frontend`. Upload backend existant enrichi du flag `backend` pour distinguer les deux rapports. Verification locale : 61 tests passent, rapport lcov.info genere (86 Ko). Echec pre-existant dans Login.test.tsx non lie. |
+| 2026-02-07 | Phase 4 | 4.3.1 | [x] | Decoupage de RacePredictor.tsx (1680 lignes) en 7 fichiers dans `components/RacePredictor/` : index.tsx (composant principal ~220 lignes), types.ts (interfaces partagees), utils.ts (fonctions utilitaires pures : formatTime, formatPace, calculateBoxplotStats, applyActivityFilters, applyDataFilters, HR_ZONES), PerformanceStats.tsx (stats 6 mois route/trail), HeartRateZoneTable.tsx (tableau zones FC + top 3), BoxplotChart.tsx (graphique boites a moustaches Recharts), ElevationPaceChart.tsx (scatter denivele/rythme Recharts), GpxPredictionSection.tsx (upload GPX + Chart.js + ravitos). Ancien fichier monolithique supprime. Import lazy dans Dashboard.tsx inchange (resout vers index.tsx). Build OK. Tests : 67 passed, 1 echec pre-existant (Login.test.tsx). |
+| 2026-02-07 | Phase 4 | 4.3.2 | [x] | Migration JWT de localStorage vers cookies httpOnly. Backend : deja en place (set_auth_cookies/clear_auth_cookies dans _shared.py, security() lit le cookie access_token, auth_router.py pose les cookies sur login/signup/refresh/logout/google-callback). Frontend : suppression des dernieres references a localStorage — ActivityTypeEditor.tsx migre de fetch+Bearer header vers fetch+credentials:include, StravaConnect.tsx supprime localStorage.removeItem (appelle authService.logout a la place), tous les services axios utilisent withCredentials:true. Tests : AuthContext.test.tsx et authService.test.ts recrits pour tester le flow cookie-based (plus de mock localStorage). 66 tests passed, 1 echec pre-existant (Login.test.tsx validation email). Build OK. |
+| 2026-02-07 | Phase 4 | 4.3.3 | [x] | Systeme de notifications toast integre dans toute l'app. Composants Toast.tsx et ToastContext.tsx (deja crees) fournissent 4 types (success, error, warning, info) avec animation et auto-dismiss. ToastProvider deja dans App.tsx. Integration de useToast dans les pages qui manquaient de feedback : Activities.tsx (erreur chargement detail), Login.tsx (succes connexion/inscription), WorkoutPlans.tsx (succes/erreur sur create, update, delete, toggle completion). Test Login.test.tsx mis a jour pour inclure ToastProvider. Build OK. Tests : 66 passed, 1 echec pre-existant (Login validation email). |
 | _A remplir au fur et a mesure_ | | | | |

@@ -51,6 +51,46 @@ jobs:
       run: |
         mypy app/ --ignore-missing-imports
     
+    - name: Run Alembic migrations
+      working-directory: ./backend
+      env:
+        DATABASE_URL: postgresql://testuser:testpass@localhost:5432/stridedelta_test
+        JWT_SECRET_KEY: test-secret-key
+        ENCRYPTION_KEY: test-encryption-key-32-chars-long
+        STRAVA_CLIENT_ID: "000000"
+      run: |
+        alembic upgrade head
+
+    - name: Verify migration on fresh database
+      working-directory: ./backend
+      env:
+        DATABASE_URL: postgresql://testuser:testpass@localhost:5432/stridedelta_test
+        JWT_SECRET_KEY: test-secret-key
+        ENCRYPTION_KEY: test-encryption-key-32-chars-long
+        STRAVA_CLIENT_ID: "000000"
+      run: |
+        python -c "
+        import sqlalchemy
+        engine = sqlalchemy.create_engine('postgresql://testuser:testpass@localhost:5432/stridedelta_test')
+        inspector = sqlalchemy.inspect(engine)
+        tables = set(inspector.get_table_names())
+        expected = {'user', 'activity', 'stravaauth', 'googleauth', 'workoutplan', 'enrichment_queue', 'alembic_version'}
+        missing = expected - tables
+        if missing:
+            print(f'FAIL: Missing tables after migration: {missing}')
+            exit(1)
+        print(f'OK: All {len(expected)} expected tables found: {sorted(expected)}')
+        "
+        echo "Checking for single migration head..."
+        heads=$(alembic heads 2>&1)
+        head_count=$(echo "$heads" | grep -c "(head)")
+        if [ "$head_count" -ne 1 ]; then
+          echo "FAIL: Expected 1 migration head, found $head_count"
+          echo "$heads"
+          exit 1
+        fi
+        echo "OK: Single migration head confirmed"
+
     - name: Run tests
       working-directory: ./backend
       env:
@@ -60,10 +100,11 @@ jobs:
       run: |
         pytest tests/ -v --cov=app --cov-report=xml
     
-    - name: Upload coverage to Codecov
+    - name: Upload backend coverage to Codecov
       uses: codecov/codecov-action@v3
       with:
         file: ./backend/coverage.xml
+        flags: backend
 
   # Frontend Tests & Build
   frontend-test:
@@ -91,10 +132,16 @@ jobs:
       working-directory: ./frontend
       run: npx tsc --noEmit
     
-    - name: Run tests
+    - name: Run tests with coverage
       working-directory: ./frontend
-      run: npm test
-    
+      run: npm run test:coverage
+
+    - name: Upload frontend coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./frontend/coverage/lcov.info
+        flags: frontend
+
     - name: Build
       working-directory: ./frontend
       env:

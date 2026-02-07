@@ -1,6 +1,7 @@
 # FastAPI & Web Server
 fastapi>=0.110.0
 uvicorn[standard]>=0.30.0
+gunicorn>=22.0.0
 python-multipart>=0.0.6
 
 # Database & ORM
@@ -17,6 +18,13 @@ cryptography>=41.0.0
 # HTTP Client & OAuth
 requests>=2.31.0
 httpx>=0.25.2
+
+# Rate Limiting
+slowapi>=0.1.9
+
+# Monitoring
+sentry-sdk[fastapi]>=2.0.0
+python-json-logger>=2.0.0
 
 # Redis
 redis>=5.0.0

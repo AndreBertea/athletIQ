@@ -36,5 +36,8 @@ USER appuser
 # Port d'exposition
 EXPOSE 8000
 
-# Commande de démarrage
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"] 
+# Nombre de workers (gunicorn lit aussi WEB_CONCURRENCY automatiquement)
+ENV WEB_CONCURRENCY=4
+
+# Commande de démarrage : migrations Alembic puis gunicorn avec uvicorn workers
+CMD ["sh", "-c", "alembic upgrade head && gunicorn app.main:app --bind 0.0.0.0:8000 --workers ${WEB_CONCURRENCY} --worker-class uvicorn.workers.UvicornWorker --timeout 120 --graceful-timeout 30 --access-logfile -"]

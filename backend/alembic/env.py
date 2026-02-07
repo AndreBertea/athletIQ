@@ -15,6 +15,9 @@ from app.domain.entities.user import User
 from app.domain.entities.activity import Activity
 from app.domain.entities.workout_plan import WorkoutPlan
 from app.domain.entities.enrichment_queue import EnrichmentQueue
+from app.domain.entities.segment import Segment
+from app.domain.entities.segment_features import SegmentFeatures
+from app.domain.entities.activity_weather import ActivityWeather
 from app.core.database import engine
 from sqlmodel import SQLModel
 

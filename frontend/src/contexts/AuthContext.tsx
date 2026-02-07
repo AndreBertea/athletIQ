@@ -29,52 +29,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const initializeAuth = async () => {
     try {
-      const token = localStorage.getItem('access_token')
-      if (token) {
-        const userData = await authService.getCurrentUser()
-        setUser(userData)
-      }
-    } catch (error) {
-      // Token invalide, le supprimer
-      localStorage.removeItem('access_token')
-      localStorage.removeItem('refresh_token')
+      // Les cookies httpOnly sont envoyés automatiquement par le navigateur
+      const userData = await authService.getCurrentUser()
+      setUser(userData)
+    } catch {
+      // Pas de session valide (pas de cookie ou cookie expiré)
     } finally {
       setLoading(false)
     }
   }
 
   const login = async (email: string, password: string) => {
-    const response = await authService.login(email, password)
-    
-    localStorage.setItem('access_token', response.access_token)
-    localStorage.setItem('refresh_token', response.refresh_token)
-    
+    await authService.login(email, password)
+    // Le backend a posé les cookies httpOnly, on récupère le user
     const userData = await authService.getCurrentUser()
     setUser(userData)
   }
 
   const signup = async (email: string, password: string, fullName: string) => {
-    const response = await authService.signup(email, password, fullName)
-    
-    localStorage.setItem('access_token', response.access_token)
-    localStorage.setItem('refresh_token', response.refresh_token)
-    
+    await authService.signup(email, password, fullName)
+    // Le backend a posé les cookies httpOnly, on récupère le user
     const userData = await authService.getCurrentUser()
     setUser(userData)
   }
 
   const logout = () => {
-    localStorage.removeItem('access_token')
-    localStorage.removeItem('refresh_token')
+    authService.logout()
     setUser(null)
   }
 
   const refreshToken = async () => {
-    const refreshTokenValue = localStorage.getItem('refresh_token')
-    if (!refreshTokenValue) throw new Error('No refresh token')
-
-    const response = await authService.refreshToken(refreshTokenValue)
-    localStorage.setItem('access_token', response.access_token)
+    await authService.refreshToken()
   }
 
   const value = {
@@ -95,4 +80,4 @@ export function useAuth() {
     throw new Error('useAuth must be used within an AuthProvider')
   }
   return context
-} 
+}

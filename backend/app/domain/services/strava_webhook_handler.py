@@ -7,12 +7,62 @@ from sqlmodel import Session, select
 from uuid import UUID
 
 from app.core.database import engine
+from app.core.settings import get_settings
 from app.domain.entities.activity import Activity
 from app.domain.entities.user import StravaAuth
 from app.domain.services.strava_sync_service import strava_sync_service
 from app.domain.services.auto_enrichment_service import auto_enrichment_service
 
 logger = logging.getLogger(__name__)
+
+
+REQUIRED_WEBHOOK_FIELDS = ("object_type", "object_id", "aspect_type", "owner_id", "subscription_id")
+
+
+def validate_webhook_challenge(hub_verify_token: str, hub_challenge: str) -> dict:
+    """Valide le challenge Strava pour la subscription webhook.
+
+    Retourne le payload de reponse si valide.
+    Leve ValueError si le verify_token est invalide.
+    """
+    settings = get_settings()
+    if hub_verify_token != settings.STRAVA_WEBHOOK_VERIFY_TOKEN:
+        logger.warning(f"Webhook Strava: verify_token invalide: {hub_verify_token}")
+        raise ValueError("Invalid verify token")
+
+    logger.info("Webhook Strava: challenge valide avec succes")
+    return {"hub.challenge": hub_challenge}
+
+
+def validate_and_dispatch_event(event: dict) -> dict:
+    """Valide la structure du payload webhook et dispatche le traitement.
+
+    Retourne un dict de statut. Leve ValueError si le payload est invalide.
+    """
+    missing = [f for f in REQUIRED_WEBHOOK_FIELDS if f not in event]
+    if missing:
+        logger.warning(f"Webhook Strava: champs manquants dans le payload: {missing}")
+        raise ValueError("missing fields")
+
+    settings = get_settings()
+    expected_sub_id = settings.STRAVA_WEBHOOK_SUBSCRIPTION_ID
+    if expected_sub_id:
+        received_sub_id = str(event.get("subscription_id", ""))
+        if received_sub_id != expected_sub_id:
+            logger.warning(
+                f"Webhook Strava: subscription_id invalide: "
+                f"recu={received_sub_id}, attendu={expected_sub_id}"
+            )
+            raise ValueError("invalid subscription")
+
+    logger.info(
+        f"Webhook Strava recu: object_type={event.get('object_type')}, "
+        f"aspect_type={event.get('aspect_type')}, "
+        f"object_id={event.get('object_id')}, "
+        f"owner_id={event.get('owner_id')}"
+    )
+
+    return {"status": "ok"}
 
 
 def _get_user_id_by_strava_athlete(session: Session, owner_id: int) -> str | None:

@@ -1,17 +1,16 @@
 """add parsing fields to workout plan
 
 Revision ID: add_parsing_fields
-Revises: cad68901c5f3
+Revises: a1b2c3d4e5f6
 Create Date: 2025-01-27 10:00:00.000000
 
 """
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects import sqlite
 
 # revision identifiers, used by Alembic.
 revision = 'add_parsing_fields'
-down_revision = 'cad68901c5f3'
+down_revision = 'a1b2c3d4e5f6'
 branch_labels = None
 depends_on = None
 
@@ -24,11 +23,11 @@ def upgrade() -> None:
     op.add_column('workoutplan', sa.Column('parsed_estimated_pace', sa.String(), nullable=True))
     op.add_column('workoutplan', sa.Column('parsed_estimated_heart_rate', sa.String(), nullable=True))
     op.add_column('workoutplan', sa.Column('parsed_confidence_score', sa.Float(), nullable=True))
-    op.add_column('workoutplan', sa.Column('parsed_main_sets', sqlite.JSON, nullable=True))
+    op.add_column('workoutplan', sa.Column('parsed_main_sets', sa.JSON(), nullable=True))
     op.add_column('workoutplan', sa.Column('parsed_warmup', sa.String(), nullable=True))
     op.add_column('workoutplan', sa.Column('parsed_cooldown', sa.String(), nullable=True))
-    op.add_column('workoutplan', sa.Column('parsing_corrections', sqlite.JSON, nullable=True))
-    op.add_column('workoutplan', sa.Column('parsing_validation_issues', sqlite.JSON, nullable=True))
+    op.add_column('workoutplan', sa.Column('parsing_corrections', sa.JSON(), nullable=True))
+    op.add_column('workoutplan', sa.Column('parsing_validation_issues', sa.JSON(), nullable=True))
     op.add_column('workoutplan', sa.Column('parsing_validation_score', sa.Float(), nullable=True))
     op.add_column('workoutplan', sa.Column('parsed_at', sa.DateTime(), nullable=True))
     # ### end Alembic commands ###

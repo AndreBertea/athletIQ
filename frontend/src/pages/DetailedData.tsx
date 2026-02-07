@@ -2,11 +2,13 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Database, Clock, AlertCircle, CheckCircle, Play } from 'lucide-react'
 import { activityService } from '../services/activityService'
+import { useToast } from '../contexts/ToastContext'
 
 export default function DetailedData() {
   const [isEnriching, setIsEnriching] = useState(false)
   const [batchSize, setBatchSize] = useState(10)
   const queryClient = useQueryClient()
+  const toast = useToast()
 
   // Query pour le statut d'enrichissement
   const { data: enrichmentStatus, isLoading: statusLoading, refetch: refetchStatus } = useQuery({
@@ -34,11 +36,10 @@ export default function DetailedData() {
       refetchQuota()
       queryClient.invalidateQueries({ queryKey: ['activities'] })
       
-      // Message de succès
-      alert(`✅ ${data.message}`)
+      toast.success(data.message)
     },
     onError: (error: any) => {
-      alert(`❌ Erreur: ${error.response?.data?.detail || 'Échec de l\'enrichissement'}`)
+      toast.error(error.response?.data?.detail || 'Échec de l\'enrichissement')
     },
     onSettled: () => {
       setIsEnriching(false)
@@ -47,7 +48,7 @@ export default function DetailedData() {
 
   const handleEnrichBatch = () => {
     if (!enrichmentStatus?.can_enrich_more) {
-      alert('⚠️ Quota atteint ou aucune activité à enrichir')
+      toast.warning('Quota atteint ou aucune activité à enrichir')
       return
     }
     

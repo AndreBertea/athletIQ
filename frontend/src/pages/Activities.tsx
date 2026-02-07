@@ -2,28 +2,33 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Activity, MapPin, Clock, TrendingUp, Eye, Calendar, X, Heart, Target, Trophy, Mountain, Zap, Gauge } from 'lucide-react'
 import { activityService } from '../services/activityService'
+import { useToast } from '../contexts/ToastContext'
 import HeartRateChart from '../components/HeartRateChart'
 // @ts-expect-error: Types manquants pour react-plotly.js
 import Plot from 'react-plotly.js'
 import ActivityTypeEditor from '../components/ActivityTypeEditor'
 
+const PER_PAGE = 30
+
 export default function Activities() {
+  const toast = useToast()
   const [selectedActivityId, setSelectedActivityId] = useState<number | null>(null)
   const [selectedActivityDetail, setSelectedActivityDetail] = useState<any | null>(null)
   const [useEnrichedData, setUseEnrichedData] = useState<boolean>(true)
-  
-  // Récupérer les activités originales
-  const { data: originalActivities, isLoading: originalLoading } = useQuery({
-    queryKey: ['activities'],
-    queryFn: () => activityService.getActivities({ limit: 1000 }),
+  const [page, setPage] = useState(1)
+
+  // Récupérer les activités originales (paginées)
+  const { data: originalData, isLoading: originalLoading } = useQuery({
+    queryKey: ['activities', page],
+    queryFn: () => activityService.getActivities({ page, per_page: PER_PAGE }),
     staleTime: 5 * 60 * 1000,
     enabled: !useEnrichedData
   })
 
-  // Récupérer les activités enrichies (directement un tableau maintenant)
-  const { data: enrichedActivities, isLoading: enrichedLoading } = useQuery({
-    queryKey: ['enriched-activities'],
-    queryFn: () => activityService.getEnrichedActivities({ limit: 1000 }),
+  // Récupérer les activités enrichies (paginées)
+  const { data: enrichedData, isLoading: enrichedLoading } = useQuery({
+    queryKey: ['enriched-activities', page],
+    queryFn: () => activityService.getEnrichedActivities({ page, per_page: PER_PAGE }),
     staleTime: 5 * 60 * 1000,
     enabled: useEnrichedData
   })
@@ -37,19 +42,22 @@ export default function Activities() {
   })
 
   const isLoading = useEnrichedData ? enrichedLoading : originalLoading
-  
+
   // Utiliser les bonnes données selon le toggle
-  const activities = useEnrichedData ? enrichedActivities : originalActivities
-  
+  const paginatedData = useEnrichedData ? enrichedData : originalData
+  const activities = paginatedData?.items || []
+  const totalPages = paginatedData?.pages || 1
+  const totalActivities = paginatedData?.total || 0
+
   // Créer un Map des activités enrichies pour vérification (toujours charger pour les badges)
-  const { data: allEnrichedActivities } = useQuery({
-    queryKey: ['enriched-activities-for-badges'],
-    queryFn: () => activityService.getEnrichedActivities({ limit: 100 }),
+  const { data: badgesData } = useQuery({
+    queryKey: ['enriched-activities-for-badges', page],
+    queryFn: () => activityService.getEnrichedActivities({ page, per_page: PER_PAGE }),
     staleTime: 5 * 60 * 1000
   })
-  
-  const enrichedMap = new Map((allEnrichedActivities || []).map((a: any) => [a.activity_id, a]))
-  const enrichedIds = new Set((allEnrichedActivities || []).map((a: any) => a.activity_id))
+
+  const enrichedMap = new Map((badgesData?.items || []).map((a: any) => [a.activity_id, a]))
+  const enrichedIds = new Set((badgesData?.items || []).map((a: any) => a.activity_id))
 
   if (isLoading) {
     return (
@@ -124,6 +132,7 @@ export default function Activities() {
       }
     } catch (error) {
       console.error('Erreur lors du chargement du détail:', error)
+      toast.error('Impossible de charger les détails de l\'activité')
     }
   }
 
@@ -152,7 +161,7 @@ export default function Activities() {
         <div className="flex items-center space-x-2">
           <label className="text-sm font-medium text-gray-700">Source :</label>
           <button
-            onClick={() => setUseEnrichedData(true)}
+            onClick={() => { setUseEnrichedData(true); setPage(1) }}
             className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
               useEnrichedData
                 ? 'bg-green-600 text-white'
@@ -162,7 +171,7 @@ export default function Activities() {
             Enrichies
           </button>
           <button
-            onClick={() => setUseEnrichedData(false)}
+            onClick={() => { setUseEnrichedData(false); setPage(1) }}
             className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
               !useEnrichedData
                 ? 'bg-blue-600 text-white'
@@ -466,6 +475,56 @@ export default function Activities() {
           )
         })}
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-gray-600">
+            {totalActivities} activit{totalActivities > 1 ? 'és' : 'é'} — Page {page} / {totalPages}
+          </p>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="px-3 py-1.5 text-sm rounded-md border transition-colors disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+            >
+              Précédent
+            </button>
+            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+              let pageNum: number
+              if (totalPages <= 5) {
+                pageNum = i + 1
+              } else if (page <= 3) {
+                pageNum = i + 1
+              } else if (page >= totalPages - 2) {
+                pageNum = totalPages - 4 + i
+              } else {
+                pageNum = page - 2 + i
+              }
+              return (
+                <button
+                  key={pageNum}
+                  onClick={() => setPage(pageNum)}
+                  className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                    page === pageNum
+                      ? 'bg-primary-600 text-white'
+                      : 'border hover:bg-gray-50'
+                  }`}
+                >
+                  {pageNum}
+                </button>
+              )
+            })}
+            <button
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+              className="px-3 py-1.5 text-sm rounded-md border transition-colors disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+            >
+              Suivant
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Modal détail activité */}
       {selectedActivityDetail && (
