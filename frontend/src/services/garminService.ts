@@ -18,6 +18,42 @@ export interface GarminStatus {
   last_sync_at?: string
 }
 
+export interface FitMetrics {
+  id: string
+  activity_id: string
+  ground_contact_time_avg: number | null
+  vertical_oscillation_avg: number | null
+  stance_time_balance_avg: number | null
+  power_avg: number | null
+  aerobic_training_effect: number | null
+  anaerobic_training_effect: number | null
+  record_count: number | null
+  fit_downloaded_at: string | null
+}
+
+export interface GarminActivitySyncResult {
+  created: number
+  linked: number
+  skipped: number
+  errors: number
+  total: number
+}
+
+export interface FitEnrichResult {
+  status: string
+  activity_id: string
+  streams_keys?: string[]
+  fit_metrics_stored?: boolean
+  segments_created?: number
+  weather_enriched?: boolean
+}
+
+export interface BatchEnrichResult {
+  enriched: number
+  errors: number
+  total: number
+}
+
 export interface GarminDailyEntry {
   date: string
   hrv_rmssd: number | null
@@ -57,6 +93,26 @@ export const garminService = {
     if (dateFrom) params.date_from = dateFrom
     if (dateTo) params.date_to = dateTo
     const res = await api.get('/garmin/daily', { params })
+    return res.data
+  },
+
+  async syncGarminActivities(daysBack: number = 30): Promise<GarminActivitySyncResult> {
+    const res = await api.post(`/sync/garmin/activities?days_back=${daysBack}`)
+    return res.data
+  },
+
+  async enrichGarminFit(activityId: string): Promise<FitEnrichResult> {
+    const res = await api.post(`/garmin/activities/${activityId}/enrich-fit`)
+    return res.data
+  },
+
+  async batchEnrichGarminFit(maxActivities: number = 10): Promise<BatchEnrichResult> {
+    const res = await api.post(`/garmin/activities/enrich-fit?max_activities=${maxActivities}`)
+    return res.data
+  },
+
+  async getActivityFitMetrics(activityId: string): Promise<FitMetrics> {
+    const res = await api.get(`/garmin/activities/${activityId}/fit-metrics`)
     return res.data
   },
 }

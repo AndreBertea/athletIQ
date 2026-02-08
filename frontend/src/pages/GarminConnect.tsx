@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle, AlertCircle, RefreshCw, LogOut, Heart, Moon, Activity, Loader2, Shield } from 'lucide-react'
+import { CheckCircle, AlertCircle, RefreshCw, LogOut, Heart, Moon, Activity, Loader2, Shield, Download, Zap } from 'lucide-react'
 import { useToast } from '../contexts/ToastContext'
 import { garminService } from '../services/garminService'
 
@@ -60,6 +60,26 @@ export default function GarminConnect() {
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Echec de la synchronisation Garmin')
+    },
+  })
+
+  const syncActivitiesMutation = useMutation({
+    mutationFn: () => garminService.syncGarminActivities(daysBack),
+    onSuccess: (data) => {
+      toast.success(`Activites : ${data.created} creees, ${data.linked} liees, ${data.skipped} deja syncees`)
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Echec de la synchronisation des activites')
+    },
+  })
+
+  const batchEnrichMutation = useMutation({
+    mutationFn: () => garminService.batchEnrichGarminFit(10),
+    onSuccess: (data) => {
+      toast.success(`FIT : ${data.enriched}/${data.total} activites enrichies`)
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Echec de l\'enrichissement FIT')
     },
   })
 
@@ -231,6 +251,52 @@ export default function GarminConnect() {
                   <>
                     <RefreshCw className="h-4 w-4 mr-2" />
                     Synchroniser ({daysBack} jours)
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Activites Garmin */}
+          <div className="card">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">
+              Activites Garmin
+            </h3>
+            <p className="text-sm text-gray-500 mb-4">
+              Synchronisez vos activites Garmin et enrichissez-les avec les fichiers FIT (Running Dynamics, puissance, Training Effect).
+            </p>
+            <div className="space-y-3">
+              <button
+                onClick={() => syncActivitiesMutation.mutate()}
+                disabled={syncActivitiesMutation.isPending}
+                className="w-full btn-primary"
+              >
+                {syncActivitiesMutation.isPending ? (
+                  <div className="flex items-center justify-center">
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    Synchronisation des activites...
+                  </div>
+                ) : (
+                  <>
+                    <Download className="h-4 w-4 mr-2" />
+                    Synchroniser les activites ({daysBack} jours)
+                  </>
+                )}
+              </button>
+              <button
+                onClick={() => batchEnrichMutation.mutate()}
+                disabled={batchEnrichMutation.isPending}
+                className="w-full px-4 py-2 text-sm bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors disabled:opacity-50 flex items-center justify-center"
+              >
+                {batchEnrichMutation.isPending ? (
+                  <div className="flex items-center justify-center">
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    Enrichissement FIT en cours...
+                  </div>
+                ) : (
+                  <>
+                    <Zap className="h-4 w-4 mr-2" />
+                    Enrichir les fichiers FIT (max 10)
                   </>
                 )}
               </button>

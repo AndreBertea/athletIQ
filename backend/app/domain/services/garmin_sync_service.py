@@ -1,19 +1,23 @@
 """
-Service de sync Garmin — Tache 3.3.1 + 5.1.2
+Service de sync Garmin — Tache 3.3.1 + 5.1.2 + activites Garmin
 Synchronise les donnees physiologiques quotidiennes depuis Garmin Connect via garth.
 Inclut le download et parsing de fichiers FIT (Running Dynamics, power, Training Effect).
+Inclut la sync des activites Garmin dans la table Activity unifiee.
 """
 import asyncio
 import logging
 from io import BytesIO
 from datetime import date, datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
 import garth
+from sqlalchemy import and_, func
 from sqlmodel import Session, select
 
 from app.auth.garmin_auth import garmin_auth
+from app.domain.entities.activity import Activity, ActivitySource, ActivityType
+from app.domain.entities.fit_metrics import FitMetrics
 from app.domain.entities.garmin_daily import GarminDaily
 from app.domain.entities.user import GarminAuth
 
@@ -297,3 +301,459 @@ def parse_fit_file(fit_bytes: bytes) -> Dict[str, Any]:
         break  # Une seule session par activite
 
     return result
+
+
+# ============================================================
+# Mapping des types d'activite Garmin -> ActivityType
+# ============================================================
+
+GARMIN_TYPE_MAP: Dict[str, ActivityType] = {
+    "running": ActivityType.RUN,
+    "trail_running": ActivityType.TRAIL_RUN,
+    "treadmill_running": ActivityType.RUN,
+    "cycling": ActivityType.RIDE,
+    "indoor_cycling": ActivityType.RIDE,
+    "mountain_biking": ActivityType.RIDE,
+    "gravel_cycling": ActivityType.RIDE,
+    "swimming": ActivityType.SWIM,
+    "open_water_swimming": ActivityType.SWIM,
+    "pool_swimming": ActivityType.SWIM,
+    "walking": ActivityType.WALK,
+    "hiking": ActivityType.WALK,
+}
+
+# Tolerance pour la deduplication fuzzy
+DEDUP_TIME_TOLERANCE_S = 300  # 5 minutes
+DEDUP_DISTANCE_TOLERANCE_M = 200  # 200m
+
+
+def _map_garmin_activity(
+    garmin_act: garth.Activity,
+    user_id: UUID,
+) -> Dict[str, Any]:
+    """Convertit une activite garth en dict compatible Activity."""
+    # Determiner le type
+    type_key = None
+    if garmin_act.activity_type and hasattr(garmin_act.activity_type, "type_key"):
+        type_key = garmin_act.activity_type.type_key
+    activity_type = GARMIN_TYPE_MAP.get(type_key, ActivityType.RUN)
+
+    # Distance en metres (garth retourne des metres directement)
+    distance = garmin_act.distance or 0.0
+
+    # Durees en secondes (garth retourne des secondes)
+    moving_time = int(garmin_act.moving_duration or garmin_act.duration or 0)
+    elapsed_time = int(garmin_act.elapsed_duration or garmin_act.duration or 0)
+
+    # Pace en min/km
+    average_pace = None
+    if distance > 0 and moving_time > 0:
+        average_pace = round((moving_time / 60) / (distance / 1000), 2)
+
+    return {
+        "user_id": user_id,
+        "source": ActivitySource.GARMIN.value,
+        "garmin_activity_id": garmin_act.activity_id,
+        "name": garmin_act.activity_name or "Garmin Activity",
+        "activity_type": activity_type,
+        "start_date": garmin_act.start_time_gmt or garmin_act.start_time_local or datetime.utcnow(),
+        "distance": distance,
+        "moving_time": moving_time,
+        "elapsed_time": elapsed_time,
+        "total_elevation_gain": garmin_act.elevation_gain or 0.0,
+        "average_speed": garmin_act.average_speed,
+        "max_speed": garmin_act.max_speed,
+        "average_heartrate": garmin_act.average_hr,
+        "max_heartrate": garmin_act.max_hr,
+        "average_cadence": garmin_act.average_running_cadence_in_steps_per_minute,
+        "average_pace": average_pace,
+    }
+
+
+def _deduplicate_activity(
+    session: Session,
+    user_id: UUID,
+    garmin_activity_id: int,
+    start_date: datetime,
+    distance: float,
+) -> Optional[Activity]:
+    """
+    Verifie si une activite existe deja.
+    1) Match exact par garmin_activity_id
+    2) Fuzzy match par start_date + distance (pour eviter les doublons Strava/Garmin)
+    Retourne l'Activity existante ou None.
+    """
+    # 1) Match exact garmin_activity_id
+    existing = session.exec(
+        select(Activity).where(
+            Activity.user_id == user_id,
+            Activity.garmin_activity_id == garmin_activity_id,
+        )
+    ).first()
+    if existing:
+        return existing
+
+    # 2) Fuzzy match : meme heure (+/- 5min) et distance similaire (+/- 200m)
+    time_lower = start_date - timedelta(seconds=DEDUP_TIME_TOLERANCE_S)
+    time_upper = start_date + timedelta(seconds=DEDUP_TIME_TOLERANCE_S)
+
+    existing = session.exec(
+        select(Activity).where(
+            Activity.user_id == user_id,
+            Activity.start_date >= time_lower,
+            Activity.start_date <= time_upper,
+            Activity.distance >= distance - DEDUP_DISTANCE_TOLERANCE_M,
+            Activity.distance <= distance + DEDUP_DISTANCE_TOLERANCE_M,
+        )
+    ).first()
+
+    return existing
+
+
+async def sync_garmin_activities(
+    session: Session,
+    user_id: UUID,
+    days_back: int = 30,
+) -> Dict[str, Any]:
+    """
+    Synchronise les activites Garmin dans la table Activity.
+
+    Liste les activites via garth.Activity.list(), dedup, cree Activity source=GARMIN.
+    Si une activite existe deja via Strava (fuzzy match), lie le garmin_activity_id.
+
+    Returns:
+        dict avec created, linked, skipped, errors, total
+    """
+    garmin_auth_record = session.exec(
+        select(GarminAuth).where(GarminAuth.user_id == user_id)
+    ).first()
+
+    if not garmin_auth_record:
+        raise ValueError(f"Aucune authentification Garmin pour user_id={user_id}")
+
+    client = garmin_auth.get_client(garmin_auth_record.oauth_token_encrypted)
+
+    # Recuperer les activites (garth pagine par start/limit)
+    cutoff = datetime.utcnow() - timedelta(days=days_back)
+    created = 0
+    linked = 0
+    skipped = 0
+    errors = 0
+
+    try:
+        # garth.Activity.list() retourne les plus recentes d'abord
+        # On charge par pages de 20 jusqu'a depasser le cutoff
+        all_activities: List[garth.Activity] = []
+        start = 0
+        page_size = 20
+        while True:
+            page = garth.Activity.list(limit=page_size, start=start, client=client)
+            if not page:
+                break
+            all_activities.extend(page)
+            # Si la derniere activite de la page est avant le cutoff, on arrete
+            last = page[-1]
+            last_time = last.start_time_gmt or last.start_time_local
+            if last_time and last_time < cutoff:
+                break
+            start += page_size
+            await asyncio.sleep(0.2)  # rate limit
+    except Exception as e:
+        logger.error(f"Erreur listing activites Garmin: {e}")
+        return {"created": 0, "linked": 0, "skipped": 0, "errors": 1, "total": 0}
+
+    for garmin_act in all_activities:
+        act_time = garmin_act.start_time_gmt or garmin_act.start_time_local
+        if act_time and act_time < cutoff:
+            continue
+
+        try:
+            mapped = _map_garmin_activity(garmin_act, user_id)
+            existing = _deduplicate_activity(
+                session, user_id, garmin_act.activity_id,
+                mapped["start_date"], mapped["distance"],
+            )
+
+            if existing:
+                if existing.garmin_activity_id == garmin_act.activity_id:
+                    # Deja synce depuis Garmin, skip
+                    skipped += 1
+                else:
+                    # Existe via Strava, on lie le garmin_activity_id
+                    existing.garmin_activity_id = garmin_act.activity_id
+                    if existing.source == ActivitySource.STRAVA.value:
+                        pass  # On garde source=strava, on ajoute juste l'ID Garmin
+                    session.add(existing)
+                    session.commit()
+                    linked += 1
+            else:
+                # Nouvelle activite Garmin
+                activity = Activity(**mapped)
+                session.add(activity)
+                session.commit()
+                created += 1
+
+        except Exception as e:
+            logger.warning(f"Erreur sync activite Garmin {garmin_act.activity_id}: {e}")
+            errors += 1
+
+    return {
+        "created": created,
+        "linked": linked,
+        "skipped": skipped,
+        "errors": errors,
+        "total": len(all_activities),
+    }
+
+
+# ============================================================
+# FIT file streams extraction + enrichissement
+# ============================================================
+
+# Conversion semicircles -> degrees (FIT GPS encoding)
+SEMICIRCLE_TO_DEG = 180.0 / (2 ** 31)
+
+
+def parse_fit_file_streams(fit_bytes: bytes) -> Dict[str, Any]:
+    """
+    Parse un fichier FIT et extrait les streams compatibles avec le pipeline
+    de segmentation existant.
+
+    Format de sortie compatible avec streams_data Strava :
+    {
+        "time": {"data": [0, 1, 2, ...]},
+        "distance": {"data": [0.0, 5.2, ...]},
+        "altitude": {"data": [100.0, 101.2, ...]},
+        "heartrate": {"data": [120, 125, ...]},
+        "cadence": {"data": [85, 86, ...]},
+        "latlng": {"data": [[lat, lng], ...]},
+        "grade_smooth": {"data": [0.0, 1.2, ...]},
+    }
+    """
+    import fitparse
+
+    fitfile = fitparse.FitFile(BytesIO(fit_bytes))
+
+    times: List[float] = []
+    distances: List[float] = []
+    altitudes: List[float] = []
+    heartrates: List[int] = []
+    cadences: List[int] = []
+    latlngs: List[List[float]] = []
+    grades: List[float] = []
+
+    start_timestamp = None
+
+    for record in fitfile.get_messages("record"):
+        # Timestamp -> time relative
+        ts = record.get_value("timestamp")
+        if ts is not None:
+            if start_timestamp is None:
+                start_timestamp = ts
+            elapsed = (ts - start_timestamp).total_seconds()
+            times.append(elapsed)
+        else:
+            times.append(None)
+
+        # Distance cumulative (metres)
+        dist = record.get_value("distance")
+        distances.append(float(dist) if dist is not None else None)
+
+        # Altitude
+        alt = record.get_value("enhanced_altitude") or record.get_value("altitude")
+        altitudes.append(float(alt) if alt is not None else None)
+
+        # Heart rate
+        hr = record.get_value("heart_rate")
+        heartrates.append(int(hr) if hr is not None else None)
+
+        # Cadence (running = steps/min, FIT peut donner demi-cycles)
+        cad = record.get_value("cadence")
+        cadences.append(int(cad) if cad is not None else None)
+
+        # GPS : position_lat/position_long en semicircles
+        lat_raw = record.get_value("position_lat")
+        lng_raw = record.get_value("position_long")
+        if lat_raw is not None and lng_raw is not None:
+            lat = lat_raw * SEMICIRCLE_TO_DEG
+            lng = lng_raw * SEMICIRCLE_TO_DEG
+            latlngs.append([lat, lng])
+        else:
+            latlngs.append(None)
+
+        # Grade
+        grade = record.get_value("grade")
+        grades.append(float(grade) if grade is not None else None)
+
+    streams: Dict[str, Any] = {}
+
+    if any(t is not None for t in times):
+        streams["time"] = {"data": times}
+    if any(d is not None for d in distances):
+        streams["distance"] = {"data": distances}
+    if any(a is not None for a in altitudes):
+        streams["altitude"] = {"data": altitudes}
+    if any(h is not None for h in heartrates):
+        streams["heartrate"] = {"data": heartrates}
+    if any(c is not None for c in cadences):
+        streams["cadence"] = {"data": cadences}
+    if any(ll is not None for ll in latlngs):
+        streams["latlng"] = {"data": latlngs}
+    if any(g is not None for g in grades):
+        streams["grade_smooth"] = {"data": grades}
+
+    return streams
+
+
+async def enrich_garmin_activity_fit(
+    session: Session,
+    user_id: UUID,
+    activity_id: UUID,
+) -> Dict[str, Any]:
+    """
+    Enrichit une activite Garmin avec son fichier FIT.
+
+    1. Telecharge le FIT
+    2. Parse les streams + metriques Running Dynamics
+    3. Stocke streams_data dans l'activite
+    4. Cree/update FitMetrics
+    5. Lance segmentation + meteo
+
+    Returns:
+        dict avec status, streams_keys, fit_metrics_stored, segments_created
+    """
+    activity = session.exec(
+        select(Activity).where(
+            Activity.id == activity_id,
+            Activity.user_id == user_id,
+        )
+    ).first()
+
+    if not activity:
+        raise ValueError(f"Activite {activity_id} non trouvee")
+
+    if not activity.garmin_activity_id:
+        raise ValueError(f"Activite {activity_id} n'a pas de garmin_activity_id")
+
+    # Recuperer le client Garmin
+    garmin_auth_record = session.exec(
+        select(GarminAuth).where(GarminAuth.user_id == user_id)
+    ).first()
+    if not garmin_auth_record:
+        raise ValueError(f"Aucune authentification Garmin pour user_id={user_id}")
+
+    client = garmin_auth.get_client(garmin_auth_record.oauth_token_encrypted)
+
+    # 1. Download FIT
+    fit_bytes = download_fit_file(client, activity.garmin_activity_id)
+    if not fit_bytes:
+        return {"status": "fit_download_failed", "activity_id": str(activity_id)}
+
+    # 2. Parse streams
+    streams = parse_fit_file_streams(fit_bytes)
+
+    # 3. Parse metriques FIT (Running Dynamics, power, TE)
+    fit_data = parse_fit_file(fit_bytes)
+
+    # 4. Stocke streams_data
+    if streams:
+        activity.streams_data = streams
+        activity.updated_at = datetime.utcnow()
+        session.add(activity)
+
+    # 5. Cree/update FitMetrics
+    existing_fm = session.exec(
+        select(FitMetrics).where(FitMetrics.activity_id == activity_id)
+    ).first()
+
+    if existing_fm:
+        for key, value in fit_data.items():
+            if hasattr(existing_fm, key):
+                setattr(existing_fm, key, value)
+        existing_fm.fit_downloaded_at = datetime.utcnow()
+        existing_fm.updated_at = datetime.utcnow()
+        session.add(existing_fm)
+    else:
+        fm_fields = {
+            k: v for k, v in fit_data.items()
+            if hasattr(FitMetrics, k)
+        }
+        fm = FitMetrics(
+            activity_id=activity_id,
+            fit_downloaded_at=datetime.utcnow(),
+            **fm_fields,
+        )
+        session.add(fm)
+
+    session.commit()
+
+    result = {
+        "status": "success",
+        "activity_id": str(activity_id),
+        "streams_keys": list(streams.keys()),
+        "fit_metrics_stored": bool(fit_data),
+    }
+
+    # 6. Segmentation + meteo (non-bloquant)
+    segments_created = 0
+    if streams:
+        try:
+            from app.domain.services.segmentation_service import segment_activity
+            segments_created = segment_activity(session, activity)
+            result["segments_created"] = segments_created
+        except Exception as e:
+            logger.warning(f"Segmentation echouee pour activite Garmin {activity_id}: {e}")
+
+        try:
+            from app.domain.services.weather_service import fetch_weather_for_activity
+            weather_ok = await fetch_weather_for_activity(session, activity)
+            result["weather_enriched"] = weather_ok
+        except Exception as e:
+            logger.warning(f"Meteo echouee pour activite Garmin {activity_id}: {e}")
+
+    return result
+
+
+async def batch_enrich_garmin_fit(
+    session: Session,
+    user_id: UUID,
+    max_activities: int = 10,
+) -> Dict[str, Any]:
+    """
+    Enrichit en batch les activites Garmin sans streams_data.
+
+    Returns:
+        dict avec enriched, errors, total
+    """
+    # Trouver les activites Garmin sans streams_data
+    activities = session.exec(
+        select(Activity).where(
+            Activity.user_id == user_id,
+            Activity.garmin_activity_id.is_not(None),
+            Activity.streams_data.is_(None),
+        ).order_by(Activity.start_date.desc()).limit(max_activities)
+    ).all()
+
+    enriched = 0
+    errors_count = 0
+
+    for activity in activities:
+        try:
+            result = await enrich_garmin_activity_fit(
+                session, user_id, activity.id,
+            )
+            if result.get("status") == "success":
+                enriched += 1
+            else:
+                errors_count += 1
+        except Exception as e:
+            logger.warning(f"Erreur enrichissement FIT activite {activity.id}: {e}")
+            errors_count += 1
+
+        await asyncio.sleep(0.5)  # rate limit entre activites
+
+    return {
+        "enriched": enriched,
+        "errors": errors_count,
+        "total": len(activities),
+    }

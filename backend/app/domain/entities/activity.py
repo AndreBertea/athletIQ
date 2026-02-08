@@ -14,6 +14,13 @@ if TYPE_CHECKING:
     from .workout_plan import WorkoutPlan
 
 
+class ActivitySource(str, Enum):
+    """Source de l'activité"""
+    STRAVA = "strava"
+    GARMIN = "garmin"
+    MANUAL = "manual"
+
+
 class ActivityType(str, Enum):
     """Types d'activités supportés"""
     RUN = "Run"
@@ -45,8 +52,12 @@ class Activity(ActivityBase, table=True):
     id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True)
     user_id: UUID = Field(foreign_key="user.id")
     
+    # Source de l'activité
+    source: str = Field(default=ActivitySource.STRAVA.value, index=True)
+
     # Identifiants externes
     strava_id: Optional[int] = Field(sa_column=Column(BigInteger, unique=True, index=True))
+    garmin_activity_id: Optional[int] = Field(sa_column=Column(BigInteger, unique=True, index=True))
     external_id: Optional[str] = None
     
     # Données techniques détaillées (JSON)
@@ -81,7 +92,9 @@ class Activity(ActivityBase, table=True):
 
 class ActivityCreate(ActivityBase):
     """Schéma pour créer une activité"""
+    source: str = ActivitySource.STRAVA.value
     strava_id: Optional[int] = None
+    garmin_activity_id: Optional[int] = None
     average_pace: Optional[float] = None
     streams_data: Optional[Dict[str, Any]] = None
     laps_data: Optional[List[Dict[str, Any]]] = None
@@ -90,7 +103,9 @@ class ActivityCreate(ActivityBase):
 class ActivityRead(ActivityBase):
     """Schéma pour lire une activité (réponse API)"""
     id: UUID
+    source: str
     strava_id: Optional[int]
+    garmin_activity_id: Optional[int]
     average_pace: Optional[float]
     location_city: Optional[str]
     created_at: datetime

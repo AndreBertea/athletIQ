@@ -15,7 +15,13 @@ from app.core.database import get_session
 from app.auth.jwt import get_current_user_id
 from app.domain.entities.garmin_daily import GarminDaily, GarminDailyRead
 from app.domain.services.auth_service import auth_service
-from app.domain.services.garmin_sync_service import sync_daily_data
+from app.domain.entities.fit_metrics import FitMetrics, FitMetricsRead
+from app.domain.services.garmin_sync_service import (
+    sync_daily_data,
+    sync_garmin_activities,
+    enrich_garmin_activity_fit,
+    batch_enrich_garmin_fit,
+)
 from app.api.routers._shared import security, limiter
 
 logger = logging.getLogger(__name__)
@@ -121,3 +127,103 @@ async def get_garmin_daily(
 
     results = session.exec(query).all()
     return results
+
+
+# ============ ACTIVITES GARMIN ============
+
+@router.post("/sync/garmin/activities")
+async def sync_garmin_act(
+    token: str = Depends(security),
+    session: Session = Depends(get_session),
+    days_back: int = Query(default=30, ge=1, le=365),
+):
+    """Synchronise les activites Garmin dans la table Activity."""
+    user_id = get_current_user_id(token.credentials)
+    try:
+        result = await sync_garmin_activities(session, UUID(user_id), days_back)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        logger.error(f"Erreur sync activites Garmin: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur sync activites Garmin: {str(e)}",
+        )
+
+
+@router.post("/garmin/activities/{activity_id}/enrich-fit")
+async def enrich_garmin_fit(
+    activity_id: UUID,
+    token: str = Depends(security),
+    session: Session = Depends(get_session),
+):
+    """Enrichit une activite Garmin avec son fichier FIT."""
+    user_id = get_current_user_id(token.credentials)
+    try:
+        result = await enrich_garmin_activity_fit(session, UUID(user_id), activity_id)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        logger.error(f"Erreur enrichissement FIT: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur enrichissement FIT: {str(e)}",
+        )
+
+
+@router.post("/garmin/activities/enrich-fit")
+async def batch_enrich_fit(
+    token: str = Depends(security),
+    session: Session = Depends(get_session),
+    max_activities: int = Query(default=10, ge=1, le=50),
+):
+    """Enrichit en batch les activites Garmin sans streams_data."""
+    user_id = get_current_user_id(token.credentials)
+    try:
+        result = await batch_enrich_garmin_fit(session, UUID(user_id), max_activities)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        logger.error(f"Erreur batch enrichissement FIT: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur batch enrichissement FIT: {str(e)}",
+        )
+
+
+@router.get("/garmin/activities/{activity_id}/fit-metrics", response_model=FitMetricsRead)
+async def get_fit_metrics(
+    activity_id: UUID,
+    token: str = Depends(security),
+    session: Session = Depends(get_session),
+):
+    """Recupere les metriques FIT (Running Dynamics) d'une activite."""
+    user_id = get_current_user_id(token.credentials)
+
+    # Verifier ownership
+    from app.domain.entities.activity import Activity
+    activity = session.exec(
+        select(Activity).where(
+            Activity.id == activity_id,
+            Activity.user_id == UUID(user_id),
+        )
+    ).first()
+    if not activity:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Activite non trouvee",
+        )
+
+    fm = session.exec(
+        select(FitMetrics).where(FitMetrics.activity_id == activity_id)
+    ).first()
+    if not fm:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Pas de metriques FIT pour cette activite",
+        )
+
+    return fm

@@ -13,7 +13,7 @@ from sqlmodel import Session, select
 from uuid import UUID
 
 from app.core.database import get_session
-from app.domain.entities.activity import Activity
+from app.domain.entities.activity import Activity, ActivitySource
 from app.domain.entities.enrichment_queue import EnrichmentQueue, EnrichmentStatus
 from app.domain.services.detailed_strava_service import detailed_strava_service
 from app.domain.services.round_robin_scheduler import RoundRobinScheduler
@@ -196,6 +196,16 @@ class AutoEnrichmentService:
             if activity.streams_data:
                 logger.info(f"Activite {activity_id} deja enrichie")
                 return True
+
+            # Branche Garmin : enrichir via FIT file au lieu de Strava API
+            if getattr(activity, "source", None) == ActivitySource.GARMIN.value:
+                try:
+                    from app.domain.services.garmin_sync_service import enrich_garmin_activity_fit
+                    result = await enrich_garmin_activity_fit(session, UUID(user_id), UUID(activity_id))
+                    return result.get("status") == "success"
+                except Exception as e:
+                    logger.warning(f"Enrichissement Garmin FIT echoue pour activite {activity_id}: {e}")
+                    return False
 
             success = detailed_strava_service.enrich_activity_with_details(session, user_id, activity)
 
