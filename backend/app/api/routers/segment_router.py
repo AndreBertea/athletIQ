@@ -19,7 +19,7 @@ from app.domain.entities.training_load import TrainingLoad, TrainingLoadRead
 from app.domain.services import segmentation_service
 from app.domain.services import weather_service
 from app.domain.services import derived_features_service
-from app.api.routers._shared import security
+from app.api.routers._shared import security, resolve_activity
 
 logger = logging.getLogger(__name__)
 
@@ -168,19 +168,14 @@ async def get_activity_segments(
 
 @router.get("/weather/{activity_id}")
 async def get_activity_weather(
-    activity_id: UUID,
+    activity_id: str,
     token: str = Depends(security),
     session: Session = Depends(get_session),
 ):
-    """Retourne les donnees meteo d'une activite."""
+    """Retourne les donnees meteo d'une activite (accepte UUID ou strava_id)."""
     user_id = get_current_user_id(token.credentials)
 
-    activity = session.exec(
-        select(Activity).where(
-            Activity.id == activity_id,
-            Activity.user_id == user_id,
-        )
-    ).first()
+    activity = resolve_activity(session, activity_id, user_id)
     if not activity:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -188,7 +183,7 @@ async def get_activity_weather(
         )
 
     weather = session.exec(
-        select(ActivityWeather).where(ActivityWeather.activity_id == activity_id)
+        select(ActivityWeather).where(ActivityWeather.activity_id == activity.id)
     ).first()
     if not weather:
         raise HTTPException(

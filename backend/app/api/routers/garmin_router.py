@@ -22,7 +22,7 @@ from app.domain.services.garmin_sync_service import (
     enrich_garmin_activity_fit,
     batch_enrich_garmin_fit,
 )
-from app.api.routers._shared import security, limiter
+from app.api.routers._shared import security, limiter, resolve_activity
 
 logger = logging.getLogger(__name__)
 
@@ -196,21 +196,14 @@ async def batch_enrich_fit(
 
 @router.get("/garmin/activities/{activity_id}/fit-metrics", response_model=FitMetricsRead)
 async def get_fit_metrics(
-    activity_id: UUID,
+    activity_id: str,
     token: str = Depends(security),
     session: Session = Depends(get_session),
 ):
-    """Recupere les metriques FIT (Running Dynamics) d'une activite."""
+    """Recupere les metriques FIT (Running Dynamics) d'une activite (accepte UUID ou strava_id)."""
     user_id = get_current_user_id(token.credentials)
 
-    # Verifier ownership
-    from app.domain.entities.activity import Activity
-    activity = session.exec(
-        select(Activity).where(
-            Activity.id == activity_id,
-            Activity.user_id == UUID(user_id),
-        )
-    ).first()
+    activity = resolve_activity(session, activity_id, user_id)
     if not activity:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -218,7 +211,7 @@ async def get_fit_metrics(
         )
 
     fm = session.exec(
-        select(FitMetrics).where(FitMetrics.activity_id == activity_id)
+        select(FitMetrics).where(FitMetrics.activity_id == activity.id)
     ).first()
     if not fm:
         raise HTTPException(

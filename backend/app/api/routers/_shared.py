@@ -2,12 +2,15 @@
 Utilitaires partages entre les routers API.
 """
 import logging
+from uuid import UUID
+
 from fastapi import Request, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.responses import JSONResponse
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from jose import JWTError, jwt as jose_jwt
+from sqlmodel import Session, select
 
 logger = logging.getLogger(__name__)
 
@@ -106,3 +109,36 @@ def clear_auth_cookies(response: JSONResponse) -> JSONResponse:
     response.delete_cookie(key="access_token", path="/", httponly=True, secure=is_prod, samesite=samesite_value)
     response.delete_cookie(key="refresh_token", path="/", httponly=True, secure=is_prod, samesite=samesite_value)
     return response
+
+
+def resolve_activity(session: Session, activity_id_str: str, user_id: str):
+    """Resout une activite par UUID ou strava_id (dual-resolution)."""
+    from app.domain.entities.activity import Activity
+
+    activity = None
+    # 1. Essayer comme UUID
+    try:
+        activity_uuid = UUID(activity_id_str)
+        activity = session.exec(
+            select(Activity).where(
+                Activity.id == activity_uuid,
+                Activity.user_id == UUID(user_id),
+            )
+        ).first()
+    except ValueError:
+        pass
+
+    # 2. Fallback : essayer comme strava_id numerique
+    if not activity:
+        try:
+            strava_id = int(activity_id_str)
+            activity = session.exec(
+                select(Activity).where(
+                    Activity.strava_id == strava_id,
+                    Activity.user_id == UUID(user_id),
+                )
+            ).first()
+        except (ValueError, TypeError):
+            pass
+
+    return activity
