@@ -18,7 +18,7 @@ cryptography>=41.0.0
 # HTTP Client & OAuth
 requests>=2.31.0
 httpx>=0.25.2
-garth>=0.4.0
+garth>=0.6.0
 garminconnect>=0.2.0
 
 # Rate Limiting

@@ -4,16 +4,21 @@ Synchronise les donnees physiologiques quotidiennes depuis Garmin Connect via ga
 Inclut le download et parsing de fichiers FIT (Running Dynamics, power, Training Effect).
 Inclut la sync des activites Garmin dans la table Activity unifiee.
 """
+from __future__ import annotations
+
 import asyncio
 import logging
 from io import BytesIO
 from datetime import date, datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 from uuid import UUID
 
 import garth
 from sqlalchemy import and_, func
 from sqlmodel import Session, select
+
+if TYPE_CHECKING:
+    pass  # garth.Activity used only in annotations
 
 from app.auth.garmin_auth import garmin_auth
 from app.domain.entities.activity import Activity, ActivitySource, ActivityType
