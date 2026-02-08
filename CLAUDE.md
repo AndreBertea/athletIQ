@@ -13,15 +13,17 @@ athletIQ est une application d'analyse sportive connectee a Strava.
 
 **A CHAQUE DEBUT D'ITERATION ou de nouvelle session, tu DOIS :**
 
-1. Lire `/Users/andrebertea/Projects/athletIQ/DATA_AQI_PLAN.md` (plan d'acquisition de donnees — **focus actuel**)
+1. Lire le plan actif :
+   - **UX/UI frontend** : `/Users/andrebertea/Projects/athletIQ/UX_UI_PLAN.md` (**focus actuel**)
+   - Pipeline de donnees : `/Users/andrebertea/Projects/athletIQ/DATA_AQI_PLAN.md` (termine)
 2. Identifier les taches `[ ]` (a faire) et `[~]` (en cours)
 3. Ne travailler QUE sur la tache assignee ou la prochaine tache non terminee dans l'ordre des etapes
-4. Mettre a jour le statut de la tache dans `DATA_AQI_PLAN.md` :
+4. Mettre a jour le statut de la tache dans le plan actif :
    - `[~]` quand tu commences a travailler dessus
    - `[x]` quand c'est termine et verifie
 5. Ajouter une ligne dans le "Journal des modifications" en bas du fichier
 
-> **Note :** Le plan de production (`PRODUCTION_PLAN.md`) est termine (Phases 1-4 completes). Le focus est desormais sur le pipeline de donnees (`DATA_AQI_PLAN.md`).
+> **Note :** Le plan de production (`PRODUCTION_PLAN.md`) et le pipeline de donnees (`DATA_AQI_PLAN.md`) sont termines. Le focus est desormais sur la refonte frontend (`UX_UI_PLAN.md`).
 
 ## Fichiers cles du projet
 
@@ -44,7 +46,9 @@ athletIQ est une application d'analyse sportive connectee a Strava.
 | `frontend/src/services/` | Couche d'appels API (axios) |
 | `docker-compose.dev.yml` | Orchestration Docker dev |
 | `.github/workflows/ci-cd.yml` | Pipeline CI/CD |
-| `DATA_AQI_PLAN.md` | **Plan d'acquisition de donnees (LIRE EN PREMIER — focus actuel)** |
+| `UX_UI_PLAN.md` | **Plan de refonte frontend (LIRE EN PREMIER — focus actuel)** |
+| `PLAN_GUIDE_UXUI.md` | Guide de classification des taches UX/UI |
+| `DATA_AQI_PLAN.md` | Plan d'acquisition de donnees (termine) |
 | `PRODUCTION_PLAN.md` | Plan de mise en production (Phases 1-4 terminees) |
 
 ## Problemes connus et pieges
@@ -63,4 +67,4 @@ athletIQ est une application d'analyse sportive connectee a Strava.
 - **Securite** : ne jamais exposer de secrets dans le code. Utiliser les variables d'environnement
 - **Scope** : ne pas sur-ingenierer. Faire le minimum necessaire pour la tache en cours
 - **Tests** : verifier que les tests passent apres chaque modification (`pytest` backend, `npm test` frontend)
-- **Mise a jour du plan** : toujours mettre a jour DATA_AQI_PLAN.md apres avoir termine une tache
+- **Mise a jour du plan** : toujours mettre a jour UX_UI_PLAN.md apres avoir termine une tache

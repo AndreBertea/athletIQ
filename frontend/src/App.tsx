@@ -1,6 +1,5 @@
 import React, { Suspense } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
-import { Calendar } from 'lucide-react'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { ToastProvider } from './contexts/ToastContext'
 import ErrorBoundary from './components/ErrorBoundary'
@@ -11,9 +10,8 @@ const Dashboard = React.lazy(() => import('./pages/Dashboard'))
 const Activities = React.lazy(() => import('./pages/Activities'))
 const WorkoutPlans = React.lazy(() => import('./pages/WorkoutPlans'))
 const DetailedData = React.lazy(() => import('./pages/DetailedData'))
-const StravaConnect = React.lazy(() => import('./pages/StravaConnect'))
+const Settings = React.lazy(() => import('./pages/Settings'))
 const GoogleConnect = React.lazy(() => import('./pages/GoogleConnect'))
-const GarminConnect = React.lazy(() => import('./pages/GarminConnect'))
 
 // Protected Route wrapper
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -80,6 +78,18 @@ function App() {
             }
           />
           <Route
+            path="/parametres"
+            element={
+              <ProtectedRoute>
+                <Layout>
+                  <ErrorBoundary sectionName="Paramètres">
+                    <Settings />
+                  </ErrorBoundary>
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/strava-connect/donnees-detaillees"
             element={
               <ProtectedRoute>
@@ -90,30 +100,12 @@ function App() {
             }
           />
           <Route
-            path="/plans"
-            element={
-              <ProtectedRoute>
-                <Layout>
-                  <div className="text-center py-12">
-                    <Calendar className="mx-auto h-12 w-12 text-gray-400" />
-                    <h3 className="mt-2 text-lg font-medium text-gray-900">Plans d'entraînement</h3>
-                    <p className="mt-1 text-sm text-gray-500">
-                      Cette fonctionnalité sera bientôt disponible.
-                    </p>
-                  </div>
-                </Layout>
-              </ProtectedRoute>
-            }
+            path="/strava-connect"
+            element={<Navigate to="/parametres" replace />}
           />
           <Route
-            path="/strava-connect"
-            element={
-              <ProtectedRoute>
-                <Layout>
-                  <StravaConnect />
-                </Layout>
-              </ProtectedRoute>
-            }
+            path="/garmin-connect"
+            element={<Navigate to="/parametres" replace />}
           />
           <Route
             path="/google-connect"
@@ -121,16 +113,6 @@ function App() {
               <ProtectedRoute>
                 <Layout>
                   <GoogleConnect />
-                </Layout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/garmin-connect"
-            element={
-              <ProtectedRoute>
-                <Layout>
-                  <GarminConnect />
                 </Layout>
               </ProtectedRoute>
             }

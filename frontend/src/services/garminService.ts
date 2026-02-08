@@ -63,6 +63,11 @@ export interface GarminDailyEntry {
   resting_hr: number | null
   stress_score: number | null
   body_battery_max: number | null
+  spo2: number | null
+  vo2max_estimated: number | null
+  weight_kg: number | null
+  body_battery_min: number | null
+  training_status: string | null
 }
 
 // --- Service ---

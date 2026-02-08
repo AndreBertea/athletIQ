@@ -16,7 +16,7 @@ interface Activity {
   strava_id?: number
 }
 
-interface ActivityStats {
+export interface ActivityStats {
   total_activities: number
   total_distance: number
   total_time: number
@@ -77,7 +77,7 @@ interface GetActivitiesParams {
 
 // ============ DONNÉES ENRICHIES (activity_detail.db) ============
 
-interface EnrichedActivity {
+export interface EnrichedActivity {
   activity_id: number
   name: string
   sport_type: string  // Type corrigé (RacketSport, Workout, etc.)
@@ -96,7 +96,7 @@ interface EnrichedActivity {
   description: string
 }
 
-interface EnrichedActivityStats {
+export interface EnrichedActivityStats {
   total_activities: number
   total_distance_km: number
   total_time_hours: number
@@ -106,6 +106,8 @@ interface EnrichedActivityStats {
   activities_by_month: Record<string, number>
   average_pace_by_sport: Record<string, number>
 }
+
+export type ApiError = Error & { response?: { data?: { detail?: string }; status?: number } }
 
 class ActivityService {
   private api = axios.create({
@@ -213,7 +215,7 @@ class ActivityService {
     const perPage = 200
     let totalPages = 1
     do {
-      const params: any = { page, per_page: perPage }
+      const params: GetActivitiesParams & { sport_type?: string } = { page, per_page: perPage }
       if (sportType) params.sport_type = sportType
       if (dateFrom) params.date_from = dateFrom
       const data = await this.getEnrichedActivities(params)

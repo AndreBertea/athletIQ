@@ -1,6 +1,6 @@
 import React from 'react'
 import { AreaChart } from './ui/area-chart'
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
+import { TrendingUp, TrendingDown, Minus, Heart } from 'lucide-react'
 
 interface ChronicLoadData {
   date: string
@@ -12,9 +12,10 @@ interface ChronicLoadData {
 interface ChronicLoadChartProps {
   data: ChronicLoadData[]
   isLoading?: boolean
+  rhrDelta7d?: number
 }
 
-export default function ChronicLoadChart({ data, isLoading }: ChronicLoadChartProps) {
+export default function ChronicLoadChart({ data, isLoading, rhrDelta7d }: ChronicLoadChartProps) {
   if (isLoading) {
     return (
       <div className="h-64 flex items-center justify-center text-gray-500">
@@ -69,7 +70,7 @@ export default function ChronicLoadChart({ data, isLoading }: ChronicLoadChartPr
   return (
     <div className="space-y-4">
       {/* Métriques de charge */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className={`grid grid-cols-1 ${rhrDelta7d !== undefined ? 'md:grid-cols-4' : 'md:grid-cols-3'} gap-4`}>
         {/* Charge Chronique */}
         <div className="bg-white p-4 rounded-lg border">
           <div className="flex items-center justify-between">
@@ -110,6 +111,21 @@ export default function ChronicLoadChart({ data, isLoading }: ChronicLoadChartPr
             </span>
           </div>
         </div>
+
+        {/* Delta RHR 7j */}
+        {rhrDelta7d !== undefined && (
+          <div className="bg-white p-4 rounded-lg border">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Delta RHR 7j</p>
+                <p className={`text-2xl font-bold ${rhrDelta7d > 0 ? 'text-red-600' : rhrDelta7d < 0 ? 'text-green-600' : 'text-gray-600'}`}>
+                  {rhrDelta7d > 0 ? '+' : ''}{Math.round(rhrDelta7d)} bpm
+                </p>
+              </div>
+              <Heart className={`h-5 w-5 ${rhrDelta7d > 0 ? 'text-red-500' : rhrDelta7d < 0 ? 'text-green-500' : 'text-gray-500'}`} />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Graphique */}

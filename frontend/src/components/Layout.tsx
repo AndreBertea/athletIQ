@@ -1,7 +1,7 @@
 import React from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { LogOut, Activity, BarChart3, Calendar, Link2, Watch } from 'lucide-react'
+import { LogOut, Activity, BarChart3, Calendar, Settings } from 'lucide-react'
 
 interface LayoutProps {
   children: React.ReactNode
@@ -20,9 +20,8 @@ export default function Layout({ children }: LayoutProps) {
   const navigation = [
     { name: 'Tableau de bord', href: '/', icon: BarChart3 },
     { name: 'Activités', href: '/activites', icon: Activity },
-    { name: 'Plans d\'entraînement', href: '/plans', icon: Calendar },
-    { name: 'Connexion Strava', href: '/strava-connect', icon: Link2 },
-    { name: 'Connexion Garmin', href: '/garmin-connect', icon: Watch },
+    { name: 'Plans', href: '/plans', icon: Calendar },
+    { name: 'Paramètres', href: '/parametres', icon: Settings },
   ]
 
   return (
@@ -34,9 +33,9 @@ export default function Layout({ children }: LayoutProps) {
             {/* Logo */}
             <div className="flex items-center">
               <div className="h-8 w-8 bg-primary-600 rounded-full flex items-center justify-center">
-                <span className="text-white font-bold">S</span>
+                <span className="text-white font-bold">A</span>
               </div>
-              <span className="ml-2 text-xl font-bold text-gray-900">StrideDelta</span>
+              <span className="ml-2 text-xl font-bold text-gray-900">athletIQ</span>
             </div>
 
             {/* Navigation */}
