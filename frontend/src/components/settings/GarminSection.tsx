@@ -317,8 +317,16 @@ export default function GarminSection() {
                   <option value={30}>30 derniers jours (recommande)</option>
                   <option value={60}>2 derniers mois</option>
                   <option value={90}>3 derniers mois</option>
+                  <option value={180}>6 derniers mois</option>
+                  <option value={365}>1 an</option>
+                  <option value={730}>2 ans</option>
                 </select>
               </div>
+              {daysBack >= 180 && (
+                <div className="text-xs text-amber-600 bg-amber-50 p-2 rounded border border-amber-200">
+                  <strong>Sync longue :</strong> {daysBack >= 365 ? 'Cela peut prendre plusieurs minutes.' : 'Cela peut prendre un moment.'} Les requetes sont espacees pour ne pas surcharger Garmin Connect.
+                </div>
+              )}
               <button
                 onClick={() => syncMutation.mutate()}
                 disabled={syncMutation.isPending}

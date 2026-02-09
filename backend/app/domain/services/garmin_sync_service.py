@@ -30,7 +30,7 @@ from app.domain.entities.user import GarminAuth
 
 logger = logging.getLogger(__name__)
 
-REQUEST_DELAY_S = 0.5  # 500ms entre chaque date
+REQUEST_DELAY_S = 1.0  # 1s entre chaque date (safe pour Garmin)
 
 
 async def sync_daily_data(
@@ -562,7 +562,7 @@ async def sync_garmin_activities(
             if last_time and last_time < cutoff:
                 break
             start += page_size
-            await asyncio.sleep(0.2)  # rate limit
+            await asyncio.sleep(1.0)  # rate limit genereux pour Garmin
     except Exception as e:
         logger.error(f"Erreur listing activites Garmin: {e}")
         return {"created": 0, "linked": 0, "skipped": 0, "errors": 1, "total": 0}
@@ -982,7 +982,7 @@ async def batch_enrich_garmin_fit(
             logger.warning(f"Erreur enrichissement FIT activite {activity.id}: {e}")
             errors_count += 1
 
-        await asyncio.sleep(0.5)  # rate limit entre activites
+        await asyncio.sleep(1.5)  # rate limit genereux entre enrichissements FIT
 
     return {
         "enriched": enriched,

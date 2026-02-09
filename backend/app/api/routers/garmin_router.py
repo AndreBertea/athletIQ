@@ -88,7 +88,7 @@ async def garmin_disconnect(
 async def sync_garmin(
     token: str = Depends(security),
     session: Session = Depends(get_session),
-    days_back: int = Query(default=30, ge=1, le=365),
+    days_back: int = Query(default=30, ge=1, le=730),
 ):
     """Synchronise les donnees quotidiennes Garmin."""
     user_id = get_current_user_id(token.credentials)
@@ -136,7 +136,7 @@ async def get_garmin_daily(
 async def sync_garmin_act(
     token: str = Depends(security),
     session: Session = Depends(get_session),
-    days_back: int = Query(default=30, ge=1, le=365),
+    days_back: int = Query(default=30, ge=1, le=730),
 ):
     """Synchronise les activites Garmin dans la table Activity."""
     user_id = get_current_user_id(token.credentials)
