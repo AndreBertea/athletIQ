@@ -109,6 +109,10 @@ export interface EnrichedActivity {
   max_heartrate_bpm: number
   calories_kcal: number
   description: string
+  // Flags sources de données
+  has_strava?: boolean
+  has_garmin?: boolean
+  has_weather?: boolean
 }
 
 export interface EnrichedActivityStats {

@@ -9,6 +9,8 @@ from typing import Optional
 
 from app.domain.entities import Activity, ActivityStats, StravaAuth
 from app.domain.entities.activity import ActivityType
+from app.domain.entities.activity_weather import ActivityWeather
+from app.domain.entities.fit_metrics import FitMetrics
 from app.domain.services.detailed_strava_service import detailed_strava_service
 from app.domain.services.auto_enrichment_service import auto_enrichment_service
 from app.domain.services.strava_sync_service import strava_sync_service
@@ -78,8 +80,36 @@ class ActivityService:
         activities = session.exec(query).all()
         total_pages = (total + per_page - 1) // per_page if total > 0 else 1
 
+        # Batch-check des sources de données
+        activity_uuids = [a.id for a in activities]
+        weather_ids: set = set()
+        garmin_ids: set = set()
+        if activity_uuids:
+            weather_ids = set(
+                session.exec(
+                    select(ActivityWeather.activity_id).where(
+                        ActivityWeather.activity_id.in_(activity_uuids)
+                    )
+                ).all()
+            )
+            garmin_ids = set(
+                session.exec(
+                    select(FitMetrics.activity_id).where(
+                        FitMetrics.activity_id.in_(activity_uuids)
+                    )
+                ).all()
+            )
+
+        items = []
+        for a in activities:
+            d = a.model_dump() if hasattr(a, 'model_dump') else a.dict()
+            d["has_strava"] = a.strava_id is not None
+            d["has_weather"] = a.id in weather_ids
+            d["has_garmin"] = a.id in garmin_ids
+            items.append(d)
+
         return {
-            "items": activities,
+            "items": items,
             "total": total,
             "page": page,
             "per_page": per_page,
@@ -209,7 +239,34 @@ class ActivityService:
         activities = session.exec(query).all()
         total_pages = (total + per_page - 1) // per_page if total > 0 else 1
 
-        items = [_activity_to_enriched_dict(a) for a in activities]
+        # Collecter les UUIDs pour batch-check des sources de données
+        activity_uuids = [a.id for a in activities]
+
+        weather_ids: set = set()
+        garmin_ids: set = set()
+        if activity_uuids:
+            weather_ids = set(
+                session.exec(
+                    select(ActivityWeather.activity_id).where(
+                        ActivityWeather.activity_id.in_(activity_uuids)
+                    )
+                ).all()
+            )
+            garmin_ids = set(
+                session.exec(
+                    select(FitMetrics.activity_id).where(
+                        FitMetrics.activity_id.in_(activity_uuids)
+                    )
+                ).all()
+            )
+
+        items = []
+        for a in activities:
+            d = _activity_to_enriched_dict(a)
+            d["has_strava"] = a.strava_id is not None
+            d["has_weather"] = a.id in weather_ids
+            d["has_garmin"] = a.id in garmin_ids
+            items.append(d)
 
         return {
             "items": items,

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Activity, MapPin, Clock, TrendingUp, Eye, Calendar, X, Heart, Target, Trophy, Mountain, Zap, Gauge, BarChart3, Layers } from 'lucide-react'
+import { Activity, MapPin, Clock, TrendingUp, Eye, Calendar, X, Heart, Target, Trophy, Mountain, Zap, Gauge, BarChart3, Layers, CloudSun, Watch } from 'lucide-react'
 import { activityService } from '../services/activityService'
 import { dataService } from '../services/dataService'
 import { useToast } from '../contexts/ToastContext'
@@ -284,8 +284,8 @@ export default function Activities() {
                     </div>
                   </div>
 
-                  {/* Actions */}
-                  <div className="flex items-center space-x-2">
+                  {/* Actions + badges sources */}
+                  <div className="flex flex-col items-end space-y-2">
                     {isEnriched ? (
                       <button
                         onClick={(e) => {
@@ -303,6 +303,28 @@ export default function Activities() {
                         {activity.location_city || 'Non enrichi'}
                       </div>
                     )}
+
+                    {/* Badges sources de données */}
+                    <div className="flex items-center space-x-1.5">
+                      {(activity.has_strava || activity.strava_id || activityId) && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700" title="Données Strava">
+                          <svg className="h-3 w-3 mr-0.5" viewBox="0 0 24 24" fill="currentColor"><path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169"/></svg>
+                          Strava
+                        </span>
+                      )}
+                      {activity.has_garmin && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700" title="Données Garmin FIT">
+                          <Watch className="h-3 w-3 mr-0.5" />
+                          Garmin
+                        </span>
+                      )}
+                      {activity.has_weather && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700" title="Données météo">
+                          <CloudSun className="h-3 w-3 mr-0.5" />
+                          Météo
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
 
