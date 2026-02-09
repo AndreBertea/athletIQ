@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Activity, MapPin, Clock, TrendingUp, Eye, Calendar, X, Heart, Target, Trophy, Mountain, Zap, Gauge, BarChart3, Layers, CloudSun, Watch } from 'lucide-react'
+import { Activity, MapPin, Clock, TrendingUp, Eye, Calendar, X, Heart, Target, Trophy, Mountain, Zap, Gauge, BarChart3, Layers, CloudSun, Watch, Thermometer, Footprints, Timer, MoveVertical, ArrowLeftRight } from 'lucide-react'
 import { activityService } from '../services/activityService'
 import { dataService } from '../services/dataService'
+import { garminService } from '../services/garminService'
 import { useToast } from '../contexts/ToastContext'
 import HeartRateChart from '../components/HeartRateChart'
 // @ts-expect-error: Types manquants pour react-plotly.js
@@ -14,13 +15,174 @@ import WeatherWidget from '../components/activity/WeatherWidget'
 
 const PER_PAGE = 30
 
+function ActivityWeatherInline({ activityId, hasWeather }: { activityId: number | string | null; hasWeather?: boolean }) {
+  const { data } = useQuery({
+    queryKey: ['activity-weather', activityId],
+    queryFn: () => dataService.getWeather(String(activityId)),
+    enabled: !!activityId && hasWeather === true,
+    staleTime: 30 * 60 * 1000,
+    retry: false,
+  })
+
+  if (!data || data.temperature_c == null) return null
+
+  return (
+    <div className="flex items-center">
+      <Thermometer className="h-4 w-4 mr-1 text-amber-500" />
+      <span>{data.temperature_c.toFixed(0)}°C</span>
+    </div>
+  )
+}
+
+function FitTabContent({ activityId, hasGarmin }: { activityId: number | string | null; hasGarmin?: boolean }) {
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['fit-metrics', activityId],
+    queryFn: () => garminService.getActivityFitMetrics(String(activityId)),
+    enabled: !!activityId && hasGarmin !== false,
+    staleTime: 30 * 60 * 1000,
+    retry: false,
+  })
+
+  if (hasGarmin === false) {
+    return <div className="text-sm text-gray-500">Pas de données FIT pour cette activité.</div>
+  }
+
+  if (isLoading) {
+    return (
+      <div className="text-center py-4 text-gray-500 text-sm">
+        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-500 mx-auto mb-2"></div>
+        Chargement des métriques FIT...
+      </div>
+    )
+  }
+
+  if (isError || !data) {
+    return <div className="text-sm text-gray-500">Données FIT indisponibles.</div>
+  }
+
+  const metrics = [
+    data.ground_contact_time_avg != null && {
+      label: 'GCT',
+      value: `${data.ground_contact_time_avg.toFixed(0)} ms`,
+      icon: Footprints,
+      colorClass: 'text-purple-600',
+      bgClass: 'bg-purple-50',
+    },
+    data.power_avg != null && {
+      label: 'Puissance',
+      value: `${data.power_avg.toFixed(0)} W`,
+      icon: Zap,
+      colorClass: 'text-blue-600',
+      bgClass: 'bg-blue-50',
+    },
+    data.aerobic_training_effect != null && {
+      label: 'Training Effect',
+      value: data.anaerobic_training_effect != null
+        ? `${data.aerobic_training_effect.toFixed(1)} / ${data.anaerobic_training_effect.toFixed(1)}`
+        : `${data.aerobic_training_effect.toFixed(1)}`,
+      icon: Timer,
+      colorClass: 'text-green-600',
+      bgClass: 'bg-green-50',
+    },
+    data.vertical_oscillation_avg != null && {
+      label: 'Oscillation',
+      value: `${data.vertical_oscillation_avg.toFixed(1)} cm`,
+      icon: MoveVertical,
+      colorClass: 'text-teal-600',
+      bgClass: 'bg-teal-50',
+    },
+    data.stance_time_balance_avg != null && {
+      label: 'Équilibre G/D',
+      value: `${data.stance_time_balance_avg.toFixed(1)}%`,
+      icon: ArrowLeftRight,
+      colorClass: 'text-slate-600',
+      bgClass: 'bg-slate-100',
+    },
+  ].filter(Boolean) as Array<{
+    label: string
+    value: string
+    icon: typeof Footprints
+    colorClass: string
+    bgClass: string
+  }>
+
+  if (metrics.length === 0) {
+    return <div className="text-sm text-gray-500">Aucune métrique FIT disponible.</div>
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        {metrics.map((metric) => {
+          const Icon = metric.icon
+          return (
+            <div key={metric.label} className={`${metric.bgClass} p-3 rounded-lg text-center`}>
+              <Icon className={`h-4 w-4 mx-auto mb-1 ${metric.colorClass}`} />
+              <div className={`text-xs ${metric.colorClass}`}>{metric.label}</div>
+              <div className={`text-sm font-bold ${metric.colorClass}`}>{metric.value}</div>
+            </div>
+          )
+        })}
+      </div>
+      <div className="flex flex-wrap gap-4 text-xs text-gray-500">
+        {data.record_count != null && (
+          <span>Enregistrements FIT : <span className="font-medium text-gray-700">{data.record_count}</span></span>
+        )}
+        {data.fit_downloaded_at && (
+          <span>FIT importé : <span className="font-medium text-gray-700">{new Date(data.fit_downloaded_at).toLocaleString('fr-FR')}</span></span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function WeatherTabContent({ activityId, hasWeather }: { activityId: number | string | null; hasWeather?: boolean }) {
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['activity-weather', activityId],
+    queryFn: () => dataService.getWeather(String(activityId)),
+    enabled: !!activityId && hasWeather !== false,
+    staleTime: 30 * 60 * 1000,
+    retry: false,
+  })
+
+  if (hasWeather === false) {
+    return <div className="text-sm text-gray-500">Pas de données météo pour cette activité.</div>
+  }
+
+  if (isLoading) {
+    return (
+      <div className="text-center py-4 text-gray-500 text-sm">
+        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-500 mx-auto mb-2"></div>
+        Chargement de la météo...
+      </div>
+    )
+  }
+
+  if (isError || !data) {
+    return <div className="text-sm text-gray-500">Données météo indisponibles.</div>
+  }
+
+  const hasMetrics = data.temperature_c != null
+    || data.humidity_pct != null
+    || data.wind_speed_kmh != null
+    || data.pressure_hpa != null
+    || (data.precipitation_mm != null && data.precipitation_mm > 0)
+    || data.cloud_cover_pct != null
+
+  if (!hasMetrics) {
+    return <div className="text-sm text-gray-500">Aucune métrique météo disponible.</div>
+  }
+
+  return <WeatherWidget weather={data} />
+}
+
 export default function Activities() {
   const toast = useToast()
   const [selectedActivityId, setSelectedActivityId] = useState<number | null>(null)
   const [selectedActivityDetail, setSelectedActivityDetail] = useState<any | null>(null)
   const [useEnrichedData, setUseEnrichedData] = useState<boolean>(true)
   const [page, setPage] = useState(1)
-  const [activeTab, setActiveTab] = useState<'streams' | 'segments' | 'laps'>('streams')
+  const [activeTab, setActiveTab] = useState<'streams' | 'segments' | 'laps' | 'fit' | 'weather'>('streams')
 
   // Récupérer les activités originales (paginées)
   const { data: originalData, isLoading: originalLoading } = useQuery({
@@ -217,6 +379,9 @@ export default function Activities() {
             max_heartrate: useEnrichedData ? activity.max_heartrate_bpm : null,
             elev_gain: useEnrichedData ? activity.elev_gain_m : null
           }
+          const hasWeather = Boolean(useEnrichedData ? activity.has_weather : (enrichedData?.has_weather ?? activity.has_weather))
+          const hasGarmin = Boolean(useEnrichedData ? activity.has_garmin : (enrichedData?.has_garmin ?? activity.has_garmin))
+          const weatherActivityId = useEnrichedData ? activity.activity_id : (activity.strava_id || activity.id)
 
           return (
             <div key={useEnrichedData ? activity.activity_id : activity.id} className="bg-white rounded-lg border shadow-sm">
@@ -280,6 +445,7 @@ export default function Activities() {
                             <span>{formatPace(activity.average_pace)}/km</span>
                           </div>
                         )}
+                        <ActivityWeatherInline activityId={weatherActivityId} hasWeather={hasWeather} />
                       </div>
                     </div>
                   </div>
@@ -337,6 +503,8 @@ export default function Activities() {
                         { id: 'streams' as const, label: 'Streams', icon: <Eye className="h-3.5 w-3.5 mr-1.5" /> },
                         { id: 'segments' as const, label: 'Segments', icon: <BarChart3 className="h-3.5 w-3.5 mr-1.5" /> },
                         { id: 'laps' as const, label: 'Tours', icon: <Layers className="h-3.5 w-3.5 mr-1.5" /> },
+                        { id: 'fit' as const, label: 'FIT', icon: <Watch className="h-3.5 w-3.5 mr-1.5" /> },
+                        { id: 'weather' as const, label: 'Météo', icon: <CloudSun className="h-3.5 w-3.5 mr-1.5" /> },
                       ]).map(tab => (
                         <button
                           key={tab.id}
@@ -535,6 +703,14 @@ export default function Activities() {
 
                     {activeTab === 'laps' && (
                       <LapsTable lapsData={streamsData?.laps_data} />
+                    )}
+
+                    {activeTab === 'fit' && (
+                      <FitTabContent activityId={activityId} hasGarmin={hasGarmin} />
+                    )}
+
+                    {activeTab === 'weather' && (
+                      <WeatherTabContent activityId={weatherActivityId} hasWeather={hasWeather} />
                     )}
                   </div>
                 )}
