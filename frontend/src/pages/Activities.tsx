@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Activity, MapPin, Clock, TrendingUp, Eye, Calendar, X, Heart, Target, Trophy, Mountain, Zap, Gauge, BarChart3, Layers } from 'lucide-react'
 import { activityService } from '../services/activityService'
+import { dataService } from '../services/dataService'
 import { useToast } from '../contexts/ToastContext'
 import HeartRateChart from '../components/HeartRateChart'
 // @ts-expect-error: Types manquants pour react-plotly.js
@@ -9,6 +10,7 @@ import Plot from 'react-plotly.js'
 import ActivityTypeEditor from '../components/ActivityTypeEditor'
 import SegmentAnalysis from '../components/activity/SegmentAnalysis'
 import LapsTable from '../components/activity/LapsTable'
+import WeatherWidget from '../components/activity/WeatherWidget'
 
 const PER_PAGE = 30
 
@@ -42,6 +44,15 @@ export default function Activities() {
     queryFn: () => selectedActivityId ? activityService.getEnrichedActivityStreams(selectedActivityId) : null,
     enabled: !!selectedActivityId,
     staleTime: 10 * 60 * 1000
+  })
+
+  // Récupérer la météo pour la modal détail
+  const modalActivityId = selectedActivityDetail?.strava_id || selectedActivityDetail?.activity_id
+  const { data: modalWeather } = useQuery({
+    queryKey: ['activity-weather-modal', modalActivityId],
+    queryFn: () => dataService.getWeather(String(modalActivityId)),
+    enabled: !!modalActivityId,
+    staleTime: 30 * 60 * 1000,
   })
 
   const isLoading = useEnrichedData ? enrichedLoading : originalLoading
@@ -501,7 +512,7 @@ export default function Activities() {
                     )}
 
                     {activeTab === 'laps' && (
-                      <LapsTable lapsData={(streamsData as any)?.laps_data} activityMovingTime={displayData.moving_time} />
+                      <LapsTable lapsData={streamsData?.laps_data} />
                     )}
                   </div>
                 )}
@@ -618,6 +629,9 @@ export default function Activities() {
                   <div className="text-sm text-gray-500">Dénivelé</div>
                 </div>
               </div>
+
+              {/* Widget météo */}
+              {modalWeather && <WeatherWidget weather={modalWeather} />}
 
               {/* Graphiques détaillés - chargés automatiquement */}
               {(() => {

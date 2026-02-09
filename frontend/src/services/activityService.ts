@@ -44,10 +44,25 @@ interface EnrichmentStatus {
   can_enrich_more: boolean
 }
 
+export interface LapData {
+  distance: number
+  moving_time: number
+  elapsed_time: number
+  total_elevation_gain: number
+  average_speed: number
+  max_speed: number
+  average_cadence?: number
+  average_heartrate?: number
+  max_heartrate?: number
+  start_index: number
+  end_index: number
+  [key: string]: any
+}
+
 interface ActivityStreams {
   activity_id: string
   streams_data: Record<string, any>
-  laps_data: Record<string, any>[]
+  laps_data: LapData[]
 }
 
 interface EnrichResult {
@@ -249,6 +264,7 @@ class ActivityService {
       cadence?: number[];
       [key: string]: number[] | undefined;
     };
+    laps_data?: LapData[];
   }> {
     const response = await this.api.get(`/activities/enriched/${activityId}/streams`)
     return response.data

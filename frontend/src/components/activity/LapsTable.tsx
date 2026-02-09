@@ -1,24 +1,9 @@
 // @ts-expect-error: Types manquants pour react-plotly.js
 import Plot from 'react-plotly.js'
-
-interface LapData {
-  distance: number
-  moving_time: number
-  elapsed_time: number
-  total_elevation_gain: number
-  average_speed: number
-  max_speed: number
-  average_cadence?: number
-  average_heartrate?: number
-  max_heartrate?: number
-  start_index: number
-  end_index: number
-  [key: string]: any
-}
+import type { LapData } from '../../services/activityService'
 
 interface LapsTableProps {
   lapsData: LapData[] | null | undefined
-  activityMovingTime?: number
 }
 
 function formatPace(paceMinPerKm: number): string {

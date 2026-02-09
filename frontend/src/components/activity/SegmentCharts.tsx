@@ -60,10 +60,10 @@ export default function SegmentCharts({ segments }: SegmentChartsProps) {
   return (
     <div className="space-y-4">
       {/* Graphique 1 — Pace par segment */}
-      <div className="bg-white rounded-lg border">
-        <div className="flex items-center p-3 border-b">
+      <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
+        <div className="flex items-center p-3 border-b border-gray-200 dark:border-gray-700">
           <Target className="h-4 w-4 mr-2 text-blue-500" />
-          <span className="text-sm font-medium text-gray-900">Allure par segment</span>
+          <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Allure par segment</span>
         </div>
         <div className="p-2">
           <Plot
@@ -88,10 +88,10 @@ export default function SegmentCharts({ segments }: SegmentChartsProps) {
 
       {/* Graphique 2 — FC + Cadence */}
       {(hasHr || hasCadence) && (
-        <div className="bg-white rounded-lg border">
-          <div className="flex items-center p-3 border-b">
+        <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
+          <div className="flex items-center p-3 border-b border-gray-200 dark:border-gray-700">
             <Heart className="h-4 w-4 mr-2 text-red-500" />
-            <span className="text-sm font-medium text-gray-900">Fréquence cardiaque & Cadence</span>
+            <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Fréquence cardiaque & Cadence</span>
           </div>
           <div className="p-2">
             <Plot
@@ -135,10 +135,10 @@ export default function SegmentCharts({ segments }: SegmentChartsProps) {
 
       {/* Graphique 3 — Profil altimétrique */}
       {hasAlt && (
-        <div className="bg-white rounded-lg border">
-          <div className="flex items-center p-3 border-b">
+        <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
+          <div className="flex items-center p-3 border-b border-gray-200 dark:border-gray-700">
             <Mountain className="h-4 w-4 mr-2 text-emerald-500" />
-            <span className="text-sm font-medium text-gray-900">Profil altimétrique</span>
+            <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Profil altimétrique</span>
           </div>
           <div className="p-2">
             <Plot
@@ -166,10 +166,10 @@ export default function SegmentCharts({ segments }: SegmentChartsProps) {
 
       {/* Graphique 4 — Features avancées */}
       {(hasEff || hasMinetti) && (
-        <div className="bg-white rounded-lg border">
-          <div className="flex items-center p-3 border-b">
+        <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
+          <div className="flex items-center p-3 border-b border-gray-200 dark:border-gray-700">
             <Zap className="h-4 w-4 mr-2 text-amber-500" />
-            <span className="text-sm font-medium text-gray-900">Features avancées</span>
+            <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Features avancées</span>
           </div>
           <div className="p-2">
             <Plot
@@ -213,10 +213,10 @@ export default function SegmentCharts({ segments }: SegmentChartsProps) {
 
       {/* Graphique 5 — Race completion vs Pace */}
       {hasRaceComp && (
-        <div className="bg-white rounded-lg border">
-          <div className="flex items-center p-3 border-b">
+        <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
+          <div className="flex items-center p-3 border-b border-gray-200 dark:border-gray-700">
             <Gauge className="h-4 w-4 mr-2 text-indigo-500" />
-            <span className="text-sm font-medium text-gray-900">Progression vs Allure</span>
+            <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Progression vs Allure</span>
           </div>
           <div className="p-2">
             <Plot
