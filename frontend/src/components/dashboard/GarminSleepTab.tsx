@@ -17,6 +17,8 @@ const SLEEP_RANGE_OPTIONS = [
   { days: 30, label: '30j' },
   { days: 90, label: '3 mois' },
   { days: 180, label: '6 mois' },
+  { days: 365, label: '1 an' },
+  { days: 730, label: '2 ans' },
 ]
 
 function toLocaleDateStr(d: Date): string {
@@ -279,13 +281,16 @@ export default function GarminSleepTab() {
     queryFn: () => {
       const end = toLocaleDateStr(new Date())
       const start = new Date()
-      start.setDate(start.getDate() - fetchDays)
+      start.setDate(start.getDate() - Math.max(fetchDays - 1, 0))
       return garminService.getGarminDaily(toLocaleDateStr(start), end)
     },
     staleTime: 5 * 60_000,
   })
 
-  const data = rawData ?? []
+  const data = useMemo(() => {
+    if (!rawData || rawData.length === 0) return []
+    return [...rawData].sort((a, b) => a.date.localeCompare(b.date))
+  }, [rawData])
 
   // Dates disponibles (triees chronologiquement)
   const availableDates = useMemo(() => {
@@ -320,12 +325,15 @@ export default function GarminSleepTab() {
     if (isSingleDay) return []
     return filteredData.map(entry => ({
       date: entry.date,
-      dateFormatted: format(parseISO(entry.date), 'd MMM', { locale: fr }),
       sleep_score: entry.sleep_score,
       deep_min: entry.deep_sleep_seconds ? Math.round(entry.deep_sleep_seconds / 60) : 0,
       light_min: entry.light_sleep_seconds ? Math.round(entry.light_sleep_seconds / 60) : 0,
       rem_min: entry.rem_sleep_seconds ? Math.round(entry.rem_sleep_seconds / 60) : 0,
       awake_min: entry.awake_sleep_seconds ? Math.round(entry.awake_sleep_seconds / 60) : 0,
+      deep_sleep_seconds: entry.deep_sleep_seconds,
+      light_sleep_seconds: entry.light_sleep_seconds,
+      rem_sleep_seconds: entry.rem_sleep_seconds,
+      awake_sleep_seconds: entry.awake_sleep_seconds,
       sleep_start_time: entry.sleep_start_time,
       sleep_end_time: entry.sleep_end_time,
       sleep_duration_min: entry.sleep_duration_min,
@@ -380,7 +388,7 @@ export default function GarminSleepTab() {
           <Moon className="h-4 w-4 text-indigo-500" />
           {isSingleDay ? 'Detail nuit' : 'Tendances sommeil'}
         </h4>
-        <div className="flex gap-1">
+        <div className="flex flex-wrap gap-1">
           {SLEEP_RANGE_OPTIONS.map(opt => (
             <button
               key={opt.days}
@@ -474,11 +482,12 @@ export default function GarminSleepTab() {
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart data={trendData} margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
                     <XAxis
-                      dataKey="dateFormatted"
+                      dataKey="date"
                       tick={{ fontSize: 11 }}
                       tickLine={false}
                       axisLine={false}
                       minTickGap={20}
+                      tickFormatter={(value: string) => format(parseISO(value), 'd MMM', { locale: fr })}
                     />
                     <YAxis
                       yAxisId="left"
@@ -498,10 +507,10 @@ export default function GarminSleepTab() {
                       width={35}
                     />
                     <RechartsTooltip
-                      content={({ active, payload, label }) => {
+                      content={({ active, payload }) => {
                         if (!active || !payload || payload.length === 0) return null
-                        const d = filteredData.find(e => format(parseISO(e.date), 'd MMM', { locale: fr }) === label)
-                        if (!d) return null
+                        const d = payload[0]?.payload
+                        if (!d?.date) return null
                         return (
                           <div className="rounded-lg border bg-white p-3 shadow-md text-sm">
                             <p className="font-semibold text-gray-900 mb-2">{format(parseISO(d.date), 'd MMMM yyyy', { locale: fr })}</p>

@@ -62,6 +62,10 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
   const [visibleMetrics, setVisibleMetrics] = useState<Set<string>>(
     new Set(METRICS.map(m => m.key))
   )
+  const orderedData = useMemo(() => {
+    if (!data || data.length === 0) return []
+    return [...data].sort((a, b) => a.date.localeCompare(b.date))
+  }, [data])
 
   const toggleMetric = (key: string) => {
     setVisibleMetrics(prev => {
@@ -77,16 +81,16 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
 
   // Mini-cartes récapitulatives
   const summaryCards = useMemo(() => {
-    if (!data || data.length === 0) return null
+    if (orderedData.length === 0) return null
 
-    const hrvAvg = avg7d(data, 'hrv_rmssd')
-    const hrvPrev = avg7dPrev(data, 'hrv_rmssd')
-    const readinessAvg = avg7d(data, 'training_readiness')
-    const sleepAvg = avg7d(data, 'sleep_score')
-    const latestRhr = data[data.length - 1]?.resting_hr
-    const rhrAvg = avg7d(data, 'resting_hr')
-    const latestVo2 = data[data.length - 1]?.vo2max_estimated
-    const latestWeight = data[data.length - 1]?.weight_kg
+    const hrvAvg = avg7d(orderedData, 'hrv_rmssd')
+    const hrvPrev = avg7dPrev(orderedData, 'hrv_rmssd')
+    const readinessAvg = avg7d(orderedData, 'training_readiness')
+    const sleepAvg = avg7d(orderedData, 'sleep_score')
+    const latestRhr = orderedData[orderedData.length - 1]?.resting_hr
+    const rhrAvg = avg7d(orderedData, 'resting_hr')
+    const latestVo2 = orderedData[orderedData.length - 1]?.vo2max_estimated
+    const latestWeight = orderedData[orderedData.length - 1]?.weight_kg
 
     const cards: Array<{
       label: string
@@ -164,12 +168,12 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
     }
 
     return cards
-  }, [data])
+  }, [orderedData])
 
   // Badges secondaires (dernière entrée)
   const latestBadges = useMemo(() => {
-    if (!data || data.length === 0) return null
-    const latest = data[data.length - 1]
+    if (orderedData.length === 0) return null
+    const latest = orderedData[orderedData.length - 1]
 
     const trainingStatusColors: Record<string, string> = {
       Productive: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
@@ -189,12 +193,12 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
       bodyBatteryMin: latest.body_battery_min,
       bodyBatteryMax: latest.body_battery_max,
     }
-  }, [data])
+  }, [orderedData])
 
   // Données formatées pour le graphique
   const chartData = useMemo(() => {
-    if (!data || data.length === 0) return []
-    return data.map(entry => ({
+    if (orderedData.length === 0) return []
+    return orderedData.map(entry => ({
       date: entry.date,
       dateFormatted: format(parseISO(entry.date), 'd MMM', { locale: fr }),
       hrv_rmssd: entry.hrv_rmssd,
@@ -204,7 +208,7 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
       body_battery_max: entry.body_battery_max,
       resting_hr: entry.resting_hr,
     }))
-  }, [data])
+  }, [orderedData])
 
   // --- État non connecté ---
   if (!isConnected) {
@@ -244,7 +248,7 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
   }
 
   // --- Pas de données ---
-  if (!data || data.length === 0) {
+  if (orderedData.length === 0) {
     return (
       <div className="card">
         <div className="flex items-center space-x-2 mb-4">
@@ -271,7 +275,7 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
       <div className="flex items-center space-x-2 mb-2">
         <Watch className="h-5 w-5 text-purple-600" />
         <h3 className="text-lg font-medium text-gray-900">Monitoring Garmin Daily</h3>
-        <span className="text-xs text-gray-400">{data.length} jours</span>
+        <span className="text-xs text-gray-400">{orderedData.length} jours</span>
       </div>
 
       {/* Onglets */}
@@ -399,7 +403,7 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
                 <Tooltip
                   content={({ active, payload, label }) => {
                     if (!active || !payload || payload.length === 0) return null
-                    const entry = data.find(d =>
+                    const entry = orderedData.find(d =>
                       format(parseISO(d.date), 'd MMM', { locale: fr }) === label
                     )
                     if (!entry) return null
