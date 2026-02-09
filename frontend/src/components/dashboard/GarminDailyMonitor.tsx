@@ -498,7 +498,7 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
           </div>
         </>
       ) : (
-        <GarminSleepTab data={data} />
+        <GarminSleepTab />
       )}
     </div>
   )

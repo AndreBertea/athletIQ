@@ -7,11 +7,9 @@ import {
 import { Moon, Wind, Activity, Droplets, ChevronLeft, ChevronRight, Calendar } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { fr } from 'date-fns/locale'
+import { useQuery } from '@tanstack/react-query'
+import { garminService } from '../../services/garminService'
 import type { GarminDailyEntry } from '../../services/garminService'
-
-interface GarminSleepTabProps {
-  data: GarminDailyEntry[]
-}
 
 const SLEEP_RANGE_OPTIONS = [
   { days: 1, label: '1 nuit' },
@@ -266,29 +264,37 @@ function SleepNightDetail({ entry, showTitle }: { entry: GarminDailyEntry; showT
 }
 
 // ============================================================
-// Composant principal
+// Composant principal — fetch autonome des donnees
 // ============================================================
-export default function GarminSleepTab({ data }: GarminSleepTabProps) {
+export default function GarminSleepTab() {
   const [sleepRange, setSleepRange] = useState(7)
   const [selectedDateIdx, setSelectedDateIdx] = useState(-1) // -1 = derniere date dispo
 
   const isSingleDay = sleepRange === 1
 
+  // Fetch autonome : la plage API = sleepRange (ou 30j en mode 1-nuit pour la navigation)
+  const fetchDays = isSingleDay ? 30 : sleepRange
+  const { data: rawData, isLoading } = useQuery({
+    queryKey: ['garmin-sleep', fetchDays],
+    queryFn: () => {
+      const end = toLocaleDateStr(new Date())
+      const start = new Date()
+      start.setDate(start.getDate() - fetchDays)
+      return garminService.getGarminDaily(toLocaleDateStr(start), end)
+    },
+    staleTime: 5 * 60_000,
+  })
+
+  const data = rawData ?? []
+
   // Dates disponibles (triees chronologiquement)
   const availableDates = useMemo(() => {
-    if (!data || data.length === 0) return []
+    if (data.length === 0) return []
     return data.map(d => d.date)
   }, [data])
 
-  // Filtrage multi-jours (avec date locale, PAS toISOString)
-  const filteredData = useMemo(() => {
-    if (!data || data.length === 0) return []
-    if (isSingleDay) return data // en mode 1j, on utilise selectedDateIdx
-    const cutoff = new Date()
-    cutoff.setDate(cutoff.getDate() - sleepRange)
-    const cutoffStr = toLocaleDateStr(cutoff)
-    return data.filter(d => d.date >= cutoffStr)
-  }, [data, sleepRange, isSingleDay])
+  // En mode multi-jours, les donnees API correspondent deja a la plage voulue
+  const filteredData = data
 
   // En mode 1j : entree selectionnee
   const currentDateIdx = useMemo(() => {
@@ -343,8 +349,18 @@ export default function GarminSleepTab({ data }: GarminSleepTabProps) {
     setSelectedDateIdx(-1)
   }
 
+  // --- Chargement ---
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-16 text-gray-400">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500 mr-3" />
+        <span className="text-sm">Chargement des donnees de sommeil...</span>
+      </div>
+    )
+  }
+
   // --- Aucune donnee ---
-  if (!data || data.length === 0) {
+  if (data.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-gray-400">
         <Moon className="h-12 w-12 mb-3 text-gray-300" />
