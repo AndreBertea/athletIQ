@@ -471,7 +471,7 @@ export default function Activities() {
   })
 
   // Récupérer les streams de l'activité sélectionnée
-  const { data: streamsData } = useQuery({
+  const { data: streamsData, isLoading: streamsLoading } = useQuery({
     queryKey: ['activity-streams', selectedActivityId],
     queryFn: () => selectedActivityId ? activityService.getEnrichedActivityStreams(selectedActivityId) : null,
     enabled: !!selectedActivityId,
@@ -991,6 +991,7 @@ export default function Activities() {
                         polylineEncoded={activity.polyline || enrichedData?.polyline || activity.summary_polyline || enrichedData?.summary_polyline}
                         startLatlng={activity.start_latlng || enrichedData?.start_latlng}
                         endLatlng={activity.end_latlng || enrichedData?.end_latlng}
+                        isLoading={streamsLoading}
                       />
                     )}
                   </div>

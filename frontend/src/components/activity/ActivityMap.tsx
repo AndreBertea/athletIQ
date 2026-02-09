@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useCallback } from 'react'
+import { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import * as maptilersdk from '@maptiler/sdk'
 import '@maptiler/sdk/dist/maptiler-sdk.css'
 import { ElevationProfileControl } from '@maptiler/elevation-profile-control'
@@ -7,10 +7,11 @@ import { MapPin, AlertTriangle, Mountain, Satellite, Map, Moon } from 'lucide-re
 
 interface ActivityMapProps {
   polylineEncoded?: string
-  streamsLatlng?: [number, number][]
-  streamsAltitude?: number[]
+  streamsLatlng?: [number, number][] | { data?: [number, number][] }
+  streamsAltitude?: number[] | { data?: number[] }
   startLatlng?: [number, number]
   endLatlng?: [number, number]
+  isLoading?: boolean
 }
 
 interface MapStyleOption {
@@ -33,6 +34,7 @@ export default function ActivityMap({
   streamsAltitude,
   startLatlng,
   endLatlng,
+  isLoading = false,
 }: ActivityMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null)
   const elevationContainer = useRef<HTMLDivElement>(null)
@@ -47,6 +49,21 @@ export default function ActivityMap({
 
   const isDark = document.documentElement.classList.contains('dark')
   const [currentStyle, setCurrentStyle] = useState(isDark ? 'dark' : 'outdoor')
+
+  const normalizedLatlng = useMemo(() => {
+    if (Array.isArray(streamsLatlng)) return streamsLatlng
+    const data = streamsLatlng?.data
+    return Array.isArray(data) ? data : []
+  }, [streamsLatlng])
+
+  const normalizedAltitude = useMemo(() => {
+    if (Array.isArray(streamsAltitude)) return streamsAltitude
+    const data = streamsAltitude?.data
+    return Array.isArray(data) ? data : []
+  }, [streamsAltitude])
+
+  const hasCandidateData = normalizedLatlng.length > 0 || Boolean(polylineEncoded)
+  const isWaitingForData = isLoading && !hasCandidateData
 
   // Coordonnees de depart/arrivee calculees a partir des donnees
   const coordsRef = useRef<{
@@ -123,14 +140,24 @@ export default function ActivityMap({
   }, [])
 
   useEffect(() => {
+    if (isWaitingForData) {
+      setNoData(false)
+      return
+    }
+    if (!hasCandidateData) {
+      setNoData(true)
+      return
+    }
+    setNoData(false)
+
     if (!mapContainer.current || !elevationContainer.current) return
 
     // Determiner les coordonnees GeoJSON
     let geoJsonCoords: [number, number][] | [number, number, number][] = []
     let geoJsonFeature: GeoJSON.Feature<GeoJSON.LineString>
 
-    if (streamsLatlng && streamsLatlng.length > 0) {
-      geoJsonFeature = buildGeoJSON3D(streamsLatlng, streamsAltitude)
+    if (normalizedLatlng.length > 0) {
+      geoJsonFeature = buildGeoJSON3D(normalizedLatlng, normalizedAltitude)
       geoJsonCoords = geoJsonFeature.geometry.coordinates as [number, number, number][]
     } else if (polylineEncoded) {
       geoJsonFeature = polylineToGeoJSON(polylineEncoded)
@@ -264,7 +291,15 @@ export default function ActivityMap({
       endMarkerRef.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [streamsLatlng, streamsAltitude, polylineEncoded, startLatlng, endLatlng])
+  }, [
+    isWaitingForData,
+    hasCandidateData,
+    normalizedLatlng,
+    normalizedAltitude,
+    polylineEncoded,
+    startLatlng,
+    endLatlng,
+  ])
 
   const handleStyleChange = (styleId: string) => {
     setCurrentStyle(styleId)
@@ -282,6 +317,15 @@ export default function ActivityMap({
       <div className="flex flex-col items-center justify-center py-12 text-gray-500 dark:text-gray-400">
         <AlertTriangle className="h-8 w-8 mb-2 text-amber-500" />
         <p className="text-sm">Cle API MapTiler manquante (VITE_MAPTILER_API_KEY)</p>
+      </div>
+    )
+  }
+
+  if (isWaitingForData) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-gray-500 dark:text-gray-400">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500 mb-2" />
+        <p className="text-sm">Chargement de la carte...</p>
       </div>
     )
   }
