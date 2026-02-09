@@ -12,6 +12,7 @@ from app.domain.entities.activity import Activity
 from app.domain.entities.user import StravaAuth
 from app.domain.services.strava_sync_service import strava_sync_service
 from app.domain.services.auto_enrichment_service import auto_enrichment_service
+from app.domain.services.derived_features_service import recompute_training_load_from
 
 logger = logging.getLogger(__name__)
 
@@ -117,6 +118,13 @@ def handle_activity_create(owner_id: int, strava_activity_id: int) -> None:
         session.commit()
         logger.info(f"Webhook activity.create: activite strava_id={strava_activity_id} sauvegardee (id={activity.id})")
 
+        # Recalculer la charge d'entrainement a partir de la date de l'activite
+        try:
+            if activity.start_date:
+                recompute_training_load_from(session, UUID(user_id), activity.start_date.date())
+        except Exception as e:
+            logger.warning(f"Webhook activity.create: recalcul training load echoue: {e}")
+
         # Ajouter automatiquement a la queue d'enrichissement
         try:
             added = auto_enrichment_service.scheduler.add_to_queue(
@@ -167,6 +175,13 @@ def handle_activity_update(owner_id: int, strava_activity_id: int) -> None:
         session.commit()
         logger.info(f"Webhook activity.update: activite strava_id={strava_activity_id} mise a jour")
 
+        # Recalculer la charge d'entrainement a partir de la date de l'activite
+        try:
+            if activity.start_date:
+                recompute_training_load_from(session, UUID(user_id), activity.start_date.date())
+        except Exception as e:
+            logger.warning(f"Webhook activity.update: recalcul training load echoue: {e}")
+
 
 def handle_activity_delete(owner_id: int, strava_activity_id: int) -> None:
     """Traite un evenement activity.delete.
@@ -179,9 +194,18 @@ def handle_activity_delete(owner_id: int, strava_activity_id: int) -> None:
             logger.info(f"Webhook activity.delete: strava_id={strava_activity_id} non trouve en DB (deja supprime?)")
             return
 
+        deleted_date = activity.start_date.date() if activity.start_date else None
+        user_id = str(activity.user_id)
         session.delete(activity)
         session.commit()
         logger.info(f"Webhook activity.delete: activite strava_id={strava_activity_id} supprimee")
+
+        # Recalculer la charge d'entrainement a partir de la date supprimee
+        try:
+            if deleted_date:
+                recompute_training_load_from(session, UUID(user_id), deleted_date)
+        except Exception as e:
+            logger.warning(f"Webhook activity.delete: recalcul training load echoue: {e}")
 
 
 def process_webhook_event(event: dict) -> None:

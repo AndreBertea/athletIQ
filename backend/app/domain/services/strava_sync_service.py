@@ -6,7 +6,7 @@ import requests
 
 logger = logging.getLogger(__name__)
 from typing import List, Dict, Any, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date as date_type
 from sqlmodel import Session, select
 from fastapi import HTTPException, status
 from uuid import UUID
@@ -14,6 +14,7 @@ from uuid import UUID
 from app.auth.strava_oauth import strava_oauth
 from app.domain.entities.activity import Activity, ActivityCreate
 from app.domain.entities.user import StravaAuth
+from app.domain.services.derived_features_service import recompute_training_load_from
 
 
 class StravaSyncService:
@@ -45,6 +46,23 @@ class StravaSyncService:
             strava_auth.expires_at = datetime.fromtimestamp(new_tokens.expires_at)
             strava_auth.updated_at = datetime.utcnow()
             session.commit()
+
+            # Recalculer la charge d'entrainement si de nouvelles activites ont ete ajoutees
+            if new_activities:
+                try:
+                    min_start = min(
+                        (a.start_date for a in new_activities if a.start_date),
+                        default=None,
+                    )
+                    if min_start:
+                        recompute_training_load_from(
+                            session,
+                            UUID(user_id),
+                            min_start.date(),
+                            date_type.today(),
+                        )
+                except Exception as e:
+                    logger.warning(f"Sync Strava: recalcul training load echoue: {e}")
             
             return new_tokens.access_token, strava_auth.strava_athlete_id
         

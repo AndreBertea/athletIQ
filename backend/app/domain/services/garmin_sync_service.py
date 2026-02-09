@@ -27,6 +27,7 @@ from app.domain.entities.activity import Activity, ActivitySource, ActivityType
 from app.domain.entities.fit_metrics import FitMetrics
 from app.domain.entities.garmin_daily import GarminDaily
 from app.domain.entities.user import GarminAuth
+from app.domain.services.derived_features_service import recompute_training_load_from
 
 logger = logging.getLogger(__name__)
 
@@ -567,6 +568,7 @@ async def sync_garmin_activities(
     linked = 0
     skipped = 0
     errors = 0
+    earliest_created_date: Optional[date] = None
 
     try:
         # garth.Activity.list() retourne les plus recentes d'abord
@@ -620,10 +622,21 @@ async def sync_garmin_activities(
                 session.add(activity)
                 session.commit()
                 created += 1
+                if activity.start_date:
+                    created_date = activity.start_date.date()
+                    if earliest_created_date is None or created_date < earliest_created_date:
+                        earliest_created_date = created_date
 
         except Exception as e:
             logger.warning(f"Erreur sync activite Garmin {garmin_act.activity_id}: {e}")
             errors += 1
+
+    # Recalculer la charge d'entrainement si de nouvelles activites ont ete creees
+    if created > 0 and earliest_created_date:
+        try:
+            recompute_training_load_from(session, user_id, earliest_created_date)
+        except Exception as e:
+            logger.warning(f"Sync Garmin: recalcul training load echoue: {e}")
 
     return {
         "created": created,

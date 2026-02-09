@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from sqlmodel import Session, select
+from sqlalchemy import func
 
 from app.domain.entities.activity import Activity
 from app.domain.entities.garmin_daily import GarminDaily
@@ -387,3 +388,80 @@ def compute_training_load(
     session.commit()
     logger.info(f"User {user_id}: training load calcule pour {days_computed} jours ({date_from} -> {date_to})")
     return days_computed
+
+
+def recompute_training_load_from(
+    session: Session,
+    user_id: UUID,
+    start_date: date_type,
+    end_date: Optional[date_type] = None,
+) -> int:
+    """Recalcule la charge d'entrainement a partir d'une date jusqu'a end_date (aujourd'hui par defaut)."""
+    if end_date is None:
+        end_date = date_type.today()
+    if start_date > end_date:
+        return 0
+    return compute_training_load(session, user_id, start_date, end_date)
+
+
+def ensure_training_load_for_range(
+    session: Session,
+    user_id: UUID,
+    date_from: Optional[date_type] = None,
+    date_to: Optional[date_type] = None,
+) -> Dict[str, Any]:
+    """
+    Garantit que les donnees de training load existent pour la plage demandee.
+    Recalcule si necessaire (table vide, manque en debut ou fin).
+    """
+    # Normaliser user_id (accepte str ou UUID)
+    if not isinstance(user_id, UUID):
+        user_id = UUID(str(user_id))
+
+    today = date_type.today()
+    if date_to and date_to > today:
+        date_to = today
+
+    # Trouver la plus ancienne activite de l'utilisateur
+    min_activity_dt = session.exec(
+        select(func.min(Activity.start_date)).where(Activity.user_id == user_id)
+    ).one()
+    if not min_activity_dt:
+        return {"computed": False, "reason": "no_activities"}
+
+    earliest_activity_date = min_activity_dt.date()
+    target_from = date_from or earliest_activity_date
+    if target_from < earliest_activity_date:
+        target_from = earliest_activity_date
+
+    target_to = date_to or today
+    if target_to < target_from:
+        return {"computed": False, "reason": "invalid_range"}
+
+    # Verifier l'etat actuel de la table trainingload
+    min_tl, max_tl = session.exec(
+        select(func.min(TrainingLoad.date), func.max(TrainingLoad.date)).where(
+            TrainingLoad.user_id == user_id
+        )
+    ).one()
+
+    # Aucun historique: calcul complet depuis la premiere activite
+    if not min_tl or not max_tl:
+        days = compute_training_load(session, user_id, earliest_activity_date, target_to)
+        return {"computed": True, "date_from": earliest_activity_date, "date_to": target_to, "days": days}
+
+    # Si on demande plus tot que l'historique actuel, il faut recalculer jusqu'au max existant
+    if target_from < min_tl:
+        d_from = target_from
+        d_to = target_to if target_to > max_tl else max_tl
+        days = compute_training_load(session, user_id, d_from, d_to)
+        return {"computed": True, "date_from": d_from, "date_to": d_to, "days": days}
+
+    # Si on demande apres le max existant, on complete seulement la fin
+    if target_to > max_tl:
+        d_from = max_tl + timedelta(days=1)
+        d_to = target_to
+        days = compute_training_load(session, user_id, d_from, d_to)
+        return {"computed": True, "date_from": d_from, "date_to": d_to, "days": days}
+
+    return {"computed": False, "reason": "up_to_date"}

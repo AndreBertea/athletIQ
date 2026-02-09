@@ -306,6 +306,16 @@ async def get_training_load(
     """Retourne les donnees de training load pour l'utilisateur sur une plage de dates."""
     user_id = get_current_user_id(token.credentials)
 
+    # Assurer le calcul des donnees si manquantes
+    try:
+        derived_features_service.ensure_training_load_for_range(session, user_id, date_from, date_to)
+    except Exception as e:
+        logger.error(f"Erreur ensure training load user {user_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors du calcul du training load: {str(e)}",
+        )
+
     query = select(TrainingLoad).where(TrainingLoad.user_id == user_id)
     if date_from:
         query = query.where(TrainingLoad.date >= date_from)
