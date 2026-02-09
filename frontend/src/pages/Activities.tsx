@@ -1,12 +1,14 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Activity, MapPin, Clock, TrendingUp, Eye, Calendar, X, Heart, Target, Trophy, Mountain, Zap, Gauge } from 'lucide-react'
+import { Activity, MapPin, Clock, TrendingUp, Eye, Calendar, X, Heart, Target, Trophy, Mountain, Zap, Gauge, BarChart3, Layers } from 'lucide-react'
 import { activityService } from '../services/activityService'
 import { useToast } from '../contexts/ToastContext'
 import HeartRateChart from '../components/HeartRateChart'
 // @ts-expect-error: Types manquants pour react-plotly.js
 import Plot from 'react-plotly.js'
 import ActivityTypeEditor from '../components/ActivityTypeEditor'
+import SegmentAnalysis from '../components/activity/SegmentAnalysis'
+import LapsTable from '../components/activity/LapsTable'
 
 const PER_PAGE = 30
 
@@ -16,6 +18,7 @@ export default function Activities() {
   const [selectedActivityDetail, setSelectedActivityDetail] = useState<any | null>(null)
   const [useEnrichedData, setUseEnrichedData] = useState<boolean>(true)
   const [page, setPage] = useState(1)
+  const [activeTab, setActiveTab] = useState<'streams' | 'segments' | 'laps'>('streams')
 
   // Récupérer les activités originales (paginées)
   const { data: originalData, isLoading: originalLoading } = useQuery({
@@ -292,182 +295,214 @@ export default function Activities() {
                   </div>
                 </div>
 
-                {/* Graphiques des streams (si sélectionné et enrichi) */}
-                {showStreams && isEnriched && streamsData && (
+                {/* Graphiques / Analyse (si sélectionné et enrichi) */}
+                {showStreams && isEnriched && (
                   <div className="mt-6 pt-6 border-t">
-                    <div className="space-y-4">
-                      {/* Métriques clés */}
-                      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                        <div className="bg-blue-50 p-3 rounded-lg text-center">
-                          <TrendingUp className="h-4 w-4 mx-auto mb-1 text-blue-600" />
-                          <div className="text-xs text-blue-600">Distance</div>
-                          <div className="text-sm font-bold text-blue-800">{formatDistance(displayData.distance)}</div>
+                    {/* Onglets */}
+                    <div className="flex space-x-1 mb-4 border-b">
+                      {([
+                        { id: 'streams' as const, label: 'Streams', icon: <Eye className="h-3.5 w-3.5 mr-1.5" /> },
+                        { id: 'segments' as const, label: 'Segments', icon: <BarChart3 className="h-3.5 w-3.5 mr-1.5" /> },
+                        { id: 'laps' as const, label: 'Tours', icon: <Layers className="h-3.5 w-3.5 mr-1.5" /> },
+                      ]).map(tab => (
+                        <button
+                          key={tab.id}
+                          onClick={(e) => { e.stopPropagation(); setActiveTab(tab.id) }}
+                          className={`inline-flex items-center px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                            activeTab === tab.id
+                              ? 'border-primary-600 text-primary-600'
+                              : 'border-transparent text-gray-500 hover:text-gray-700'
+                          }`}
+                        >
+                          {tab.icon}{tab.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Contenu des onglets */}
+                    {activeTab === 'streams' && streamsData && (
+                      <div className="space-y-4">
+                        {/* Métriques clés */}
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                          <div className="bg-blue-50 p-3 rounded-lg text-center">
+                            <TrendingUp className="h-4 w-4 mx-auto mb-1 text-blue-600" />
+                            <div className="text-xs text-blue-600">Distance</div>
+                            <div className="text-sm font-bold text-blue-800">{formatDistance(displayData.distance)}</div>
+                          </div>
+                          <div className="bg-green-50 p-3 rounded-lg text-center">
+                            <Clock className="h-4 w-4 mx-auto mb-1 text-green-600" />
+                            <div className="text-xs text-green-600">Durée</div>
+                            <div className="text-sm font-bold text-green-800">{formatDuration(displayData.moving_time)}</div>
+                          </div>
+                          {displayData.avg_heartrate && (
+                            <div className="bg-red-50 p-3 rounded-lg text-center">
+                              <Heart className="h-4 w-4 mx-auto mb-1 text-red-600" />
+                              <div className="text-xs text-red-600">FC moy / max</div>
+                              <div className="text-sm font-bold text-red-800">{Math.round(displayData.avg_heartrate)}{displayData.max_heartrate ? ` / ${Math.round(displayData.max_heartrate)}` : ''} bpm</div>
+                            </div>
+                          )}
+                          {displayData.elev_gain && (
+                            <div className="bg-emerald-50 p-3 rounded-lg text-center">
+                              <Mountain className="h-4 w-4 mx-auto mb-1 text-emerald-600" />
+                              <div className="text-xs text-emerald-600">Dénivelé +</div>
+                              <div className="text-sm font-bold text-emerald-800">{Math.round(displayData.elev_gain)} m</div>
+                            </div>
+                          )}
+                          {activity.avg_cadence && (
+                            <div className="bg-purple-50 p-3 rounded-lg text-center">
+                              <Zap className="h-4 w-4 mx-auto mb-1 text-purple-600" />
+                              <div className="text-xs text-purple-600">Cadence</div>
+                              <div className="text-sm font-bold text-purple-800">{Math.round(activity.avg_cadence * 2)} ppm</div>
+                            </div>
+                          )}
                         </div>
-                        <div className="bg-green-50 p-3 rounded-lg text-center">
-                          <Clock className="h-4 w-4 mx-auto mb-1 text-green-600" />
-                          <div className="text-xs text-green-600">Durée</div>
-                          <div className="text-sm font-bold text-green-800">{formatDuration(displayData.moving_time)}</div>
-                        </div>
-                        {displayData.avg_heartrate && (
-                          <div className="bg-red-50 p-3 rounded-lg text-center">
-                            <Heart className="h-4 w-4 mx-auto mb-1 text-red-600" />
-                            <div className="text-xs text-red-600">FC moy / max</div>
-                            <div className="text-sm font-bold text-red-800">{Math.round(displayData.avg_heartrate)}{displayData.max_heartrate ? ` / ${Math.round(displayData.max_heartrate)}` : ''} bpm</div>
+
+                        {/* Graphique de fréquence cardiaque */}
+                        {streamsData.streams?.heartrate && streamsData.streams?.time && (
+                          <HeartRateChart
+                            timeData={streamsData.streams.time.data || streamsData.streams.time}
+                            heartrateData={streamsData.streams.heartrate.data || streamsData.streams.heartrate}
+                            distanceData={streamsData.streams.distance?.data || streamsData.streams.distance}
+                            showMiniVersion={false}
+                          />
+                        )}
+
+                        {/* Graphique d'altitude */}
+                        {streamsData.streams?.altitude && streamsData.streams?.time && (
+                          <div className="w-full bg-white rounded-lg border">
+                            <div className="flex items-center p-3 border-b">
+                              <Mountain className="h-4 w-4 mr-2 text-emerald-500" />
+                              <span className="text-sm font-medium text-gray-900">Profil altimétrique</span>
+                            </div>
+                            <div className="p-2">
+                              {(() => {
+                                const altData = streamsData.streams.altitude.data || streamsData.streams.altitude
+                                const distData = streamsData.streams.distance?.data || streamsData.streams.distance
+                                const timeArr = streamsData.streams.time.data || streamsData.streams.time
+                                const xAxis = distData ? distData.map((d: number) => d / 1000) : timeArr.map((t: number) => t / 60)
+                                return (
+                                  // @ts-expect-error: Types manquants pour react-plotly.js
+                                  <Plot
+                                    data={[{
+                                      x: xAxis,
+                                      y: altData,
+                                      type: 'scatter',
+                                      mode: 'lines',
+                                      fill: 'tozeroy',
+                                      line: { color: '#10b981', width: 2 },
+                                      fillcolor: 'rgba(16, 185, 129, 0.15)',
+                                      hovertemplate: `<b>%{y:.0f} m</b><br>${distData ? 'Distance: %{x:.1f} km' : 'Temps: %{x:.1f} min'}<extra></extra>`
+                                    }]}
+                                    layout={{
+                                      margin: { t: 20, r: 20, b: 40, l: 50 },
+                                      height: 200,
+                                      xaxis: { title: distData ? 'Distance (km)' : 'Temps (min)' },
+                                      yaxis: { title: 'Altitude (m)' },
+                                      showlegend: false,
+                                      font: { family: 'Inter, system-ui, sans-serif', size: 12 },
+                                      plot_bgcolor: 'rgba(0,0,0,0)',
+                                      paper_bgcolor: 'rgba(0,0,0,0)'
+                                    }}
+                                    config={{ displayModeBar: false, responsive: true }}
+                                    style={{ width: '100%' }}
+                                  />
+                                )
+                              })()}
+                            </div>
                           </div>
                         )}
-                        {displayData.elev_gain && (
-                          <div className="bg-emerald-50 p-3 rounded-lg text-center">
-                            <Mountain className="h-4 w-4 mx-auto mb-1 text-emerald-600" />
-                            <div className="text-xs text-emerald-600">Dénivelé +</div>
-                            <div className="text-sm font-bold text-emerald-800">{Math.round(displayData.elev_gain)} m</div>
+
+                        {/* Graphique de vitesse */}
+                        {streamsData.streams?.velocity_smooth && streamsData.streams?.time && (
+                          <div className="w-full bg-white rounded-lg border">
+                            <div className="flex items-center p-3 border-b">
+                              <Gauge className="h-4 w-4 mr-2 text-orange-500" />
+                              <span className="text-sm font-medium text-gray-900">Vitesse</span>
+                            </div>
+                            <div className="p-2">
+                              {(() => {
+                                const velData = streamsData.streams.velocity_smooth.data || streamsData.streams.velocity_smooth
+                                const timeArr = streamsData.streams.time.data || streamsData.streams.time
+                                return (
+                                  // @ts-expect-error: Types manquants pour react-plotly.js
+                                  <Plot
+                                    data={[{
+                                      x: timeArr.map((t: number) => t / 60),
+                                      y: velData.map((v: number) => v * 3.6),
+                                      type: 'scatter',
+                                      mode: 'lines',
+                                      line: { color: '#f97316', width: 2 },
+                                      hovertemplate: '<b>%{y:.1f} km/h</b><br>Temps: %{x:.1f} min<extra></extra>'
+                                    }]}
+                                    layout={{
+                                      margin: { t: 20, r: 20, b: 40, l: 50 },
+                                      height: 200,
+                                      xaxis: { title: 'Temps (min)' },
+                                      yaxis: { title: 'Vitesse (km/h)' },
+                                      showlegend: false,
+                                      font: { family: 'Inter, system-ui, sans-serif', size: 12 },
+                                      plot_bgcolor: 'rgba(0,0,0,0)',
+                                      paper_bgcolor: 'rgba(0,0,0,0)'
+                                    }}
+                                    config={{ displayModeBar: false, responsive: true }}
+                                    style={{ width: '100%' }}
+                                  />
+                                )
+                              })()}
+                            </div>
                           </div>
                         )}
-                        {activity.avg_cadence && (
-                          <div className="bg-purple-50 p-3 rounded-lg text-center">
-                            <Zap className="h-4 w-4 mx-auto mb-1 text-purple-600" />
-                            <div className="text-xs text-purple-600">Cadence</div>
-                            <div className="text-sm font-bold text-purple-800">{Math.round(activity.avg_cadence * 2)} ppm</div>
+
+                        {/* Graphique de cadence */}
+                        {streamsData.streams?.cadence && streamsData.streams?.time && (
+                          <div className="w-full bg-white rounded-lg border">
+                            <div className="flex items-center p-3 border-b">
+                              <Zap className="h-4 w-4 mr-2 text-purple-500" />
+                              <span className="text-sm font-medium text-gray-900">Cadence</span>
+                            </div>
+                            <div className="p-2">
+                              {(() => {
+                                const cadData = streamsData.streams.cadence.data || streamsData.streams.cadence
+                                const timeArr = streamsData.streams.time.data || streamsData.streams.time
+                                return (
+                                  // @ts-expect-error: Types manquants pour react-plotly.js
+                                  <Plot
+                                    data={[{
+                                      x: timeArr.map((t: number) => t / 60),
+                                      y: cadData.map((c: number) => c * 2),
+                                      type: 'scatter',
+                                      mode: 'lines',
+                                      line: { color: '#8b5cf6', width: 2 },
+                                      hovertemplate: '<b>%{y:.0f} ppm</b><br>Temps: %{x:.1f} min<extra></extra>'
+                                    }]}
+                                    layout={{
+                                      margin: { t: 20, r: 20, b: 40, l: 50 },
+                                      height: 200,
+                                      xaxis: { title: 'Temps (min)' },
+                                      yaxis: { title: 'Cadence (ppm)' },
+                                      showlegend: false,
+                                      font: { family: 'Inter, system-ui, sans-serif', size: 12 },
+                                      plot_bgcolor: 'rgba(0,0,0,0)',
+                                      paper_bgcolor: 'rgba(0,0,0,0)'
+                                    }}
+                                    config={{ displayModeBar: false, responsive: true }}
+                                    style={{ width: '100%' }}
+                                  />
+                                )
+                              })()}
+                            </div>
                           </div>
                         )}
                       </div>
+                    )}
 
-                      {/* Graphique de fréquence cardiaque */}
-                      {streamsData.streams?.heartrate && streamsData.streams?.time && (
-                        <HeartRateChart
-                          timeData={streamsData.streams.time.data || streamsData.streams.time}
-                          heartrateData={streamsData.streams.heartrate.data || streamsData.streams.heartrate}
-                          distanceData={streamsData.streams.distance?.data || streamsData.streams.distance}
-                          showMiniVersion={false}
-                        />
-                      )}
+                    {activeTab === 'segments' && (
+                      <SegmentAnalysis activityId={activityId} />
+                    )}
 
-                      {/* Graphique d'altitude */}
-                      {streamsData.streams?.altitude && streamsData.streams?.time && (
-                        <div className="w-full bg-white rounded-lg border">
-                          <div className="flex items-center p-3 border-b">
-                            <Mountain className="h-4 w-4 mr-2 text-emerald-500" />
-                            <span className="text-sm font-medium text-gray-900">Profil altimétrique</span>
-                          </div>
-                          <div className="p-2">
-                            {(() => {
-                              const altData = streamsData.streams.altitude.data || streamsData.streams.altitude
-                              const distData = streamsData.streams.distance?.data || streamsData.streams.distance
-                              const timeArr = streamsData.streams.time.data || streamsData.streams.time
-                              const xAxis = distData ? distData.map((d: number) => d / 1000) : timeArr.map((t: number) => t / 60)
-                              return (
-                                // @ts-expect-error: Types manquants pour react-plotly.js
-                                <Plot
-                                  data={[{
-                                    x: xAxis,
-                                    y: altData,
-                                    type: 'scatter',
-                                    mode: 'lines',
-                                    fill: 'tozeroy',
-                                    line: { color: '#10b981', width: 2 },
-                                    fillcolor: 'rgba(16, 185, 129, 0.15)',
-                                    hovertemplate: `<b>%{y:.0f} m</b><br>${distData ? 'Distance: %{x:.1f} km' : 'Temps: %{x:.1f} min'}<extra></extra>`
-                                  }]}
-                                  layout={{
-                                    margin: { t: 20, r: 20, b: 40, l: 50 },
-                                    height: 200,
-                                    xaxis: { title: distData ? 'Distance (km)' : 'Temps (min)' },
-                                    yaxis: { title: 'Altitude (m)' },
-                                    showlegend: false,
-                                    font: { family: 'Inter, system-ui, sans-serif', size: 12 },
-                                    plot_bgcolor: 'rgba(0,0,0,0)',
-                                    paper_bgcolor: 'rgba(0,0,0,0)'
-                                  }}
-                                  config={{ displayModeBar: false, responsive: true }}
-                                  style={{ width: '100%' }}
-                                />
-                              )
-                            })()}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Graphique de vitesse */}
-                      {streamsData.streams?.velocity_smooth && streamsData.streams?.time && (
-                        <div className="w-full bg-white rounded-lg border">
-                          <div className="flex items-center p-3 border-b">
-                            <Gauge className="h-4 w-4 mr-2 text-orange-500" />
-                            <span className="text-sm font-medium text-gray-900">Vitesse</span>
-                          </div>
-                          <div className="p-2">
-                            {(() => {
-                              const velData = streamsData.streams.velocity_smooth.data || streamsData.streams.velocity_smooth
-                              const timeArr = streamsData.streams.time.data || streamsData.streams.time
-                              return (
-                                // @ts-expect-error: Types manquants pour react-plotly.js
-                                <Plot
-                                  data={[{
-                                    x: timeArr.map((t: number) => t / 60),
-                                    y: velData.map((v: number) => v * 3.6),
-                                    type: 'scatter',
-                                    mode: 'lines',
-                                    line: { color: '#f97316', width: 2 },
-                                    hovertemplate: '<b>%{y:.1f} km/h</b><br>Temps: %{x:.1f} min<extra></extra>'
-                                  }]}
-                                  layout={{
-                                    margin: { t: 20, r: 20, b: 40, l: 50 },
-                                    height: 200,
-                                    xaxis: { title: 'Temps (min)' },
-                                    yaxis: { title: 'Vitesse (km/h)' },
-                                    showlegend: false,
-                                    font: { family: 'Inter, system-ui, sans-serif', size: 12 },
-                                    plot_bgcolor: 'rgba(0,0,0,0)',
-                                    paper_bgcolor: 'rgba(0,0,0,0)'
-                                  }}
-                                  config={{ displayModeBar: false, responsive: true }}
-                                  style={{ width: '100%' }}
-                                />
-                              )
-                            })()}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Graphique de cadence */}
-                      {streamsData.streams?.cadence && streamsData.streams?.time && (
-                        <div className="w-full bg-white rounded-lg border">
-                          <div className="flex items-center p-3 border-b">
-                            <Zap className="h-4 w-4 mr-2 text-purple-500" />
-                            <span className="text-sm font-medium text-gray-900">Cadence</span>
-                          </div>
-                          <div className="p-2">
-                            {(() => {
-                              const cadData = streamsData.streams.cadence.data || streamsData.streams.cadence
-                              const timeArr = streamsData.streams.time.data || streamsData.streams.time
-                              return (
-                                // @ts-expect-error: Types manquants pour react-plotly.js
-                                <Plot
-                                  data={[{
-                                    x: timeArr.map((t: number) => t / 60),
-                                    y: cadData.map((c: number) => c * 2),
-                                    type: 'scatter',
-                                    mode: 'lines',
-                                    line: { color: '#8b5cf6', width: 2 },
-                                    hovertemplate: '<b>%{y:.0f} ppm</b><br>Temps: %{x:.1f} min<extra></extra>'
-                                  }]}
-                                  layout={{
-                                    margin: { t: 20, r: 20, b: 40, l: 50 },
-                                    height: 200,
-                                    xaxis: { title: 'Temps (min)' },
-                                    yaxis: { title: 'Cadence (ppm)' },
-                                    showlegend: false,
-                                    font: { family: 'Inter, system-ui, sans-serif', size: 12 },
-                                    plot_bgcolor: 'rgba(0,0,0,0)',
-                                    paper_bgcolor: 'rgba(0,0,0,0)'
-                                  }}
-                                  config={{ displayModeBar: false, responsive: true }}
-                                  style={{ width: '100%' }}
-                                />
-                              )
-                            })()}
-                          </div>
-                        </div>
-                      )}
-                    </div>
+                    {activeTab === 'laps' && (
+                      <LapsTable lapsData={(streamsData as any)?.laps_data} activityMovingTime={displayData.moving_time} />
+                    )}
                   </div>
                 )}
               </div>

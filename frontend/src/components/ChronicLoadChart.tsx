@@ -32,7 +32,7 @@ export default function ChronicLoadChart({ data, isLoading, rhrDelta7d }: Chroni
           <div className="text-4xl mb-2">📊</div>
           <p>Données insuffisantes pour calculer la charge chronique</p>
           <p className="text-sm text-gray-400 mt-1">
-            Au moins 28 jours d'activités sont nécessaires
+            Au moins 42 jours d'activités sont nécessaires
           </p>
         </div>
       </div>
@@ -75,7 +75,7 @@ export default function ChronicLoadChart({ data, isLoading, rhrDelta7d }: Chroni
         <div className="bg-white p-4 rounded-lg border">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Charge Chronique</p>
+              <p className="text-sm font-medium text-gray-600">Charge Chronique (42j)</p>
               <p className="text-2xl font-bold text-gray-900">
                 {latestData.chronicLoad.toFixed(1)}
               </p>
@@ -133,7 +133,7 @@ export default function ChronicLoadChart({ data, isLoading, rhrDelta7d }: Chroni
         <div className="mb-4">
           <h3 className="text-lg font-semibold text-gray-900">Évolution de la Charge d'Entraînement</h3>
           <p className="text-sm text-gray-600">
-            Charge chronique (28j) vs Charge aiguë (7j) - Modèle de Banister
+            Charge chronique (EWMA 42j) vs Charge aiguë (EWMA 7j) - Modèle de Banister
           </p>
         </div>
         
@@ -152,7 +152,7 @@ export default function ChronicLoadChart({ data, isLoading, rhrDelta7d }: Chroni
         <div className="flex justify-center space-x-6 mt-4 text-sm">
           <div className="flex items-center space-x-2">
             <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-            <span className="text-gray-600">Charge Chronique (28j)</span>
+            <span className="text-gray-600">Charge Chronique (42j)</span>
           </div>
           <div className="flex items-center space-x-2">
             <div className="w-3 h-3 rounded-full bg-orange-500"></div>
@@ -165,9 +165,9 @@ export default function ChronicLoadChart({ data, isLoading, rhrDelta7d }: Chroni
       <div className="bg-blue-50 p-4 rounded-lg">
         <h4 className="font-medium text-blue-900 mb-2">À propos de la Charge Chronique</h4>
         <div className="text-sm text-blue-800 space-y-1">
-          <p><strong>Charge Chronique :</strong> Moyenne de charge sur 28 jours (fitness)</p>
-          <p><strong>Charge Aiguë :</strong> Moyenne de charge sur 7 jours (fatigue)</p>
-          <p><strong>TSB :</strong> Différence entre charge aiguë et chronique (équilibre)</p>
+          <p><strong>Charge Chronique (CTL) :</strong> EWMA 42 jours (fitness)</p>
+          <p><strong>Charge Aiguë (ATL) :</strong> EWMA 7 jours (fatigue)</p>
+          <p><strong>TSB :</strong> CTL - ATL (équilibre d'entraînement)</p>
           <p className="mt-2 text-xs">
             TSB positif = Récupération | TSB négatif = Surmenage | TSB proche de 0 = Équilibre optimal
           </p>

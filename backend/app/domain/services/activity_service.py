@@ -302,7 +302,7 @@ class ActivityService:
             return {"activity_id": activity_id, "streams": {}, "message": "Aucun stream disponible pour cette activite"}
 
         streams_clean = {k: v for k, v in activity.streams_data.items() if k != "segment_efforts"}
-        return {"activity_id": activity_id, "streams": streams_clean}
+        return {"activity_id": activity_id, "streams": streams_clean, "laps_data": activity.laps_data}
 
     def check_strava_connected(self, session: Session, user_id: str) -> None:
         strava_auth = session.exec(

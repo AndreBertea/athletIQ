@@ -1,26 +1,27 @@
 import { vi, describe, test, expect, beforeEach } from 'vitest'
 
-// Mock activityService utilise par chronicLoadService
-vi.mock('../services/activityService', () => ({
-  activityService: {
-    getAllActivities: vi.fn(),
+// Mock dataService utilise par chronicLoadService
+vi.mock('../services/dataService', () => ({
+  dataService: {
+    getTrainingLoad: vi.fn(),
   },
 }))
 
-import { activityService } from '../services/activityService'
+import { dataService } from '../services/dataService'
 import { chronicLoadService } from '../services/chronicLoadService'
 
-// Helper pour creer une activite mock
-function makeActivity(overrides: Record<string, any> = {}) {
+// Helper pour creer une entree TrainingLoad mock
+function makeTrainingLoadEntry(overrides: Record<string, any> = {}) {
   return {
     id: '1',
-    activity_type: 'Run',
-    start_date: '2024-06-15T08:00:00Z',
-    moving_time: 3600, // 1 heure
-    distance: 10000,
-    average_heart_rate: 150,
-    max_heart_rate: 190,
-    average_pace: 0.006, // 6 min/km
+    user_id: 'user-1',
+    date: '2024-06-15',
+    ctl_42d: 50,
+    atl_7d: 60,
+    tsb: -10,
+    rhr_delta_7d: 2.5,
+    created_at: '2024-06-15T00:00:00Z',
+    updated_at: '2024-06-15T00:00:00Z',
     ...overrides,
   }
 }
@@ -30,153 +31,43 @@ describe('ChronicLoadService', () => {
     vi.clearAllMocks()
   })
 
-  describe('calculateTRIMP (via getChronicLoadData)', () => {
-    test('calcule le TRIMP avec HR quand disponible', async () => {
-      const activity = makeActivity({
-        start_date: '2024-06-15T08:00:00Z',
-        moving_time: 3600,
-        average_heart_rate: 150,
-        max_heart_rate: 190,
-      })
-      vi.mocked(activityService.getAllActivities).mockResolvedValue([activity])
-
-      const result = await chronicLoadService.getChronicLoadData('2024-06-15', '2024-06-15')
-
-      expect(result).toHaveLength(1)
-      // Le TRIMP devrait etre > 0 pour une activite avec HR
-      expect(result[0].acuteLoad).toBeGreaterThan(0)
-    })
-
-    test('utilise le fallback distance quand pas de HR', async () => {
-      const activity = makeActivity({
-        start_date: '2024-06-15T08:00:00Z',
-        moving_time: 3600,
-        average_heart_rate: undefined,
-        max_heart_rate: undefined,
-        distance: 10000,
-        average_pace: 0.006, // ~6 min/km
-      })
-      vi.mocked(activityService.getAllActivities).mockResolvedValue([activity])
-
-      const result = await chronicLoadService.getChronicLoadData('2024-06-15', '2024-06-15')
-
-      expect(result).toHaveLength(1)
-      expect(result[0].acuteLoad).toBeGreaterThan(0)
-    })
-  })
-
-  describe('filtrage des activites', () => {
-    test('ne prend que les activites de course (Run, TrailRun, VirtualRun)', async () => {
-      const activities = [
-        makeActivity({ id: '1', activity_type: 'Run', start_date: '2024-06-15T08:00:00Z' }),
-        makeActivity({ id: '2', activity_type: 'Ride', start_date: '2024-06-15T10:00:00Z' }),
-        makeActivity({ id: '3', activity_type: 'TrailRun', start_date: '2024-06-15T12:00:00Z' }),
-        makeActivity({ id: '4', activity_type: 'Swim', start_date: '2024-06-15T14:00:00Z' }),
-        makeActivity({ id: '5', activity_type: 'VirtualRun', start_date: '2024-06-15T16:00:00Z' }),
-      ]
-      vi.mocked(activityService.getAllActivities).mockResolvedValue(activities)
-
-      const result = await chronicLoadService.getChronicLoadData('2024-06-15', '2024-06-15')
-
-      // Devrait utiliser 3 activites (Run, TrailRun, VirtualRun) et ignorer Ride/Swim
-      expect(result).toHaveLength(1)
-      expect(result[0].acuteLoad).toBeGreaterThan(0)
-    })
-
-    test('retourne un tableau vide si aucune activite de course', async () => {
-      vi.mocked(activityService.getAllActivities).mockResolvedValue([
-        makeActivity({ activity_type: 'Ride' }),
-        makeActivity({ activity_type: 'Swim' }),
+  describe('getChronicLoadData', () => {
+    test('mappe ctl_42d vers chronicLoad, atl_7d vers acuteLoad, tsb vers trainingStressBalance', async () => {
+      vi.mocked(dataService.getTrainingLoad).mockResolvedValue([
+        makeTrainingLoadEntry({ date: '2024-06-15', ctl_42d: 45.2, atl_7d: 62.1, tsb: -16.9 }),
       ])
+
+      const result = await chronicLoadService.getChronicLoadData('2024-06-15', '2024-06-15')
+
+      expect(result).toHaveLength(1)
+      expect(result[0].date).toBe('2024-06-15')
+      expect(result[0].chronicLoad).toBe(45.2)
+      expect(result[0].acuteLoad).toBe(62.1)
+      expect(result[0].trainingStressBalance).toBe(-16.9)
+    })
+
+    test('retourne un tableau vide quand pas de donnees', async () => {
+      vi.mocked(dataService.getTrainingLoad).mockResolvedValue([])
 
       const result = await chronicLoadService.getChronicLoadData('2024-06-15', '2024-06-15')
 
       expect(result).toEqual([])
     })
-  })
 
-  describe('charge chronique et aigue', () => {
-    test('la charge chronique est la moyenne TRIMP sur 28 jours', async () => {
-      // Creer une activite par jour pendant 28 jours
-      const activities = Array.from({ length: 28 }, (_, i) => {
-        const date = new Date('2024-06-01')
-        date.setDate(date.getDate() + i)
-        return makeActivity({
-          id: String(i),
-          start_date: date.toISOString(),
-          moving_time: 3600,
-          average_heart_rate: 150,
-          max_heart_rate: 190,
-        })
-      })
-      vi.mocked(activityService.getAllActivities).mockResolvedValue(activities)
-
-      const result = await chronicLoadService.getChronicLoadData('2024-06-28', '2024-06-28')
-
-      expect(result).toHaveLength(1)
-      expect(result[0].chronicLoad).toBeGreaterThan(0)
-    })
-
-    test('la charge aigue est la moyenne TRIMP sur 7 jours', async () => {
-      // Une seule activite il y a 3 jours
-      const activities = [
-        makeActivity({
-          start_date: '2024-06-25T08:00:00Z',
-          moving_time: 3600,
-          average_heart_rate: 160,
-          max_heart_rate: 190,
-        }),
-      ]
-      vi.mocked(activityService.getAllActivities).mockResolvedValue(activities)
-
-      const result = await chronicLoadService.getChronicLoadData('2024-06-28', '2024-06-28')
-
-      expect(result).toHaveLength(1)
-      // Charge aigue devrait etre > charge chronique (1 activite sur 7j vs 28j)
-      expect(result[0].acuteLoad).toBeGreaterThan(result[0].chronicLoad)
-    })
-
-    test('TSB = acuteLoad - chronicLoad', async () => {
-      const activities = [
-        makeActivity({ start_date: '2024-06-27T08:00:00Z' }),
-      ]
-      vi.mocked(activityService.getAllActivities).mockResolvedValue(activities)
-
-      const result = await chronicLoadService.getChronicLoadData('2024-06-28', '2024-06-28')
-
-      expect(result).toHaveLength(1)
-      const expected = result[0].acuteLoad - result[0].chronicLoad
-      expect(result[0].trainingStressBalance).toBeCloseTo(expected)
-    })
-  })
-
-  describe('periode de donnees', () => {
-    test('genere une entree par jour dans la periode demandee', async () => {
-      vi.mocked(activityService.getAllActivities).mockResolvedValue([
-        makeActivity({ start_date: '2024-06-10T08:00:00Z' }),
+    test('gere les valeurs null en les remplacant par 0', async () => {
+      vi.mocked(dataService.getTrainingLoad).mockResolvedValue([
+        makeTrainingLoadEntry({ ctl_42d: null, atl_7d: null, tsb: null }),
       ])
 
-      const result = await chronicLoadService.getChronicLoadData('2024-06-10', '2024-06-14')
+      const result = await chronicLoadService.getChronicLoadData('2024-06-15', '2024-06-15')
 
-      expect(result).toHaveLength(5)
-      expect(result[0].date).toBe('2024-06-10')
-      expect(result[4].date).toBe('2024-06-14')
+      expect(result[0].chronicLoad).toBe(0)
+      expect(result[0].acuteLoad).toBe(0)
+      expect(result[0].trainingStressBalance).toBe(0)
     })
 
-    test('charge 28j de marge avant la date de debut pour le calcul chronique', async () => {
-      vi.mocked(activityService.getAllActivities).mockResolvedValue([])
-
-      await chronicLoadService.getChronicLoadData('2024-07-01', '2024-07-01')
-
-      const callArgs = vi.mocked(activityService.getAllActivities).mock.calls[0]
-      // Le dateFrom devrait etre 28 jours avant 2024-07-01 = 2024-06-03
-      expect(callArgs[1]).toBe('2024-06-03')
-    })
-  })
-
-  describe('gestion des erreurs', () => {
     test('retourne un tableau vide en cas d erreur', async () => {
-      vi.mocked(activityService.getAllActivities).mockRejectedValue(new Error('Network error'))
+      vi.mocked(dataService.getTrainingLoad).mockRejectedValue(new Error('Network error'))
 
       const result = await chronicLoadService.getChronicLoadData('2024-06-01', '2024-06-30')
 
@@ -184,9 +75,42 @@ describe('ChronicLoadService', () => {
     })
   })
 
+  describe('getChronicLoadDataWithRhr', () => {
+    test('retourne les donnees et le rhr_delta_7d du dernier jour', async () => {
+      vi.mocked(dataService.getTrainingLoad).mockResolvedValue([
+        makeTrainingLoadEntry({ date: '2024-06-14', rhr_delta_7d: 1.0 }),
+        makeTrainingLoadEntry({ date: '2024-06-15', rhr_delta_7d: 3.5 }),
+      ])
+
+      const result = await chronicLoadService.getChronicLoadDataWithRhr('2024-06-14', '2024-06-15')
+
+      expect(result.data).toHaveLength(2)
+      expect(result.lastRhrDelta7d).toBe(3.5)
+    })
+
+    test('retourne undefined pour rhr quand le dernier jour a null', async () => {
+      vi.mocked(dataService.getTrainingLoad).mockResolvedValue([
+        makeTrainingLoadEntry({ rhr_delta_7d: null }),
+      ])
+
+      const result = await chronicLoadService.getChronicLoadDataWithRhr('2024-06-15', '2024-06-15')
+
+      expect(result.lastRhrDelta7d).toBeUndefined()
+    })
+
+    test('retourne un resultat vide quand pas de donnees', async () => {
+      vi.mocked(dataService.getTrainingLoad).mockResolvedValue([])
+
+      const result = await chronicLoadService.getChronicLoadDataWithRhr('2024-06-15', '2024-06-15')
+
+      expect(result.data).toEqual([])
+      expect(result.lastRhrDelta7d).toBeUndefined()
+    })
+  })
+
   describe('getChronicLoadStats', () => {
     test('retourne les stats avec trend stable quand pas de donnees', async () => {
-      vi.mocked(activityService.getAllActivities).mockResolvedValue([])
+      vi.mocked(dataService.getTrainingLoad).mockResolvedValue([])
 
       const stats = await chronicLoadService.getChronicLoadStats()
 
@@ -195,37 +119,29 @@ describe('ChronicLoadService', () => {
       expect(stats.currentTSB).toBe(0)
       expect(stats.trend).toBe('stable')
     })
-  })
 
-  describe('estimateTRIMPFromDistance (intensite par rythme)', () => {
-    test('rythme rapide (<4 min/km) donne une intensite elevee', async () => {
-      // average_pace en s/m : paceMinPerKm = pace * 1000 / 60
-      // 3.5 min/km = 210 s/km = 0.21 s/m
-      const fastActivity = makeActivity({
-        start_date: '2024-06-15T08:00:00Z',
-        average_heart_rate: undefined,
-        max_heart_rate: undefined,
-        average_pace: 0.21, // 3.5 min/km → intensite 0.9
-        moving_time: 3600,
-      })
-      // 8 min/km = 480 s/km = 0.48 s/m
-      const slowActivity = makeActivity({
-        id: '2',
-        start_date: '2024-06-16T08:00:00Z',
-        average_heart_rate: undefined,
-        max_heart_rate: undefined,
-        average_pace: 0.48, // 8 min/km → intensite 0.5
-        moving_time: 3600,
-      })
+    test('detecte trend up quand la charge augmente', async () => {
+      vi.mocked(dataService.getTrainingLoad).mockResolvedValue([
+        makeTrainingLoadEntry({ date: '2024-06-14', ctl_42d: 40, atl_7d: 50, tsb: -10 }),
+        makeTrainingLoadEntry({ date: '2024-06-15', ctl_42d: 45, atl_7d: 55, tsb: -10 }),
+      ])
 
-      vi.mocked(activityService.getAllActivities).mockResolvedValue([fastActivity])
-      const fastResult = await chronicLoadService.getChronicLoadData('2024-06-15', '2024-06-15')
+      const stats = await chronicLoadService.getChronicLoadStats()
 
-      vi.mocked(activityService.getAllActivities).mockResolvedValue([slowActivity])
-      const slowResult = await chronicLoadService.getChronicLoadData('2024-06-16', '2024-06-16')
+      expect(stats.currentChronicLoad).toBe(45)
+      expect(stats.trend).toBe('up')
+    })
 
-      // L'activite rapide devrait donner une charge aigue plus elevee
-      expect(fastResult[0].acuteLoad).toBeGreaterThan(slowResult[0].acuteLoad)
+    test('detecte trend down quand la charge diminue', async () => {
+      vi.mocked(dataService.getTrainingLoad).mockResolvedValue([
+        makeTrainingLoadEntry({ date: '2024-06-14', ctl_42d: 50, atl_7d: 55, tsb: -5 }),
+        makeTrainingLoadEntry({ date: '2024-06-15', ctl_42d: 40, atl_7d: 45, tsb: -5 }),
+      ])
+
+      const stats = await chronicLoadService.getChronicLoadStats()
+
+      expect(stats.currentChronicLoad).toBe(40)
+      expect(stats.trend).toBe('down')
     })
   })
 })

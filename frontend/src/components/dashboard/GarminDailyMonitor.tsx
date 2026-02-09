@@ -6,9 +6,8 @@ import {
   Tooltip,
   XAxis,
   YAxis,
-  Legend,
 } from 'recharts'
-import { Watch, TrendingUp, TrendingDown, Minus, Heart, Brain, Moon, Activity } from 'lucide-react'
+import { Watch, TrendingUp, TrendingDown, Minus, Heart, Brain, Moon, Activity, Weight, Droplets } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import type { GarminDailyEntry } from '../../services/garminService'
@@ -31,6 +30,7 @@ const METRICS: MetricConfig[] = [
   { key: 'sleep_score', label: 'Sommeil', color: '#3b82f6' },
   { key: 'stress_score', label: 'Stress', color: '#ef4444' },
   { key: 'body_battery_max', label: 'Body Battery', color: '#10b981' },
+  { key: 'resting_hr', label: 'FC repos', color: '#f43f5e' },
 ]
 
 function avg7d(data: GarminDailyEntry[], key: keyof GarminDailyEntry): number | null {
@@ -73,6 +73,14 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
     })
   }
 
+  // Helpers
+  function formatSleepDuration(minutes: number | null): string {
+    if (minutes === null) return '—'
+    const h = Math.floor(minutes / 60)
+    const m = Math.round(minutes % 60)
+    return `${h}h ${m.toString().padStart(2, '0')}min`
+  }
+
   // Mini-cartes récapitulatives
   const summaryCards = useMemo(() => {
     if (!data || data.length === 0) return null
@@ -83,8 +91,20 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
     const sleepAvg = avg7d(data, 'sleep_score')
     const latestRhr = data[data.length - 1]?.resting_hr
     const rhrAvg = avg7d(data, 'resting_hr')
+    const latestVo2 = data[data.length - 1]?.vo2max_estimated
+    const latestWeight = data[data.length - 1]?.weight_kg
+    const sleepDurAvg = avg7d(data, 'sleep_duration_min')
 
-    return [
+    const cards: Array<{
+      label: string
+      value: string
+      unit: string
+      icon: typeof Heart
+      color: string
+      bgColor: string
+      trend: { current: number | null; previous: number | null } | null
+      subtitle?: string
+    }> = [
       {
         label: 'HRV moy. 7j',
         value: hrvAvg !== null ? hrvAvg.toFixed(0) : '—',
@@ -123,6 +143,72 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
         trend: null,
       },
     ]
+
+    // VO₂max — afficher seulement si disponible
+    if (latestVo2 != null) {
+      cards.push({
+        label: 'VO₂max',
+        value: latestVo2.toFixed(0),
+        unit: 'ml/kg/min',
+        icon: Activity,
+        color: 'text-emerald-600',
+        bgColor: 'bg-emerald-100',
+        trend: null,
+      })
+    }
+
+    // Poids — afficher seulement si disponible
+    if (latestWeight != null) {
+      cards.push({
+        label: 'Poids',
+        value: latestWeight.toFixed(1),
+        unit: 'kg',
+        icon: Weight,
+        color: 'text-gray-600',
+        bgColor: 'bg-gray-100',
+        trend: null,
+      })
+    }
+
+    // Durée sommeil — moyenne 7j
+    if (sleepDurAvg != null) {
+      cards.push({
+        label: 'Durée sommeil 7j',
+        value: formatSleepDuration(sleepDurAvg),
+        unit: '',
+        icon: Moon,
+        color: 'text-indigo-600',
+        bgColor: 'bg-indigo-100',
+        trend: null,
+      })
+    }
+
+    return cards
+  }, [data])
+
+  // Badges secondaires (dernière entrée)
+  const latestBadges = useMemo(() => {
+    if (!data || data.length === 0) return null
+    const latest = data[data.length - 1]
+
+    const trainingStatusColors: Record<string, string> = {
+      Productive: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
+      Maintaining: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
+      Detraining: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
+      Overreaching: 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300',
+      Recovery: 'bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-300',
+      Unproductive: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300',
+    }
+
+    return {
+      trainingStatus: latest.training_status,
+      trainingStatusColor: latest.training_status
+        ? trainingStatusColors[latest.training_status] || 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+        : null,
+      spo2: latest.spo2,
+      bodyBatteryMin: latest.body_battery_min,
+      bodyBatteryMax: latest.body_battery_max,
+    }
   }, [data])
 
   // Données formatées pour le graphique
@@ -136,6 +222,7 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
       sleep_score: entry.sleep_score,
       stress_score: entry.stress_score,
       body_battery_max: entry.body_battery_max,
+      resting_hr: entry.resting_hr,
     }))
   }, [data])
 
@@ -208,7 +295,7 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
 
       {/* Mini-cartes récapitulatives */}
       {summaryCards && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
           {summaryCards.map((card) => {
             const Icon = card.icon
             return (
@@ -232,6 +319,28 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
               </div>
             )
           })}
+        </div>
+      )}
+
+      {/* Badges secondaires */}
+      {latestBadges && (
+        <div className="flex flex-wrap items-center gap-2 mb-4">
+          {latestBadges.trainingStatus && latestBadges.trainingStatusColor && (
+            <span className={`inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full ${latestBadges.trainingStatusColor}`}>
+              {latestBadges.trainingStatus}
+            </span>
+          )}
+          {latestBadges.spo2 != null && (
+            <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300">
+              <Droplets className="h-3 w-3" />
+              SpO₂ {latestBadges.spo2}%
+            </span>
+          )}
+          {latestBadges.bodyBatteryMax != null && latestBadges.bodyBatteryMin != null && (
+            <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300">
+              BB {latestBadges.bodyBatteryMin} → {latestBadges.bodyBatteryMax}
+            </span>
+          )}
         </div>
       )}
 
@@ -325,8 +434,32 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
                       )}
                       {entry.resting_hr !== null && (
                         <div className="flex justify-between gap-4">
-                          <span className="text-gray-500">Resting HR</span>
-                          <span className="font-medium text-gray-700">{entry.resting_hr} bpm</span>
+                          <span className="text-gray-500">FC repos</span>
+                          <span className="font-medium" style={{ color: '#f43f5e' }}>{entry.resting_hr} bpm</span>
+                        </div>
+                      )}
+                      {entry.spo2 !== null && (
+                        <div className="flex justify-between gap-4">
+                          <span className="text-gray-500">SpO₂</span>
+                          <span className="font-medium text-sky-600">{entry.spo2}%</span>
+                        </div>
+                      )}
+                      {entry.sleep_duration_min !== null && (
+                        <div className="flex justify-between gap-4">
+                          <span className="text-gray-500">Durée sommeil</span>
+                          <span className="font-medium text-indigo-600">{formatSleepDuration(entry.sleep_duration_min)}</span>
+                        </div>
+                      )}
+                      {entry.body_battery_min !== null && (
+                        <div className="flex justify-between gap-4">
+                          <span className="text-gray-500">BB min</span>
+                          <span className="font-medium text-emerald-600">{entry.body_battery_min}</span>
+                        </div>
+                      )}
+                      {entry.training_status !== null && (
+                        <div className="flex justify-between gap-4">
+                          <span className="text-gray-500">Statut</span>
+                          <span className="font-medium text-gray-700">{entry.training_status}</span>
                         </div>
                       )}
                     </div>

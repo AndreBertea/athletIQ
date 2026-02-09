@@ -46,19 +46,14 @@ async def process_all_segments(
 
 @router.post("/segments/process/{activity_id}")
 async def process_activity_segments(
-    activity_id: UUID,
+    activity_id: str,
     token: str = Depends(security),
     session: Session = Depends(get_session),
 ):
-    """Segmente une activite specifique."""
+    """Segmente une activite specifique (accepte UUID ou strava_id)."""
     user_id = get_current_user_id(token.credentials)
 
-    activity = session.exec(
-        select(Activity).where(
-            Activity.id == activity_id,
-            Activity.user_id == user_id,
-        )
-    ).first()
+    activity = resolve_activity(session, activity_id, user_id)
     if not activity:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -67,7 +62,7 @@ async def process_activity_segments(
 
     try:
         count = segmentation_service.segment_activity(session, activity)
-        return {"activity_id": str(activity_id), "segments_created": count}
+        return {"activity_id": str(activity.id), "segments_created": count}
     except Exception as e:
         logger.error(f"Erreur segmentation activite {activity_id}: {e}")
         raise HTTPException(
@@ -116,20 +111,14 @@ async def get_segmentation_status(
 
 @router.get("/segments/{activity_id}")
 async def get_activity_segments(
-    activity_id: UUID,
+    activity_id: str,
     token: str = Depends(security),
     session: Session = Depends(get_session),
 ):
-    """Retourne les segments d'une activite avec leurs features."""
+    """Retourne les segments d'une activite avec leurs features (accepte UUID ou strava_id)."""
     user_id = get_current_user_id(token.credentials)
 
-    # Verifier que l'activite appartient a l'utilisateur
-    activity = session.exec(
-        select(Activity).where(
-            Activity.id == activity_id,
-            Activity.user_id == user_id,
-        )
-    ).first()
+    activity = resolve_activity(session, activity_id, user_id)
     if not activity:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -138,7 +127,7 @@ async def get_activity_segments(
 
     segments = session.exec(
         select(Segment)
-        .where(Segment.activity_id == activity_id)
+        .where(Segment.activity_id == activity.id)
         .order_by(Segment.segment_index)
     ).all()
 
@@ -155,7 +144,7 @@ async def get_activity_segments(
         })
 
     return {
-        "activity_id": str(activity_id),
+        "activity_id": str(activity.id),
         "segment_count": len(result),
         "segments": result,
     }

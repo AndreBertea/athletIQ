@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { Thermometer, Heart, Zap, Footprints, Timer } from 'lucide-react'
+import { Thermometer, Heart, Zap, Footprints, Timer, Flame, Clock, MoveVertical, ArrowLeftRight, Wind, Droplets, Cloud } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { dataService } from '../../services/dataService'
 import type { ActivityWeather } from '../../services/dataService'
@@ -53,6 +53,20 @@ export default function DashboardActivityItem({ activity, onClick, weather: weat
   const duration = formatDuration(activity.moving_time_s)
   const badgeColor = sportBadgeColors[activity.sport_type] || 'bg-gray-100 text-gray-700'
 
+  // WMO weather code → label
+  function weatherLabel(code: number | null | undefined): string | null {
+    if (code == null) return null
+    if (code === 0) return 'Clair'
+    if (code <= 3) return 'Nuageux'
+    if (code >= 45 && code <= 48) return 'Brouillard'
+    if (code >= 51 && code <= 57) return 'Bruine'
+    if (code >= 61 && code <= 67) return 'Pluie'
+    if (code >= 71 && code <= 77) return 'Neige'
+    if (code >= 80 && code <= 82) return 'Averses'
+    if (code >= 95 && code <= 99) return 'Orage'
+    return null
+  }
+
   const dateFormatted = formatDateShort(activity.start_date_utc)
 
   return (
@@ -91,11 +105,14 @@ export default function DashboardActivityItem({ activity, onClick, weather: weat
           </span>
         )}
 
-        {/* Météo */}
+        {/* Météo — température + description */}
         {weather?.temperature_c != null && (
           <span className="inline-flex items-center gap-1 text-xs text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
             <Thermometer className="h-3 w-3" />
             {weather.temperature_c.toFixed(0)}°C
+            {weatherLabel(weather.weather_code) && (
+              <span className="text-amber-500 ml-0.5">· {weatherLabel(weather.weather_code)}</span>
+            )}
           </span>
         )}
 
@@ -115,11 +132,70 @@ export default function DashboardActivityItem({ activity, onClick, weather: weat
           </span>
         )}
 
-        {/* FIT — Training Effect */}
+        {/* FIT — Training Effect (aérobie + anaérobie) */}
         {fitMetrics?.aerobic_training_effect != null && (
           <span className="inline-flex items-center gap-1 text-xs text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
             <Timer className="h-3 w-3" />
             TE {fitMetrics.aerobic_training_effect.toFixed(1)}
+            {fitMetrics.anaerobic_training_effect != null && (
+              <> / {fitMetrics.anaerobic_training_effect.toFixed(1)}</>
+            )}
+          </span>
+        )}
+
+        {/* FIT — Oscillation verticale */}
+        {fitMetrics?.vertical_oscillation_avg != null && (
+          <span className="inline-flex items-center gap-1 text-xs text-teal-700 bg-teal-50 px-2 py-0.5 rounded-full">
+            <MoveVertical className="h-3 w-3" />
+            OV {fitMetrics.vertical_oscillation_avg.toFixed(1)} cm
+          </span>
+        )}
+
+        {/* FIT — Équilibre G/D */}
+        {fitMetrics?.stance_time_balance_avg != null && (
+          <span className="inline-flex items-center gap-1 text-xs text-slate-700 bg-slate-100 px-2 py-0.5 rounded-full">
+            <ArrowLeftRight className="h-3 w-3" />
+            G/D {fitMetrics.stance_time_balance_avg.toFixed(1)}%
+          </span>
+        )}
+
+        {/* Calories */}
+        {activity.calories_kcal > 0 && (
+          <span className="inline-flex items-center gap-1 text-xs text-orange-700 bg-orange-50 px-2 py-0.5 rounded-full">
+            <Flame className="h-3 w-3" />
+            {Math.round(activity.calories_kcal)} kcal
+          </span>
+        )}
+
+        {/* Temps total (si pauses significatives) */}
+        {activity.elapsed_time_s > 0 && activity.elapsed_time_s - activity.moving_time_s > 60 && (
+          <span className="inline-flex items-center gap-1 text-xs text-gray-600 bg-gray-100 px-2 py-0.5 rounded-full">
+            <Clock className="h-3 w-3" />
+            Total {formatDuration(activity.elapsed_time_s)}
+          </span>
+        )}
+
+        {/* Météo — vent */}
+        {weather?.wind_speed_kmh != null && weather.wind_speed_kmh > 0 && (
+          <span className="inline-flex items-center gap-1 text-xs text-cyan-700 bg-cyan-50 px-2 py-0.5 rounded-full">
+            <Wind className="h-3 w-3" />
+            {weather.wind_speed_kmh.toFixed(0)} km/h
+          </span>
+        )}
+
+        {/* Météo — humidité */}
+        {weather?.humidity_pct != null && (
+          <span className="inline-flex items-center gap-1 text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+            <Droplets className="h-3 w-3" />
+            {weather.humidity_pct.toFixed(0)}%
+          </span>
+        )}
+
+        {/* Météo — précipitations */}
+        {weather?.precipitation_mm != null && weather.precipitation_mm > 0 && (
+          <span className="inline-flex items-center gap-1 text-xs text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full">
+            <Cloud className="h-3 w-3" />
+            {weather.precipitation_mm.toFixed(1)} mm
           </span>
         )}
       </div>

@@ -60,6 +60,45 @@ athletIQ est une application d'analyse sportive connectee a Strava.
 - **Ports par defaut** : backend=8000, frontend=3000, postgres=5432, redis=6379
 - **Quotas Strava** : 100 req/15min, 1000 req/jour. Chaque enrichissement = 3 appels API
 
+## Tache prioritaire : Audit des metriques (Agent Team)
+
+**A executer en priorite au demarrage de la session si l'utilisateur le demande.**
+
+Creer une **agent team de 3 teammates** pour auditer les ~130+ metriques du projet.
+Le catalogue de reference est : `/Users/andrebertea/Projects/athletIQ/metrics_audit.md`
+
+### Teammate 1 : "db-auditor" — Audit Base de Donnees & Migrations
+- Lire `metrics_audit.md` (section 8 : Schema de stockage) pour les 7 tables attendues :
+  `activities`, `segment`, `segmentfeatures`, `activityweather`, `garmindaily`, `trainingload`, `garminauth`
+- Verifier dans `backend/app/domain/entities/` que chaque modele SQLModel existe et que
+  TOUTES les colonnes listees dans metrics_audit.md sont definies (types, contraintes)
+- Verifier dans `backend/alembic/versions/` que toutes les migrations sont presentes et coherentes
+- Lister les metriques du catalogue qui n'ont PAS de colonne correspondante en BDD
+- Rapport : metriques presentes / manquantes / differences de type
+
+### Teammate 2 : "api-auditor" — Audit Routes API & Services
+- Lire `metrics_audit.md` pour la liste complete des metriques
+- Scanner `backend/app/api/routers/` pour identifier toutes les routes qui exposent des metriques
+- Scanner `backend/app/domain/services/` pour voir comment les metriques sont calculees et requetees
+- Pour chaque metrique : quelle route l'expose, quel service la calcule, requete individuelle ou bulk
+- Rapport : metriques exposees via API / non exposees
+
+### Teammate 3 : "frontend-auditor" — Audit Interface Utilisateur
+- Lire `metrics_audit.md` pour la liste complete des metriques
+- Scanner `frontend/src/` (composants React, services, types) pour trouver chaque endroit
+  ou une metrique est affichee, utilisee ou referencee
+- Pour chaque metrique trouvee : fichier, composant, contexte d'affichage (dashboard, detail activite, graphique, tableau)
+- Produire la liste des metriques du catalogue qui n'apparaissent NULLE PART dans le frontend
+- Identifier les metriques fetchees par l'API mais jamais rendues visuellement
+
+### Instructions pour le lead
+- Attendre que les 3 teammates terminent avant de synthetiser
+- Produire un rapport final consolide :
+  1. Tableau croise : metrique x presence BDD x presence API x presence Frontend
+  2. Liste des "trous" : metriques en BDD mais pas dans le frontend
+  3. Liste des incoherences : metriques dans le frontend qui n'existent pas en BDD
+  4. Recommandations : metriques a forte valeur (3 etoiles dans metrics_audit.md) non exploitees dans l'UI
+
 ## Regles de travail
 
 - **Langue** : repondre en francais

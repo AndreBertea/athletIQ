@@ -173,16 +173,19 @@ export default function Dashboard() {
     staleTime: 5 * 60_000,
   })
 
-  const { data: chronicLoadData, isLoading: chronicLoadLoading } = useQuery({
+  const { data: chronicLoadResult, isLoading: chronicLoadLoading } = useQuery({
     queryKey: ['chronic-load', selectedPeriod],
     queryFn: () => {
       const end = new Date().toISOString().split('T')[0]
       const start = new Date()
       start.setDate(start.getDate() - selectedPeriod)
-      return chronicLoadService.getChronicLoadData(start.toISOString().split('T')[0], end)
+      return chronicLoadService.getChronicLoadDataWithRhr(start.toISOString().split('T')[0], end)
     },
     staleTime: 10 * 60_000,
   })
+
+  const chronicLoadData = chronicLoadResult?.data
+  const lastRhrDelta7d = chronicLoadResult?.lastRhrDelta7d
 
   // --- Nouvelles queries ---
 
@@ -355,7 +358,7 @@ export default function Dashboard() {
           <h3 className="text-lg font-medium text-gray-900">Charge Chronique d'Entraînement</h3>
           <div className="text-sm text-gray-500">Modèle de Banister (TRIMP)</div>
         </div>
-        <ChronicLoadChart data={chronicLoadData || []} isLoading={chronicLoadLoading} />
+        <ChronicLoadChart data={chronicLoadData || []} isLoading={chronicLoadLoading} rhrDelta7d={lastRhrDelta7d} />
       </div>
 
       {/* Liste d'activités récentes */}
