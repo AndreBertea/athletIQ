@@ -34,6 +34,8 @@ const METRICS: MetricConfig[] = [
   { key: 'resting_hr', label: 'FC repos', color: '#f43f5e' },
 ]
 
+const DEFAULT_VISIBLE = new Set(['hrv_rmssd', 'training_readiness', 'sleep_score'])
+
 function avg7d(data: GarminDailyEntry[], key: keyof GarminDailyEntry): number | null {
   const last7 = data.slice(-7)
   const values = last7.map(d => d[key]).filter((v): v is number => v !== null && typeof v === 'number')
@@ -52,16 +54,15 @@ function avg7dPrev(data: GarminDailyEntry[], key: keyof GarminDailyEntry): numbe
 function TrendArrow({ current, previous }: { current: number | null; previous: number | null }) {
   if (current === null || previous === null) return null
   const diff = current - previous
-  if (Math.abs(diff) < 0.5) return <Minus className="h-4 w-4 text-gray-400" />
-  if (diff > 0) return <TrendingUp className="h-4 w-4 text-green-500" />
-  return <TrendingDown className="h-4 w-4 text-red-500" />
+  if (Math.abs(diff) < 0.5) return <Minus className="h-3.5 w-3.5 text-gray-400" />
+  if (diff > 0) return <TrendingUp className="h-3.5 w-3.5 text-green-500" />
+  return <TrendingDown className="h-3.5 w-3.5 text-red-500" />
 }
 
 export default function GarminDailyMonitor({ data, isLoading, isConnected }: GarminDailyMonitorProps) {
   const [activeTab, setActiveTab] = useState<'monitoring' | 'sleep'>('monitoring')
-  const [visibleMetrics, setVisibleMetrics] = useState<Set<string>>(
-    new Set(METRICS.map(m => m.key))
-  )
+  const [visibleMetrics, setVisibleMetrics] = useState<Set<string>>(new Set(DEFAULT_VISIBLE))
+
   const orderedData = useMemo(() => {
     if (!data || data.length === 0) return []
     return [...data].sort((a, b) => a.date.localeCompare(b.date))
@@ -79,16 +80,19 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
     })
   }
 
-  // Mini-cartes récapitulatives
+  // Mini-cartes recapitulatives
   const summaryCards = useMemo(() => {
     if (orderedData.length === 0) return null
 
     const hrvAvg = avg7d(orderedData, 'hrv_rmssd')
     const hrvPrev = avg7dPrev(orderedData, 'hrv_rmssd')
     const readinessAvg = avg7d(orderedData, 'training_readiness')
+    const readinessPrev = avg7dPrev(orderedData, 'training_readiness')
     const sleepAvg = avg7d(orderedData, 'sleep_score')
+    const sleepPrev = avg7dPrev(orderedData, 'sleep_score')
     const latestRhr = orderedData[orderedData.length - 1]?.resting_hr
     const rhrAvg = avg7d(orderedData, 'resting_hr')
+    const rhrPrev = avg7dPrev(orderedData, 'resting_hr')
     const latestVo2 = orderedData[orderedData.length - 1]?.vo2max_estimated
     const latestWeight = orderedData[orderedData.length - 1]?.weight_kg
 
@@ -99,62 +103,60 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
       icon: typeof Heart
       color: string
       bgColor: string
-      trend: { current: number | null; previous: number | null } | null
+      trend: { current: number | null; previous: number | null }
       subtitle?: string
     }> = [
       {
         label: 'HRV moy. 7j',
-        value: hrvAvg !== null ? hrvAvg.toFixed(0) : '—',
+        value: hrvAvg !== null ? hrvAvg.toFixed(0) : '--',
         unit: 'ms',
         icon: Heart,
-        color: 'text-purple-600',
-        bgColor: 'bg-purple-100',
+        color: 'text-violet-600',
+        bgColor: 'bg-violet-100',
         trend: { current: hrvAvg, previous: hrvPrev },
       },
       {
         label: 'Readiness moy. 7j',
-        value: readinessAvg !== null ? readinessAvg.toFixed(0) : '—',
+        value: readinessAvg !== null ? readinessAvg.toFixed(0) : '--',
         unit: '',
         icon: Brain,
         color: 'text-amber-600',
         bgColor: 'bg-amber-100',
-        trend: null,
+        trend: { current: readinessAvg, previous: readinessPrev },
       },
       {
         label: 'Sleep Score moy. 7j',
-        value: sleepAvg !== null ? sleepAvg.toFixed(0) : '—',
+        value: sleepAvg !== null ? sleepAvg.toFixed(0) : '--',
         unit: '',
         icon: Moon,
-        color: 'text-blue-600',
-        bgColor: 'bg-blue-100',
-        trend: null,
+        color: 'text-indigo-600',
+        bgColor: 'bg-indigo-100',
+        trend: { current: sleepAvg, previous: sleepPrev },
       },
       {
         label: 'Resting HR',
-        value: latestRhr !== null && latestRhr !== undefined ? `${latestRhr}` : '—',
+        value: latestRhr !== null && latestRhr !== undefined ? `${latestRhr}` : '--',
         unit: 'bpm',
         icon: Activity,
-        color: 'text-red-600',
-        bgColor: 'bg-red-100',
+        color: 'text-rose-600',
+        bgColor: 'bg-rose-100',
         subtitle: rhrAvg !== null ? `Moy. 7j : ${rhrAvg.toFixed(0)} bpm` : undefined,
-        trend: null,
+        trend: { current: rhrAvg, previous: rhrPrev },
       },
     ]
 
-    // VO₂max — afficher seulement si disponible
     if (latestVo2 != null) {
       cards.push({
-        label: 'VO₂max',
+        label: 'VO2max',
         value: latestVo2.toFixed(0),
         unit: 'ml/kg/min',
         icon: Activity,
         color: 'text-emerald-600',
         bgColor: 'bg-emerald-100',
-        trend: null,
+        trend: { current: null, previous: null },
       })
     }
 
-    // Poids — afficher seulement si disponible
     if (latestWeight != null) {
       cards.push({
         label: 'Poids',
@@ -162,32 +164,32 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
         unit: 'kg',
         icon: Weight,
         color: 'text-gray-600',
-        bgColor: 'bg-gray-100',
-        trend: null,
+        bgColor: 'bg-gray-200',
+        trend: { current: null, previous: null },
       })
     }
 
     return cards
   }, [orderedData])
 
-  // Badges secondaires (dernière entrée)
+  // Badges secondaires (derniere entree)
   const latestBadges = useMemo(() => {
     if (orderedData.length === 0) return null
     const latest = orderedData[orderedData.length - 1]
 
     const trainingStatusColors: Record<string, string> = {
-      Productive: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
-      Maintaining: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
-      Detraining: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
-      Overreaching: 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300',
-      Recovery: 'bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-300',
-      Unproductive: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300',
+      Productive: 'bg-green-100 text-green-700',
+      Maintaining: 'bg-blue-100 text-blue-700',
+      Detraining: 'bg-red-100 text-red-700',
+      Overreaching: 'bg-orange-100 text-orange-700',
+      Recovery: 'bg-teal-100 text-teal-700',
+      Unproductive: 'bg-yellow-100 text-yellow-700',
     }
 
     return {
       trainingStatus: latest.training_status,
       trainingStatusColor: latest.training_status
-        ? trainingStatusColors[latest.training_status] || 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+        ? trainingStatusColors[latest.training_status] || 'bg-gray-100 text-gray-700'
         : null,
       spo2: latest.spo2,
       bodyBatteryMin: latest.body_battery_min,
@@ -195,7 +197,7 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
     }
   }, [orderedData])
 
-  // Données formatées pour le graphique
+  // Donnees formatees pour le graphique
   const chartData = useMemo(() => {
     if (orderedData.length === 0) return []
     return orderedData.map(entry => ({
@@ -210,72 +212,78 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
     }))
   }, [orderedData])
 
-  // --- État non connecté ---
+  // --- Etat non connecte ---
   if (!isConnected) {
     return (
-      <div className="card">
-        <div className="text-center py-10">
-          <Watch className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-          <h3 className="text-lg font-medium text-gray-700 mb-1">Connectez Garmin</h3>
-          <p className="text-sm text-gray-500 mb-4">
-            Suivez votre HRV, sommeil, stress et récupération au quotidien.
+      <div className="bg-white rounded-xl border border-gray-200/60 p-6">
+        <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+          <Watch className="h-10 w-10 mb-3 text-gray-300" />
+          <p className="text-sm font-medium text-gray-500">Connectez Garmin</p>
+          <p className="text-xs text-gray-400 mt-1">
+            Suivez votre HRV, sommeil, stress et recuperation au quotidien.
           </p>
           <a
             href="/parametres"
-            className="inline-flex items-center px-4 py-2 rounded-md text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 transition-colors"
+            className="mt-4 inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium text-white bg-violet-600 hover:bg-violet-700 transition-colors"
           >
-            Connecter dans les Paramètres
+            Connecter dans les Parametres
           </a>
         </div>
       </div>
     )
   }
 
-  // --- État loading ---
+  // --- Etat loading ---
   if (isLoading) {
     return (
-      <div className="card">
-        <div className="flex items-center space-x-2 mb-4">
-          <Watch className="h-5 w-5 text-gray-400" />
-          <h3 className="text-lg font-medium text-gray-900">Monitoring Garmin Daily</h3>
+      <div className="bg-white rounded-xl border border-gray-200/60 p-6">
+        <div className="flex items-center gap-2 mb-5">
+          <div className="p-2.5 rounded-lg bg-violet-100">
+            <Watch className="h-5 w-5 text-violet-600" />
+          </div>
+          <h3 className="text-base font-semibold text-gray-900">Monitoring Garmin Daily</h3>
         </div>
-        <div className="h-64 flex items-center justify-center text-gray-500">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500 mr-3" />
-          Chargement des données Garmin...
+        <div className="flex items-center justify-center py-12 text-gray-400">
+          <div className="h-6 w-6 border-2 border-gray-200 border-t-orange-500 rounded-full animate-spin" />
+          <span className="ml-3 text-sm">Chargement...</span>
         </div>
       </div>
     )
   }
 
-  // --- Pas de données ---
+  // --- Pas de donnees ---
   if (orderedData.length === 0) {
     return (
-      <div className="card">
-        <div className="flex items-center space-x-2 mb-4">
-          <Watch className="h-5 w-5 text-gray-400" />
-          <h3 className="text-lg font-medium text-gray-900">Monitoring Garmin Daily</h3>
-        </div>
-        <div className="h-64 flex items-center justify-center text-gray-500 bg-gray-50 rounded-lg">
-          <div className="text-center">
-            <Watch className="h-10 w-10 mx-auto mb-2 text-gray-300" />
-            <p>Aucune donnée Garmin disponible</p>
-            <p className="text-sm text-gray-400 mt-1">
-              Synchronisez vos données dans les Paramètres
-            </p>
+      <div className="bg-white rounded-xl border border-gray-200/60 p-6">
+        <div className="flex items-center gap-2 mb-5">
+          <div className="p-2.5 rounded-lg bg-violet-100">
+            <Watch className="h-5 w-5 text-violet-600" />
           </div>
+          <h3 className="text-base font-semibold text-gray-900">Monitoring Garmin Daily</h3>
+        </div>
+        <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+          <Watch className="h-10 w-10 mb-3 text-gray-300" />
+          <p className="text-sm font-medium text-gray-500">Aucune donnee Garmin disponible</p>
+          <p className="text-xs text-gray-400 mt-1">Synchronisez vos donnees dans les Parametres</p>
         </div>
       </div>
     )
   }
 
-  // --- État connecté avec données ---
+  // --- Etat connecte avec donnees ---
   return (
-    <div className="card">
-      {/* Header avec titre */}
-      <div className="flex items-center space-x-2 mb-2">
-        <Watch className="h-5 w-5 text-purple-600" />
-        <h3 className="text-lg font-medium text-gray-900">Monitoring Garmin Daily</h3>
-        <span className="text-xs text-gray-400">{orderedData.length} jours</span>
+    <div className="bg-white rounded-xl border border-gray-200/60 p-6">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center gap-2">
+          <div className="p-2.5 rounded-lg bg-violet-100">
+            <Watch className="h-5 w-5 text-violet-600" />
+          </div>
+          <div>
+            <h3 className="text-base font-semibold text-gray-900">Monitoring Garmin Daily</h3>
+            <p className="text-xs text-gray-400">{orderedData.length} jours de donnees</p>
+          </div>
+        </div>
       </div>
 
       {/* Onglets */}
@@ -284,7 +292,7 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
           onClick={() => setActiveTab('monitoring')}
           className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
             activeTab === 'monitoring'
-              ? 'border-purple-600 text-purple-600'
+              ? 'border-violet-600 text-violet-600'
               : 'border-transparent text-gray-500 hover:text-gray-700'
           }`}
         >
@@ -295,7 +303,7 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
           onClick={() => setActiveTab('sleep')}
           className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
             activeTab === 'sleep'
-              ? 'border-indigo-600 text-indigo-600'
+              ? 'border-violet-600 text-violet-600'
               : 'border-transparent text-gray-500 hover:text-gray-700'
           }`}
         >
@@ -306,25 +314,23 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
 
       {activeTab === 'monitoring' ? (
         <>
-          {/* Mini-cartes récapitulatives */}
+          {/* Mini-cartes recapitulatives */}
           {summaryCards && (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
               {summaryCards.map((card) => {
                 const Icon = card.icon
                 return (
-                  <div key={card.label} className="bg-white p-4 rounded-lg border">
+                  <div key={card.label} className="bg-gray-50 rounded-lg p-4 border border-gray-100">
                     <div className="flex items-center justify-between">
-                      <div className={`p-2 rounded-lg ${card.bgColor}`}>
-                        <Icon className={`h-4 w-4 ${card.color}`} />
+                      <div className={`p-2.5 rounded-lg ${card.bgColor}`}>
+                        <Icon className={`h-5 w-5 ${card.color}`} />
                       </div>
-                      {card.trend && (
-                        <TrendArrow current={card.trend.current} previous={card.trend.previous} />
-                      )}
+                      <TrendArrow current={card.trend.current} previous={card.trend.previous} />
                     </div>
-                    <p className="text-sm font-medium text-gray-500 mt-3">{card.label}</p>
-                    <p className="text-2xl font-semibold text-gray-900">
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mt-3">{card.label}</p>
+                    <p className="text-2xl font-bold text-gray-900">
                       {card.value}
-                      {card.unit && <span className="text-sm font-normal text-gray-500 ml-1">{card.unit}</span>}
+                      {card.unit && <span className="text-sm font-normal text-gray-400 ml-1">{card.unit}</span>}
                     </p>
                     {card.subtitle && (
                       <p className="text-xs text-gray-400 mt-1">{card.subtitle}</p>
@@ -337,39 +343,42 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
 
           {/* Badges secondaires */}
           {latestBadges && (
-            <div className="flex flex-wrap items-center gap-2 mb-4">
+            <div className="flex flex-wrap items-center gap-2 mb-5">
               {latestBadges.trainingStatus && latestBadges.trainingStatusColor && (
-                <span className={`inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full ${latestBadges.trainingStatusColor}`}>
+                <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${latestBadges.trainingStatusColor}`}>
                   {latestBadges.trainingStatus}
                 </span>
               )}
               {latestBadges.spo2 != null && (
-                <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300">
+                <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-sky-100 text-sky-700">
                   <Droplets className="h-3 w-3" />
-                  SpO₂ {latestBadges.spo2}%
+                  SpO2 {latestBadges.spo2}%
                 </span>
               )}
               {latestBadges.bodyBatteryMax != null && latestBadges.bodyBatteryMin != null && (
-                <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300">
+                <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
                   BB {latestBadges.bodyBatteryMin} → {latestBadges.bodyBatteryMax}
                 </span>
               )}
             </div>
           )}
 
-          {/* Toggles des métriques */}
-          <div className="flex flex-wrap gap-2 mb-4">
+          {/* Toggles des metriques — toggle segmente unifie */}
+          <div className="inline-flex items-center bg-gray-100 rounded-lg p-1 gap-0.5 mb-5 flex-wrap">
             {METRICS.map((metric) => (
               <button
                 key={metric.key}
                 onClick={() => toggleMetric(metric.key)}
-                className={`px-3 py-1.5 text-xs rounded-full border transition-colors ${
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-200 ${
                   visibleMetrics.has(metric.key)
-                    ? 'border-transparent text-white'
-                    : 'border-gray-300 text-gray-500 bg-white hover:bg-gray-50'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
                 }`}
-                style={visibleMetrics.has(metric.key) ? { backgroundColor: metric.color } : undefined}
               >
+                <span
+                  className="w-2 h-2 rounded-full flex-shrink-0"
+                  style={{ backgroundColor: metric.color }}
+                />
                 {metric.label}
               </button>
             ))}
@@ -382,20 +391,20 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
                 <defs>
                   {METRICS.filter(m => visibleMetrics.has(m.key)).map((metric) => (
                     <linearGradient key={metric.key} id={`gradient-${metric.key}`} x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={metric.color} stopOpacity={0.2} />
+                      <stop offset="0%" stopColor={metric.color} stopOpacity={0.15} />
                       <stop offset="100%" stopColor={metric.color} stopOpacity={0} />
                     </linearGradient>
                   ))}
                 </defs>
                 <XAxis
                   dataKey="dateFormatted"
-                  tick={{ fontSize: 12 }}
+                  tick={{ fontSize: 11, fill: '#9ca3af' }}
                   tickLine={false}
                   axisLine={false}
                   minTickGap={20}
                 />
                 <YAxis
-                  tick={{ fontSize: 12 }}
+                  tick={{ fontSize: 11, fill: '#9ca3af' }}
                   tickLine={false}
                   axisLine={false}
                   width={40}
@@ -409,78 +418,29 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
                     if (!entry) return null
 
                     return (
-                      <div className="rounded-lg border bg-white p-3 shadow-md text-sm">
+                      <div className="rounded-lg border border-gray-200/60 bg-white p-3 shadow-lg text-sm">
                         <p className="font-semibold text-gray-900 mb-2">
                           {format(parseISO(entry.date), 'd MMMM yyyy', { locale: fr })}
                         </p>
                         <div className="space-y-1">
-                          {entry.hrv_rmssd !== null && (
-                            <div className="flex justify-between gap-4">
-                              <span className="text-gray-500">HRV</span>
-                              <span className="font-medium" style={{ color: '#8b5cf6' }}>{entry.hrv_rmssd.toFixed(0)} ms</span>
-                            </div>
-                          )}
-                          {entry.training_readiness !== null && (
-                            <div className="flex justify-between gap-4">
-                              <span className="text-gray-500">Readiness</span>
-                              <span className="font-medium" style={{ color: '#f59e0b' }}>{entry.training_readiness}</span>
-                            </div>
-                          )}
-                          {entry.sleep_score !== null && (
-                            <div className="flex justify-between gap-4">
-                              <span className="text-gray-500">Sommeil</span>
-                              <span className="font-medium" style={{ color: '#3b82f6' }}>{entry.sleep_score}</span>
-                            </div>
-                          )}
-                          {entry.stress_score !== null && (
-                            <div className="flex justify-between gap-4">
-                              <span className="text-gray-500">Stress</span>
-                              <span className="font-medium" style={{ color: '#ef4444' }}>{entry.stress_score}</span>
-                            </div>
-                          )}
-                          {entry.body_battery_max !== null && (
-                            <div className="flex justify-between gap-4">
-                              <span className="text-gray-500">Body Battery</span>
-                              <span className="font-medium" style={{ color: '#10b981' }}>{entry.body_battery_max}</span>
-                            </div>
-                          )}
-                          {entry.resting_hr !== null && (
-                            <div className="flex justify-between gap-4">
-                              <span className="text-gray-500">FC repos</span>
-                              <span className="font-medium" style={{ color: '#f43f5e' }}>{entry.resting_hr} bpm</span>
-                            </div>
-                          )}
-                          {entry.spo2 !== null && (
-                            <div className="flex justify-between gap-4">
-                              <span className="text-gray-500">SpO₂</span>
-                              <span className="font-medium text-sky-600">{entry.spo2}%</span>
-                            </div>
-                          )}
-                          {entry.sleep_duration_min !== null && (
-                            <div className="flex justify-between gap-4">
-                              <span className="text-gray-500">Durée sommeil</span>
-                              <span className="font-medium text-indigo-600">
-                                {(() => {
-                                  const minutes = entry.sleep_duration_min!
-                                  const h = Math.floor(minutes / 60)
-                                  const m = Math.round(minutes % 60)
-                                  return `${h}h ${m.toString().padStart(2, '0')}min`
-                                })()}
-                              </span>
-                            </div>
-                          )}
-                          {entry.body_battery_min !== null && (
-                            <div className="flex justify-between gap-4">
-                              <span className="text-gray-500">BB min</span>
-                              <span className="font-medium text-emerald-600">{entry.body_battery_min}</span>
-                            </div>
-                          )}
-                          {entry.training_status !== null && (
-                            <div className="flex justify-between gap-4">
-                              <span className="text-gray-500">Statut</span>
-                              <span className="font-medium text-gray-700">{entry.training_status}</span>
-                            </div>
-                          )}
+                          {METRICS.filter(m => visibleMetrics.has(m.key)).map(metric => {
+                            const val = entry[metric.key as keyof GarminDailyEntry]
+                            if (val === null) return null
+                            const unit = metric.key === 'hrv_rmssd' ? ' ms'
+                              : metric.key === 'resting_hr' ? ' bpm'
+                              : ''
+                            return (
+                              <div key={metric.key} className="flex justify-between gap-4">
+                                <span className="text-gray-500 flex items-center gap-1.5">
+                                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: metric.color }} />
+                                  {metric.label}
+                                </span>
+                                <span className="font-medium" style={{ color: metric.color }}>
+                                  {typeof val === 'number' ? val.toFixed(0) : val}{unit}
+                                </span>
+                              </div>
+                            )
+                          })}
                         </div>
                       </div>
                     )

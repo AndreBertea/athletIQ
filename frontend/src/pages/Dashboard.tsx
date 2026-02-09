@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useQuery, useQueries } from '@tanstack/react-query'
-import { Trophy } from 'lucide-react'
+import { RefreshCw } from 'lucide-react'
 import DashboardStatsCards from '../components/dashboard/DashboardStatsCards'
 import DashboardPerformanceChart from '../components/dashboard/DashboardPerformanceChart'
 import DashboardWorkoutPlans from '../components/dashboard/DashboardWorkoutPlans'
@@ -30,18 +30,18 @@ const sportFilterOptions = [
 ]
 
 const metricOptions = [
-  { value: 'distance', label: 'Distance (km)', formatter: (v: number) => `${(v ?? 0).toFixed(1)} km` },
-  { value: 'duration', label: 'Durée (h)', formatter: (v: number) => `${((v ?? 0) / 3600).toFixed(1)}h` },
-  { value: 'pace', label: 'Pace (min/km)', formatter: (v: number) => `${(v ?? 0).toFixed(1)} min/km` },
-  { value: 'elevation', label: 'Dénivelé (m)', formatter: (v: number) => `${(v ?? 0).toFixed(0)} m` },
+  { value: 'distance', label: 'Distance (km)', shortLabel: 'Dist.', formatter: (v: number) => `${(v ?? 0).toFixed(1)} km` },
+  { value: 'duration', label: 'Durée (h)', shortLabel: 'Durée', formatter: (v: number) => `${((v ?? 0) / 3600).toFixed(1)}h` },
+  { value: 'pace', label: 'Pace (min/km)', shortLabel: 'Pace', formatter: (v: number) => `${(v ?? 0).toFixed(1)} min/km` },
+  { value: 'elevation', label: 'Dénivelé (m)', shortLabel: 'D+', formatter: (v: number) => `${(v ?? 0).toFixed(0)} m` },
 ]
 
 const periodOptions = [
-  { days: 7, label: '7 derniers jours' },
-  { days: 30, label: '30 derniers jours' },
-  { days: 90, label: '3 mois' },
-  { days: 180, label: '6 mois' },
-  { days: 365, label: '1 an' },
+  { days: 7, label: '7j' },
+  { days: 30, label: '30j' },
+  { days: 90, label: '3m' },
+  { days: 180, label: '6m' },
+  { days: 365, label: '1a' },
 ]
 
 const sportTypeMapping: Record<string, string[]> = {
@@ -268,83 +268,113 @@ export default function Dashboard() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500" />
+      <div className="flex items-center justify-center py-12 text-gray-400">
+        <div className="h-6 w-6 border-2 border-gray-200 border-t-orange-500 rounded-full animate-spin" />
+        <span className="ml-3 text-sm">Chargement...</span>
       </div>
     )
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 max-w-[1600px] mx-auto">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Tableau de bord</h1>
-          <p className="mt-2 text-gray-600">
-            Aperçu de vos performances sportives
-            {useEnrichedData && (
-              <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                <Trophy className="h-3 w-3 mr-1" />
-                Données enrichies
-              </span>
-            )}
+          <h1 className="text-2xl font-bold text-gray-900">Votre résumé</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            {new Intl.DateTimeFormat('fr-FR', {
+              weekday: 'long',
+              day: 'numeric',
+              month: 'long',
+              year: 'numeric',
+            }).format(new Date())}
           </p>
         </div>
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-2">
-            <label className="text-sm font-medium text-gray-700">Source :</label>
-            <button onClick={() => setUseEnrichedData(true)} className={`px-3 py-1.5 text-sm rounded-md transition-colors ${useEnrichedData ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
+        <div className="flex items-center gap-3">
+          {/* Toggle source compact */}
+          <div className="inline-flex items-center bg-gray-100 rounded-lg p-1 gap-0.5">
+            <button
+              onClick={() => setUseEnrichedData(true)}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-200 ${
+                useEnrichedData
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
               Enrichies
             </button>
-            <button onClick={() => setUseEnrichedData(false)} className={`px-3 py-1.5 text-sm rounded-md transition-colors ${!useEnrichedData ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
+            <button
+              onClick={() => setUseEnrichedData(false)}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-200 ${
+                !useEnrichedData
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
               Originales
             </button>
           </div>
+          {/* Badge sync */}
           {stravaStatus?.connected && stravaStatus.last_sync && (
-            <div className="text-sm text-gray-500 text-right">
-              <div className="font-medium">Dernière mise à jour :</div>
-              <div>{new Date(stravaStatus.last_sync).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' })}</div>
+            <div className="flex items-center gap-1.5 text-xs text-gray-400">
+              <RefreshCw className="h-3 w-3" />
+              <span>
+                {(() => {
+                  const diff = Date.now() - new Date(stravaStatus.last_sync).getTime()
+                  const mins = Math.floor(diff / 60000)
+                  if (mins < 1) return 'Sync à l\'instant'
+                  if (mins < 60) return `Sync il y a ${mins}min`
+                  const hours = Math.floor(mins / 60)
+                  if (hours < 24) return `Sync il y a ${hours}h`
+                  return `Sync il y a ${Math.floor(hours / 24)}j`
+                })()}
+              </span>
             </div>
           )}
         </div>
       </div>
 
-      {/* Filtres */}
-      <div className="card">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-medium text-gray-900">Période d'analyse</h3>
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2">
-              <label className="text-sm font-medium text-gray-700">Filtrer par :</label>
-              <select value={selectedSportFilter} onChange={(e) => setSelectedSportFilter(e.target.value)} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 focus:border-primary-500 focus:ring-primary-500">
-                {sportFilterOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-              </select>
-            </div>
-            <div className="flex items-center space-x-2">
-              <label className="text-sm font-medium text-gray-700">Analyser les :</label>
-              <div className="flex space-x-2">
-                {periodOptions.map((p) => (
-                  <button key={p.days} onClick={() => setSelectedPeriod(p.days)} className={`px-3 py-1.5 text-sm rounded-md transition-colors ${selectedPeriod === p.days ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
-                    {p.label}
-                  </button>
-                ))}
-              </div>
-            </div>
+      {/* Filtres — sticky bar */}
+      <div className="sticky top-0 z-10 bg-gray-50/80 backdrop-blur-sm border-b border-gray-200/60 -mx-4 px-4 py-3 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          {/* Toggle période */}
+          <div className="inline-flex items-center bg-gray-100 rounded-lg p-1 gap-0.5">
+            {periodOptions.map((p) => (
+              <button
+                key={p.days}
+                onClick={() => setSelectedPeriod(p.days)}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-200 ${
+                  selectedPeriod === p.days
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
           </div>
-        </div>
-        <div className="text-sm text-gray-600">
-          <strong>Période sélectionnée :</strong> {periodOptions.find(p => p.days === selectedPeriod)?.label || `${selectedPeriod} jours`}
-          {selectedSportFilter !== 'all' && (
-            <span className="ml-2"> • <strong>Filtre :</strong> {sportFilterOptions.find(o => o.value === selectedSportFilter)?.label}</span>
-          )}
+          {/* Select sport */}
+          <select
+            value={selectedSportFilter}
+            onChange={(e) => setSelectedSportFilter(e.target.value)}
+            className="text-sm rounded-lg border-gray-200 bg-white px-3 py-1.5 pr-8 focus:ring-orange-500 focus:border-orange-500 cursor-pointer"
+          >
+            {sportFilterOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <DashboardStatsCards stats={filteredStats ?? null} useEnrichedData={useEnrichedData} />
-
-      {/* Graphique Performance */}
-      <DashboardPerformanceChart chartData={chartData} selectedMetric={selectedMetric} onMetricChange={setSelectedMetric} chartInterval={chartInterval} onIntervalChange={setChartInterval} metricOptions={metricOptions} isLoading={isLoading} />
+      {/* Zone KPIs + Performance Chart */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <div className="xl:col-span-1">
+          <DashboardStatsCards stats={filteredStats ?? null} useEnrichedData={useEnrichedData} isLoading={isLoading} />
+        </div>
+        <div className="xl:col-span-2">
+          <DashboardPerformanceChart chartData={chartData} selectedMetric={selectedMetric} onMetricChange={setSelectedMetric} chartInterval={chartInterval} onIntervalChange={setChartInterval} metricOptions={metricOptions} isLoading={isLoading} selectedSportLabel={sportFilterOptions.find(o => o.value === selectedSportFilter)?.label || 'Toutes les activités'} />
+        </div>
+      </div>
 
       {/* Garmin Daily Monitor */}
       <GarminDailyMonitor
@@ -354,27 +384,25 @@ export default function Dashboard() {
       />
 
       {/* Charge Chronique */}
-      <div className="card">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-medium text-gray-900">Charge Chronique d'Entraînement</h3>
-          <div className="text-sm text-gray-500">Banister & Edwards (TRIMP)</div>
+      <ChronicLoadChart data={chronicLoadData || []} isLoading={chronicLoadLoading} rhrDelta7d={lastRhrDelta7d} />
+
+      {/* Zone Activités + Insights */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+        <div className="lg:col-span-3">
+          <DashboardActivityList
+            activities={enrichedItems}
+            isLoading={!recentEnrichedActivities && !enrichedStats}
+            weatherMap={weatherMap}
+          />
         </div>
-        <ChronicLoadChart data={chronicLoadData || []} isLoading={chronicLoadLoading} rhrDelta7d={lastRhrDelta7d} />
+        <div className="lg:col-span-2">
+          <CorrelationInsights
+            activities={enrichedItems}
+            garminDaily={garminDaily ?? []}
+            weatherData={weatherMap}
+          />
+        </div>
       </div>
-
-      {/* Liste d'activités récentes */}
-      <DashboardActivityList
-        activities={enrichedItems}
-        isLoading={!recentEnrichedActivities && !enrichedStats}
-        weatherMap={weatherMap}
-      />
-
-      {/* Insights & Corrélations */}
-      <CorrelationInsights
-        activities={enrichedItems}
-        garminDaily={garminDaily ?? []}
-        weatherData={weatherMap}
-      />
 
       {/* Plans d'Entraînement */}
       <DashboardWorkoutPlans workoutPlans={workoutPlans} />

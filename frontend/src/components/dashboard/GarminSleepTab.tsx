@@ -1,6 +1,5 @@
 import { useState, useMemo } from 'react'
 import {
-  PieChart, Pie, Cell,
   ComposedChart, Bar, Line,
   ResponsiveContainer, Tooltip as RechartsTooltip, XAxis, YAxis, Legend,
 } from 'recharts'
@@ -17,8 +16,6 @@ const SLEEP_RANGE_OPTIONS = [
   { days: 30, label: '30j' },
   { days: 90, label: '3 mois' },
   { days: 180, label: '6 mois' },
-  { days: 365, label: '1 an' },
-  { days: 730, label: '2 ans' },
 ]
 
 function toLocaleDateStr(d: Date): string {
@@ -51,6 +48,19 @@ function hasSleepData(entry: GarminDailyEntry): boolean {
   return totalSeconds > 0
 }
 
+/** Couleur conditionnelle du score sommeil : vert >=85, orange 70-84, rouge <70 */
+function scoreColor(score: number): string {
+  if (score >= 85) return '#22c55e'
+  if (score >= 70) return '#f59e0b'
+  return '#ef4444'
+}
+
+function scoreStrokeColor(score: number): string {
+  if (score >= 85) return '#22c55e'
+  if (score >= 70) return '#f59e0b'
+  return '#ef4444'
+}
+
 interface PhaseInfo {
   key: string
   label: string
@@ -66,7 +76,7 @@ function buildPhases(entry: GarminDailyEntry): PhaseInfo[] {
     { key: 'deep', label: 'Profond', color: 'bg-indigo-700', fill: '#4338ca', seconds: entry.deep_sleep_seconds },
     { key: 'light', label: 'Leger', color: 'bg-blue-400', fill: '#60a5fa', seconds: entry.light_sleep_seconds },
     { key: 'rem', label: 'REM', color: 'bg-violet-400', fill: '#a78bfa', seconds: entry.rem_sleep_seconds },
-    { key: 'awake', label: 'Eveille', color: 'bg-gray-500', fill: '#6b7280', seconds: entry.awake_sleep_seconds },
+    { key: 'awake', label: 'Eveille', color: 'bg-gray-400', fill: '#9ca3af', seconds: entry.awake_sleep_seconds },
   ]
   const total = raw.reduce((sum, p) => sum + (p.seconds || 0), 0)
   return raw.map(p => ({
@@ -78,7 +88,7 @@ function buildPhases(entry: GarminDailyEntry): PhaseInfo[] {
 }
 
 // ============================================================
-// Vue detail d'une seule nuit (reutilisee en mode 1j et en hero multi-jour)
+// Vue detail d'une seule nuit
 // ============================================================
 function SleepNightDetail({ entry, showTitle }: { entry: GarminDailyEntry; showTitle?: boolean }) {
   const phases = buildPhases(entry)
@@ -89,27 +99,20 @@ function SleepNightDetail({ entry, showTitle }: { entry: GarminDailyEntry; showT
   const durationFormatted = formatMinutes(entry.sleep_duration_min)
   const hasLatestSleep = score !== null || sleepStart !== null || entry.sleep_duration_min !== null
 
-  const donutData = [
-    { name: 'Profond', value: entry.deep_sleep_seconds || 0, fill: '#4338ca' },
-    { name: 'Leger', value: entry.light_sleep_seconds || 0, fill: '#60a5fa' },
-    { name: 'REM', value: entry.rem_sleep_seconds || 0, fill: '#a78bfa' },
-    { name: 'Eveille', value: entry.awake_sleep_seconds || 0, fill: '#6b7280' },
-  ].filter(d => d.value > 0)
-
   if (!hasLatestSleep && !hasPhases) {
     return (
-      <div className="flex items-center justify-center py-8 rounded-xl bg-gradient-to-br from-slate-900 to-indigo-950 text-indigo-400/60">
-        <Moon className="h-6 w-6 mr-2" />
-        <span className="text-sm">Aucune donnee de sommeil pour cette nuit</span>
+      <div className="flex flex-col items-center justify-center py-12 rounded-2xl bg-gradient-to-br from-slate-900 to-indigo-950 text-indigo-400/60">
+        <Moon className="h-10 w-10 mb-3" />
+        <p className="text-sm font-medium">Aucune donnee de sommeil pour cette nuit</p>
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* HERO : Score + Horaires + Duree */}
       {hasLatestSleep && (
-        <div className="flex flex-col md:flex-row items-center gap-6 p-6 rounded-xl bg-gradient-to-br from-slate-900 to-indigo-950 text-white">
+        <div className="flex flex-col md:flex-row items-center gap-6 p-6 rounded-2xl bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950 text-white transition-all duration-300">
           {showTitle && (
             <div className="w-full md:hidden text-center mb-2">
               <p className="text-xs text-indigo-400/70">
@@ -117,21 +120,21 @@ function SleepNightDetail({ entry, showTitle }: { entry: GarminDailyEntry; showT
               </p>
             </div>
           )}
-          {/* Score circulaire */}
+          {/* Score circulaire avec couleur conditionnelle */}
           {score !== null && (
             <div className="relative flex-shrink-0">
               <svg width="140" height="140" viewBox="0 0 140 140">
                 <circle cx="70" cy="70" r="58" fill="none" stroke="#1e1b4b" strokeWidth="10" />
                 <circle
                   cx="70" cy="70" r="58" fill="none"
-                  stroke="#818cf8" strokeWidth="10" strokeLinecap="round"
+                  stroke={scoreStrokeColor(score)} strokeWidth="10" strokeLinecap="round"
                   strokeDasharray={`${(score / 100) * 364.4} 364.4`}
                   transform="rotate(-90 70 70)"
                   className="transition-all duration-1000"
                 />
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-4xl font-bold text-indigo-300">{score}</span>
+                <span className="text-4xl font-bold" style={{ color: scoreColor(score) }}>{score}</span>
                 <span className="text-xs text-indigo-400/70">/ 100</span>
               </div>
             </div>
@@ -160,20 +163,21 @@ function SleepNightDetail({ entry, showTitle }: { entry: GarminDailyEntry; showT
         </div>
       )}
 
-      {/* BARRE DES PHASES */}
+      {/* PHASES DE SOMMEIL — Barre + Mini-cartes */}
       {hasPhases && (
         <div>
           <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
             <Moon className="h-4 w-4 text-indigo-500" />
             Phases de sommeil
           </h4>
+          {/* Barre horizontale des phases */}
           {sleepStart && sleepEnd && (
-            <div className="flex justify-between text-xs text-gray-500 mb-1">
+            <div className="flex justify-between text-xs text-gray-400 mb-1">
               <span>{sleepStart}</span>
               <span>{sleepEnd}</span>
             </div>
           )}
-          <div className="flex h-8 rounded-lg overflow-hidden shadow-inner">
+          <div className="flex h-7 rounded-lg overflow-hidden">
             {phases.filter(p => p.seconds > 0).map(phase => (
               <div
                 key={phase.key}
@@ -181,7 +185,7 @@ function SleepNightDetail({ entry, showTitle }: { entry: GarminDailyEntry; showT
                 style={{ width: `${phase.pct}%` }}
               >
                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-10">
-                  <div className="bg-gray-900 text-white text-xs rounded px-2 py-1 whitespace-nowrap shadow-lg">
+                  <div className="bg-gray-900 text-white text-xs rounded-lg px-3 py-2 whitespace-nowrap shadow-lg">
                     {phase.label}: {phase.formatted} ({phase.pct.toFixed(0)}%)
                   </div>
                 </div>
@@ -193,84 +197,70 @@ function SleepNightDetail({ entry, showTitle }: { entry: GarminDailyEntry; showT
               </div>
             ))}
           </div>
-          <div className="flex flex-wrap gap-4 mt-3">
+          {/* Mini-cartes des phases */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
             {phases.filter(p => p.seconds > 0).map(phase => (
-              <div key={phase.key} className="flex items-center gap-2">
-                <div className={`w-3 h-3 rounded-full ${phase.color}`} />
-                <span className="text-xs font-medium text-gray-700">{phase.label}</span>
-                <span className="text-xs text-gray-500">{phase.formatted}</span>
-                <span className="text-xs text-gray-400">({phase.pct.toFixed(0)}%)</span>
+              <div key={phase.key} className="bg-gray-50 rounded-lg p-3 border border-gray-100">
+                <div className="flex items-center gap-2 mb-1">
+                  <div className={`w-2.5 h-2.5 rounded-full ${phase.color}`} />
+                  <span className="text-xs font-medium text-gray-500">{phase.label}</span>
+                </div>
+                <p className="text-lg font-semibold text-gray-900">{phase.formatted}</p>
+                <p className="text-xs text-gray-400">{phase.pct.toFixed(0)}%</p>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* DONUT + STATS */}
-      {(donutData.length > 0 || entry.average_respiration !== null || entry.avg_sleep_stress !== null || entry.spo2 !== null) && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {donutData.length > 0 && (
-            <div className="flex flex-col items-center justify-center">
-              <div className="relative">
-                <PieChart width={200} height={200}>
-                  <Pie
-                    data={donutData}
-                    cx="50%" cy="50%"
-                    innerRadius={55} outerRadius={80}
-                    paddingAngle={3}
-                    dataKey="value"
-                    strokeWidth={0}
-                  >
-                    {donutData.map((d) => (
-                      <Cell key={d.name} fill={d.fill} />
-                    ))}
-                  </Pie>
-                  <RechartsTooltip formatter={(value: number, name: string) => [formatSeconds(value), name]} />
-                </PieChart>
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="text-center">
-                    <p className="text-lg font-bold text-gray-900">{durationFormatted}</p>
-                    <p className="text-xs text-gray-500">Total</p>
-                  </div>
+      {/* STATS SECONDAIRES — card-metric */}
+      {(entry.average_respiration !== null || entry.avg_sleep_stress !== null || entry.spo2 !== null) && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {entry.average_respiration !== null && (
+            <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-lg bg-cyan-100">
+                  <Wind className="h-5 w-5 text-cyan-600" />
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Respiration</p>
+                  <p className="text-lg font-bold text-gray-900">
+                    {entry.average_respiration.toFixed(1)}
+                    <span className="text-sm font-normal text-gray-400 ml-1">rpm</span>
+                  </p>
                 </div>
               </div>
             </div>
           )}
-          <div className="flex flex-col gap-3">
-            {entry.average_respiration !== null && (
-              <div className="flex items-center gap-3 p-3 rounded-lg bg-cyan-50">
-                <div className="p-2 rounded-lg bg-cyan-100">
-                  <Wind className="h-5 w-5 text-cyan-600" />
-                </div>
-                <div>
-                  <p className="text-xs text-cyan-600 font-medium">Respiration moyenne</p>
-                  <p className="text-lg font-semibold text-cyan-700">{entry.average_respiration.toFixed(1)} <span className="text-sm font-normal">rpm</span></p>
-                </div>
-              </div>
-            )}
-            {entry.avg_sleep_stress !== null && (
-              <div className="flex items-center gap-3 p-3 rounded-lg bg-orange-50">
-                <div className="p-2 rounded-lg bg-orange-100">
+          {entry.avg_sleep_stress !== null && (
+            <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-lg bg-orange-100">
                   <Activity className="h-5 w-5 text-orange-600" />
                 </div>
                 <div>
-                  <p className="text-xs text-orange-600 font-medium">Stress sommeil</p>
-                  <p className="text-lg font-semibold text-orange-700">{entry.avg_sleep_stress.toFixed(0)}</p>
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Stress sommeil</p>
+                  <p className="text-lg font-bold text-gray-900">{entry.avg_sleep_stress.toFixed(0)}</p>
                 </div>
               </div>
-            )}
-            {entry.spo2 !== null && (
-              <div className="flex items-center gap-3 p-3 rounded-lg bg-sky-50">
-                <div className="p-2 rounded-lg bg-sky-100">
+            </div>
+          )}
+          {entry.spo2 !== null && (
+            <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-lg bg-sky-100">
                   <Droplets className="h-5 w-5 text-sky-600" />
                 </div>
                 <div>
-                  <p className="text-xs text-sky-600 font-medium">SpO2</p>
-                  <p className="text-lg font-semibold text-sky-700">{entry.spo2}%</p>
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">SpO2</p>
+                  <p className="text-lg font-bold text-gray-900">
+                    {entry.spo2}
+                    <span className="text-sm font-normal text-gray-400 ml-1">%</span>
+                  </p>
                 </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -278,15 +268,14 @@ function SleepNightDetail({ entry, showTitle }: { entry: GarminDailyEntry; showT
 }
 
 // ============================================================
-// Composant principal — fetch autonome des donnees
+// Composant principal — fetch autonome
 // ============================================================
 export default function GarminSleepTab() {
   const [sleepRange, setSleepRange] = useState(7)
-  const [selectedDateIdx, setSelectedDateIdx] = useState(-1) // -1 = derniere date dispo
+  const [selectedDateIdx, setSelectedDateIdx] = useState(-1)
 
   const isSingleDay = sleepRange === 1
 
-  // Fetch autonome : la plage API = sleepRange (ou 30j en mode 1-nuit pour la navigation)
   const fetchDays = isSingleDay ? 30 : sleepRange
   const { data: rawData, isLoading } = useQuery({
     queryKey: ['garmin-sleep', fetchDays],
@@ -304,16 +293,13 @@ export default function GarminSleepTab() {
     return [...rawData].sort((a, b) => a.date.localeCompare(b.date))
   }, [rawData])
 
-  // Dates disponibles (triees chronologiquement)
   const availableDates = useMemo(() => {
     if (data.length === 0) return []
     return data.map(d => d.date)
   }, [data])
 
-  // En mode multi-jours, les donnees API correspondent deja a la plage voulue
   const filteredData = data
 
-  // En mode 1j : entree selectionnee
   const defaultDateIdx = useMemo(() => {
     if (!isSingleDay || data.length === 0) return -1
     for (let i = data.length - 1; i >= 0; i -= 1) {
@@ -337,14 +323,28 @@ export default function GarminSleepTab() {
     return null
   }, [isSingleDay, currentDateIdx, data])
 
-  // Derniere entree pour le mode multi-jours
   const latest = useMemo(() => {
     if (filteredData.length === 0) return null
     const latestWithSleep = [...filteredData].reverse().find(hasSleepData)
     return latestWithSleep ?? filteredData[filteredData.length - 1]
   }, [filteredData])
 
-  // Donnees pour le graphique de tendances
+  // KPIs resume pour mode multi-jours
+  const summaryKpis = useMemo(() => {
+    if (isSingleDay || filteredData.length === 0) return null
+    const withSleep = filteredData.filter(hasSleepData)
+    if (withSleep.length === 0) return null
+
+    const scores = withSleep.map(d => d.sleep_score).filter((v): v is number => v !== null)
+    const durations = withSleep.map(d => d.sleep_duration_min).filter((v): v is number => v !== null)
+
+    return {
+      avgScore: scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null,
+      avgDuration: durations.length > 0 ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length) : null,
+      nightsCount: withSleep.length,
+    }
+  }, [isSingleDay, filteredData])
+
   const trendData = useMemo(() => {
     if (isSingleDay) return []
     return filteredData.map(entry => ({
@@ -364,7 +364,6 @@ export default function GarminSleepTab() {
     }))
   }, [filteredData, isSingleDay])
 
-  // Navigation dates (mode 1j)
   const canGoPrev = currentDateIdx > 0
   const canGoNext = currentDateIdx < availableDates.length - 1
 
@@ -375,7 +374,6 @@ export default function GarminSleepTab() {
     if (canGoNext) setSelectedDateIdx(currentDateIdx + 1)
   }
 
-  // Quand on change de range, reset la selection de date
   const handleRangeChange = (days: number) => {
     setSleepRange(days)
     setSelectedDateIdx(-1)
@@ -384,9 +382,9 @@ export default function GarminSleepTab() {
   // --- Chargement ---
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-16 text-gray-400">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500 mr-3" />
-        <span className="text-sm">Chargement des donnees de sommeil...</span>
+      <div className="flex items-center justify-center py-12 text-gray-400">
+        <div className="h-6 w-6 border-2 border-gray-200 border-t-orange-500 rounded-full animate-spin" />
+        <span className="ml-3 text-sm">Chargement...</span>
       </div>
     )
   }
@@ -394,33 +392,31 @@ export default function GarminSleepTab() {
   // --- Aucune donnee ---
   if (data.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-gray-400">
-        <Moon className="h-12 w-12 mb-3 text-gray-300" />
-        <p className="text-sm font-medium">Aucune donnee de sommeil</p>
+      <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+        <Moon className="h-10 w-10 mb-3 text-gray-300" />
+        <p className="text-sm font-medium text-gray-500">Aucune donnee de sommeil</p>
         <p className="text-xs text-gray-400 mt-1">Synchronisez vos donnees Garmin pour voir vos statistiques de sommeil</p>
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
-      {/* =========================================================
-          FILTRES DE PERIODE (toujours en haut)
-          ========================================================= */}
+    <div className="space-y-5">
+      {/* FILTRES DE PERIODE — toggle segmente unifie */}
       <div className="flex items-center justify-between">
         <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
           <Moon className="h-4 w-4 text-indigo-500" />
           {isSingleDay ? 'Detail nuit' : 'Tendances sommeil'}
         </h4>
-        <div className="flex flex-wrap gap-1">
+        <div className="inline-flex items-center bg-gray-100 rounded-lg p-1 gap-0.5">
           {SLEEP_RANGE_OPTIONS.map(opt => (
             <button
               key={opt.days}
               onClick={() => handleRangeChange(opt.days)}
-              className={`px-3 py-1 text-xs rounded-full transition-colors ${
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-200 ${
                 sleepRange === opt.days
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
               }`}
             >
               {opt.label}
@@ -429,9 +425,7 @@ export default function GarminSleepTab() {
         </div>
       </div>
 
-      {/* =========================================================
-          MODE 1 NUIT — Navigation de date + detail complet
-          ========================================================= */}
+      {/* MODE 1 NUIT */}
       {isSingleDay && (
         <>
           {/* Selecteur de date */}
@@ -447,7 +441,7 @@ export default function GarminSleepTab() {
             >
               <ChevronLeft className="h-5 w-5" />
             </button>
-            <div className="flex items-center gap-2 px-4 py-2 bg-indigo-50 rounded-lg">
+            <div className="flex items-center gap-2 px-4 py-2 bg-indigo-50 rounded-lg border border-indigo-100">
               <Calendar className="h-4 w-4 text-indigo-500" />
               <span className="text-sm font-semibold text-indigo-700">
                 {selectedEntry
@@ -468,30 +462,49 @@ export default function GarminSleepTab() {
             </button>
           </div>
 
-          {/* Detail de la nuit selectionnee */}
           {selectedEntry ? (
             <SleepNightDetail entry={selectedEntry} showTitle />
           ) : (
-            <div className="flex items-center justify-center py-8 rounded-xl bg-gradient-to-br from-slate-900 to-indigo-950 text-indigo-400/60">
-              <Moon className="h-6 w-6 mr-2" />
-              <span className="text-sm">Aucune donnee pour cette date</span>
+            <div className="flex flex-col items-center justify-center py-12 rounded-2xl bg-gradient-to-br from-slate-900 to-indigo-950 text-indigo-400/60">
+              <Moon className="h-10 w-10 mb-3" />
+              <p className="text-sm font-medium">Aucune donnee pour cette date</p>
             </div>
           )}
         </>
       )}
 
-      {/* =========================================================
-          MODE MULTI-JOURS — Hero derniere nuit + Tendances
-          ========================================================= */}
+      {/* MODE MULTI-JOURS */}
       {!isSingleDay && (
         <>
+          {/* KPIs resume de la periode */}
+          {summaryKpis && (
+            <div className="grid grid-cols-3 gap-3">
+              {summaryKpis.avgScore !== null && (
+                <div className="bg-gray-50 rounded-lg p-3 border border-gray-100 text-center">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Score moy.</p>
+                  <p className="text-xl font-bold text-gray-900">{summaryKpis.avgScore}</p>
+                </div>
+              )}
+              {summaryKpis.avgDuration !== null && (
+                <div className="bg-gray-50 rounded-lg p-3 border border-gray-100 text-center">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Duree moy.</p>
+                  <p className="text-xl font-bold text-gray-900">{formatMinutes(summaryKpis.avgDuration)}</p>
+                </div>
+              )}
+              <div className="bg-gray-50 rounded-lg p-3 border border-gray-100 text-center">
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Nuits</p>
+                <p className="text-xl font-bold text-gray-900">{summaryKpis.nightsCount}</p>
+              </div>
+            </div>
+          )}
+
           {/* Detail de la derniere nuit */}
           {latest ? (
             <SleepNightDetail entry={latest} />
           ) : (
-            <div className="flex items-center justify-center py-8 rounded-xl bg-gradient-to-br from-slate-900 to-indigo-950 text-indigo-400/60">
-              <Moon className="h-6 w-6 mr-2" />
-              <span className="text-sm">Aucune donnee de sommeil sur cette periode</span>
+            <div className="flex flex-col items-center justify-center py-12 rounded-2xl bg-gradient-to-br from-slate-900 to-indigo-950 text-indigo-400/60">
+              <Moon className="h-10 w-10 mb-3" />
+              <p className="text-sm font-medium">Aucune donnee de sommeil sur cette periode</p>
             </div>
           )}
 
@@ -502,12 +515,12 @@ export default function GarminSleepTab() {
                 <Moon className="h-4 w-4 text-indigo-500" />
                 Evolution sur {SLEEP_RANGE_OPTIONS.find(o => o.days === sleepRange)?.label}
               </h4>
-              <div className="h-[320px] w-full">
+              <div className="h-[300px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart data={trendData} margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
                     <XAxis
                       dataKey="date"
-                      tick={{ fontSize: 11 }}
+                      tick={{ fontSize: 11, fill: '#9ca3af' }}
                       tickLine={false}
                       axisLine={false}
                       minTickGap={20}
@@ -515,7 +528,7 @@ export default function GarminSleepTab() {
                     />
                     <YAxis
                       yAxisId="left"
-                      tick={{ fontSize: 11 }}
+                      tick={{ fontSize: 11, fill: '#9ca3af' }}
                       tickLine={false}
                       axisLine={false}
                       width={45}
@@ -525,7 +538,7 @@ export default function GarminSleepTab() {
                       yAxisId="right"
                       orientation="right"
                       domain={[0, 100]}
-                      tick={{ fontSize: 11 }}
+                      tick={{ fontSize: 11, fill: '#9ca3af' }}
                       tickLine={false}
                       axisLine={false}
                       width={35}
@@ -536,7 +549,7 @@ export default function GarminSleepTab() {
                         const d = payload[0]?.payload
                         if (!d?.date) return null
                         return (
-                          <div className="rounded-lg border bg-white p-3 shadow-md text-sm">
+                          <div className="rounded-lg border border-gray-200/60 bg-white p-3 shadow-lg text-sm">
                             <p className="font-semibold text-gray-900 mb-2">{format(parseISO(d.date), 'd MMMM yyyy', { locale: fr })}</p>
                             <div className="space-y-1">
                               {d.sleep_score !== null && (
@@ -563,22 +576,10 @@ export default function GarminSleepTab() {
                                   <span className="font-medium" style={{ color: '#4338ca' }}>{formatSeconds(d.deep_sleep_seconds)}</span>
                                 </div>
                               )}
-                              {d.light_sleep_seconds !== null && (
-                                <div className="flex justify-between gap-4">
-                                  <span className="text-gray-500">Leger</span>
-                                  <span className="font-medium" style={{ color: '#60a5fa' }}>{formatSeconds(d.light_sleep_seconds)}</span>
-                                </div>
-                              )}
                               {d.rem_sleep_seconds !== null && (
                                 <div className="flex justify-between gap-4">
                                   <span className="text-gray-500">REM</span>
                                   <span className="font-medium" style={{ color: '#a78bfa' }}>{formatSeconds(d.rem_sleep_seconds)}</span>
-                                </div>
-                              )}
-                              {d.awake_sleep_seconds !== null && (
-                                <div className="flex justify-between gap-4">
-                                  <span className="text-gray-500">Eveille</span>
-                                  <span className="font-medium text-gray-600">{formatSeconds(d.awake_sleep_seconds)}</span>
                                 </div>
                               )}
                             </div>
@@ -594,7 +595,7 @@ export default function GarminSleepTab() {
                     <Bar yAxisId="left" dataKey="deep_min" name="Profond" stackId="sleep" fill="#4338ca" radius={[0, 0, 0, 0]} />
                     <Bar yAxisId="left" dataKey="light_min" name="Leger" stackId="sleep" fill="#60a5fa" />
                     <Bar yAxisId="left" dataKey="rem_min" name="REM" stackId="sleep" fill="#a78bfa" />
-                    <Bar yAxisId="left" dataKey="awake_min" name="Eveille" stackId="sleep" fill="#6b7280" radius={[2, 2, 0, 0]} />
+                    <Bar yAxisId="left" dataKey="awake_min" name="Eveille" stackId="sleep" fill="#9ca3af" radius={[2, 2, 0, 0]} />
                     <Line yAxisId="right" type="monotone" dataKey="sleep_score" name="Score" stroke="#818cf8" strokeWidth={2.5} dot={false} />
                   </ComposedChart>
                 </ResponsiveContainer>

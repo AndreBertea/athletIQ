@@ -1,9 +1,10 @@
+import { TrendingUp, BarChart3 } from 'lucide-react'
 import { AreaChart } from '../ui/area-chart'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 
 interface MetricOption {
   value: string
   label: string
+  shortLabel: string
   formatter: (value: number) => string
 }
 
@@ -23,6 +24,19 @@ interface DashboardPerformanceChartProps {
   onIntervalChange: (interval: 'day' | 'week' | 'month') => void
   metricOptions: MetricOption[]
   isLoading: boolean
+  selectedSportLabel?: string
+}
+
+const intervalOptions = [
+  { value: 'day' as const, label: 'J', title: 'Par jour' },
+  { value: 'week' as const, label: 'S', title: 'Par semaine' },
+  { value: 'month' as const, label: 'M', title: 'Par mois' },
+]
+
+const intervalLabels: Record<string, string> = {
+  day: 'par jour',
+  week: 'par semaine',
+  month: 'par mois',
 }
 
 export default function DashboardPerformanceChart({
@@ -33,83 +47,92 @@ export default function DashboardPerformanceChart({
   onIntervalChange,
   metricOptions,
   isLoading,
+  selectedSportLabel = 'Course à pied',
 }: DashboardPerformanceChartProps) {
   const selectedMetricOption = metricOptions.find(opt => opt.value === selectedMetric)
 
   return (
-    <div className="card">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-medium text-gray-900">
-          Évolution des performances - Course à pied
-        </h3>
-        <div className="flex items-center space-x-4">
-          {/* Boutons d'intervalle J/S/M */}
-          <div className="flex items-center space-x-1">
-            {([
-              { value: 'day', label: 'J' },
-              { value: 'week', label: 'S' },
-              { value: 'month', label: 'M' },
-            ] as const).map((interval) => (
+    <div className="bg-white rounded-xl border border-gray-200/60 p-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-5">
+        <div className="flex items-start gap-2.5">
+          <div className="p-2 rounded-lg bg-orange-100 mt-0.5">
+            <TrendingUp className="h-5 w-5 text-orange-600" />
+          </div>
+          <div>
+            <h3 className="text-base font-semibold text-gray-900">
+              Évolution des performances
+            </h3>
+            <p className="text-sm text-gray-500 mt-0.5">
+              {selectedSportLabel} — {intervalLabels[chartInterval]}
+            </p>
+          </div>
+        </div>
+
+        {/* Controles */}
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* Toggle intervalle J/S/M */}
+          <div className="inline-flex items-center bg-gray-100 rounded-lg p-1 gap-0.5">
+            {intervalOptions.map((opt) => (
               <button
-                key={interval.value}
-                onClick={() => onIntervalChange(interval.value)}
-                className={`px-2 py-1 text-xs rounded transition-colors ${
-                  chartInterval === interval.value
-                    ? 'bg-orange-600 text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-                title={`Par ${interval.value === 'day' ? 'jour' : interval.value === 'week' ? 'semaine' : 'mois'}`}
+                key={opt.value}
+                onClick={() => onIntervalChange(opt.value)}
+                title={opt.title}
+                className={
+                  chartInterval === opt.value
+                    ? 'px-3 py-1.5 text-xs font-medium rounded-md bg-white text-gray-900 shadow-sm transition-all duration-200'
+                    : 'px-3 py-1.5 text-xs font-medium rounded-md text-gray-500 hover:text-gray-700 transition-all duration-200'
+                }
               >
-                {interval.label}
+                {opt.label}
               </button>
             ))}
           </div>
 
-          {/* Sélecteur de métrique */}
-          <div className="flex items-center space-x-2">
-            <label className="text-sm font-medium text-gray-700">Métrique :</label>
-            <Select value={selectedMetric} onValueChange={onMetricChange}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {metricOptions.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          {/* Toggle metrique */}
+          <div className="inline-flex items-center bg-gray-100 rounded-lg p-1 gap-0.5">
+            {metricOptions.map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => onMetricChange(opt.value)}
+                className={
+                  selectedMetric === opt.value
+                    ? 'px-3 py-1.5 text-xs font-medium rounded-md bg-white text-gray-900 shadow-sm transition-all duration-200'
+                    : 'px-3 py-1.5 text-xs font-medium rounded-md text-gray-500 hover:text-gray-700 transition-all duration-200'
+                }
+              >
+                {opt.shortLabel}
+              </button>
+            ))}
           </div>
         </div>
       </div>
 
-      {/* Graphique */}
+      {/* Chart area */}
       {isLoading ? (
-        <div className="h-64 flex items-center justify-center text-gray-500">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mr-3"></div>
-          Chargement des données...
+        <div className="flex items-center justify-center py-12 text-gray-400">
+          <div className="h-6 w-6 border-2 border-gray-200 border-t-orange-500 rounded-full animate-spin" />
+          <span className="ml-3 text-sm">Chargement...</span>
         </div>
       ) : chartData.length > 0 ? (
         <AreaChart
           data={chartData}
           index="date"
           categories={[selectedMetric]}
-          colors={["hsl(var(--chart-1))"]}
+          colors={['#f97316']}
           valueFormatter={selectedMetricOption?.formatter || ((value: number) => value.toString())}
           showAnimation={true}
           showTooltip={true}
           showGrid={true}
+          className="h-[280px]"
         />
       ) : (
-        <div className="h-64 flex items-center justify-center text-gray-500 bg-gray-50 rounded-lg">
-          <div className="text-center">
-            <div className="text-4xl mb-2">🏃‍♂️</div>
-            <p>Aucune activité de course trouvée pour cette période</p>
-            <p className="text-sm text-gray-400 mt-1">
-              Commencez à courir pour voir vos données ici !
-            </p>
-          </div>
+        <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+          <BarChart3 className="h-10 w-10 mb-3 text-gray-300" />
+          <p className="text-sm font-medium text-gray-500">Aucune donnée de performance</p>
+          <p className="text-xs text-gray-400 mt-1">
+            Commencez à vous entraîner pour voir vos tendances ici
+          </p>
         </div>
       )}
     </div>

@@ -56,7 +56,25 @@ html {
   .card {
     @apply bg-white shadow rounded-lg p-6;
   }
-  
+
+  .card-section {
+    @apply bg-white rounded-xl border border-gray-200/60 p-6;
+  }
+
+  .card-metric {
+    @apply bg-gray-50 rounded-lg p-4 border border-gray-100;
+  }
+
+  .card-metric-interactive {
+    @apply bg-gray-50 rounded-lg p-4 border border-gray-100
+           hover:border-gray-200 hover:bg-white hover:shadow-sm
+           transition-all duration-200 cursor-pointer;
+  }
+
+  .card-highlight {
+    @apply bg-white rounded-lg border-l-4 p-5 border border-gray-200/60;
+  }
+
   .input {
     @apply block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm;
   }

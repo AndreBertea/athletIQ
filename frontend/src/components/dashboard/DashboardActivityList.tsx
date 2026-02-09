@@ -1,4 +1,4 @@
-import { Activity, Loader2 } from 'lucide-react'
+import { Activity } from 'lucide-react'
 import DashboardActivityItem from './DashboardActivityItem'
 import type { EnrichedActivity } from '../../services/activityService'
 import type { ActivityWeather } from '../../services/dataService'
@@ -10,29 +10,43 @@ interface DashboardActivityListProps {
 }
 
 export default function DashboardActivityList({ activities, isLoading, weatherMap }: DashboardActivityListProps) {
+  const displayedActivities = activities.slice(0, 5)
+
   return (
-    <div className="card">
-      <div className="flex items-center space-x-2 mb-4">
-        <Activity className="h-5 w-5 text-primary-500" />
-        <h3 className="text-lg font-medium text-gray-900">Activités récentes</h3>
+    <div className="bg-white rounded-xl border border-gray-200/60 p-6">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center gap-2">
+          <Activity className="h-5 w-5 text-emerald-500" />
+          <h3 className="text-base font-semibold text-gray-900">Activités récentes</h3>
+        </div>
+        {activities.length > 5 && (
+          <span className="text-sm font-medium text-orange-600 hover:text-orange-700 cursor-pointer">
+            Voir toutes →
+          </span>
+        )}
       </div>
 
+      {/* Loading */}
       {isLoading ? (
-        <div className="flex items-center justify-center h-32">
-          <Loader2 className="h-8 w-8 animate-spin text-primary-500" />
+        <div className="flex items-center justify-center py-12 text-gray-400">
+          <div className="h-6 w-6 border-2 border-gray-200 border-t-orange-500 rounded-full animate-spin" />
+          <span className="ml-3 text-sm">Chargement...</span>
         </div>
-      ) : activities.length === 0 ? (
+      ) : displayedActivities.length === 0 ? (
+        /* Empty state */
         <div className="flex flex-col items-center justify-center py-12 text-gray-400">
-          <Activity className="h-12 w-12 mb-3" />
-          <p className="text-sm">Aucune activité enrichie</p>
+          <Activity className="h-10 w-10 mb-3 text-gray-300" />
+          <p className="text-sm font-medium text-gray-500">Aucune activité récente</p>
+          <p className="text-xs text-gray-400 mt-1">Les activités enrichies apparaîtront ici après synchronisation</p>
         </div>
       ) : (
-        <div className="max-h-[600px] overflow-y-auto space-y-3 pr-1">
-          {activities.map((activity) => (
+        /* Activity list */
+        <div className="divide-y divide-gray-100">
+          {displayedActivities.map((activity) => (
             <DashboardActivityItem
               key={activity.activity_id}
               activity={activity}
-              onClick={() => {}}
               weather={weatherMap?.get(String(activity.activity_id)) ?? undefined}
             />
           ))}
