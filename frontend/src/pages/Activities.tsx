@@ -986,20 +986,8 @@ export default function Activities() {
 
                     {activeTab === 'map' && (
                       <ActivityMap
-                        streamsLatlng={
-                          streamsData?.streams?.latlng
-                            ? (Array.isArray(streamsData.streams.latlng)
-                                ? streamsData.streams.latlng
-                                : (streamsData.streams.latlng as any).data)
-                            : undefined
-                        }
-                        streamsAltitude={
-                          streamsData?.streams?.altitude
-                            ? (Array.isArray(streamsData.streams.altitude)
-                                ? streamsData.streams.altitude
-                                : (streamsData.streams.altitude as any).data)
-                            : undefined
-                        }
+                        streamsLatlng={streamsData?.streams?.latlng}
+                        streamsAltitude={streamsData?.streams?.altitude}
                         polylineEncoded={activity.summary_polyline || enrichedData?.summary_polyline}
                         startLatlng={activity.start_latlng || enrichedData?.start_latlng}
                         endLatlng={activity.end_latlng || enrichedData?.end_latlng}

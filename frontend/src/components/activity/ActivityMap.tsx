@@ -3,7 +3,7 @@ import * as maptilersdk from '@maptiler/sdk'
 import '@maptiler/sdk/dist/maptiler-sdk.css'
 import { ElevationProfileControl } from '@maptiler/elevation-profile-control'
 import { buildGeoJSON3D, polylineToGeoJSON } from '../../utils/polylineDecode'
-import { MapPin } from 'lucide-react'
+import { MapPin, AlertTriangle } from 'lucide-react'
 
 interface ActivityMapProps {
   polylineEncoded?: string
@@ -25,6 +25,7 @@ export default function ActivityMap({
   const mapRef = useRef<maptilersdk.Map | null>(null)
   const cursorMarkerRef = useRef<maptilersdk.Marker | null>(null)
   const [noData, setNoData] = useState(false)
+  const [noApiKey, setNoApiKey] = useState(false)
 
   useEffect(() => {
     if (!mapContainer.current || !elevationContainer.current) return
@@ -52,11 +53,19 @@ export default function ActivityMap({
     }
 
     // Configurer MapTiler
-    maptilersdk.config.apiKey = (import.meta as any).env.VITE_MAPTILER_API_KEY || ''
+    const apiKey = (import.meta as any).env.VITE_MAPTILER_API_KEY || ''
+    if (!apiKey) {
+      setNoApiKey(true)
+      return
+    }
+    maptilersdk.config.apiKey = apiKey
+
+    // Détecter le dark mode pour adapter le style de carte
+    const isDark = document.documentElement.classList.contains('dark')
 
     const map = new maptilersdk.Map({
       container: mapContainer.current,
-      style: maptilersdk.MapStyle.OUTDOOR,
+      style: isDark ? maptilersdk.MapStyle.STREETS.DARK : maptilersdk.MapStyle.OUTDOOR,
       center: [geoJsonCoords[0][0], geoJsonCoords[0][1]],
       zoom: 12,
     })
@@ -151,6 +160,15 @@ export default function ActivityMap({
     }
   }, [streamsLatlng, streamsAltitude, polylineEncoded, startLatlng, endLatlng])
 
+  if (noApiKey) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-gray-500 dark:text-gray-400">
+        <AlertTriangle className="h-8 w-8 mb-2 text-amber-500" />
+        <p className="text-sm">Clé API MapTiler manquante (VITE_MAPTILER_API_KEY)</p>
+      </div>
+    )
+  }
+
   if (noData) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-gray-500 dark:text-gray-400">
@@ -161,7 +179,7 @@ export default function ActivityMap({
   }
 
   return (
-    <div className="w-full bg-white dark:bg-gray-900 rounded-lg border overflow-hidden">
+    <div className="w-full bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
       {/* Carte */}
       <div
         ref={mapContainer}
@@ -171,7 +189,7 @@ export default function ActivityMap({
       {/* Profil de dénivelé */}
       <div
         ref={elevationContainer}
-        className="w-full border-t"
+        className="w-full border-t border-gray-200 dark:border-gray-700"
         style={{ height: 'clamp(150px, 25vh, 200px)' }}
       />
     </div>

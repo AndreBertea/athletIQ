@@ -270,7 +270,8 @@ class ActivityService {
       altitude?: number[];
       velocity_smooth?: number[];
       cadence?: number[];
-      [key: string]: number[] | undefined;
+      latlng?: [number, number][];
+      [key: string]: number[] | [number, number][] | undefined;
     };
     laps_data?: LapData[];
   }> {
