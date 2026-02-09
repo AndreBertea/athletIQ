@@ -43,7 +43,7 @@ export default function DashboardActivityItem({ activity, onClick, weather: weat
     queryFn: () => garminService.getActivityFitMetrics(activityId),
     staleTime: 30 * 60 * 1000,
     retry: false,
-    enabled: fitMetricsProp === undefined,
+    enabled: fitMetricsProp === undefined && activity.has_garmin === true,
   })
 
   const weather = weatherProp ?? weatherQuery

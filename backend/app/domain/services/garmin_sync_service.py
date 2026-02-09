@@ -660,11 +660,13 @@ async def enrich_garmin_activity_fit(
     # 3. Parse metriques FIT (Running Dynamics, power, TE)
     fit_data = parse_fit_file(fit_bytes)
 
-    # 4. Stocke streams_data
-    if streams:
+    # 4. Stocke streams_data (ne pas ecraser des streams existants)
+    stored_streams = False
+    if streams and not activity.streams_data:
         activity.streams_data = streams
         activity.updated_at = datetime.utcnow()
         session.add(activity)
+        stored_streams = True
 
     # 5. Cree/update FitMetrics
     existing_fm = session.exec(
@@ -703,9 +705,10 @@ async def enrich_garmin_activity_fit(
     segments_created = 0
     if streams:
         try:
-            from app.domain.services.segmentation_service import segment_activity
-            segments_created = segment_activity(session, activity)
-            result["segments_created"] = segments_created
+            from app.domain.services.segmentation_service import segment_activity, is_activity_segmented
+            if stored_streams or not is_activity_segmented(session, activity.id):
+                segments_created = segment_activity(session, activity)
+                result["segments_created"] = segments_created
         except Exception as e:
             logger.warning(f"Segmentation echouee pour activite Garmin {activity_id}: {e}")
 
@@ -725,17 +728,18 @@ async def batch_enrich_garmin_fit(
     max_activities: int = 10,
 ) -> Dict[str, Any]:
     """
-    Enrichit en batch les activites Garmin sans streams_data.
+    Enrichit en batch les activites Garmin sans metriques FIT.
 
     Returns:
         dict avec enriched, errors, total
     """
-    # Trouver les activites Garmin sans streams_data
+    # Trouver les activites Garmin sans metriques FIT
+    fit_subq = select(FitMetrics.activity_id)
     activities = session.exec(
         select(Activity).where(
             Activity.user_id == user_id,
             Activity.garmin_activity_id.is_not(None),
-            Activity.streams_data.is_(None),
+            ~Activity.id.in_(fit_subq),
         ).order_by(Activity.start_date.desc()).limit(max_activities)
     ).all()
 
