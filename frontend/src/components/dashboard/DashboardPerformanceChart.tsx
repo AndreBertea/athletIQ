@@ -21,17 +21,10 @@ interface DashboardPerformanceChartProps {
   selectedMetric: string
   onMetricChange: (metric: string) => void
   chartInterval: 'day' | 'week' | 'month'
-  onIntervalChange: (interval: 'day' | 'week' | 'month') => void
   metricOptions: MetricOption[]
   isLoading: boolean
   selectedSportLabel?: string
 }
-
-const intervalOptions = [
-  { value: 'day' as const, label: 'J', title: 'Par jour' },
-  { value: 'week' as const, label: 'S', title: 'Par semaine' },
-  { value: 'month' as const, label: 'M', title: 'Par mois' },
-]
 
 const intervalLabels: Record<string, string> = {
   day: 'par jour',
@@ -44,7 +37,6 @@ export default function DashboardPerformanceChart({
   selectedMetric,
   onMetricChange,
   chartInterval,
-  onIntervalChange,
   metricOptions,
   isLoading,
   selectedSportLabel = 'Course à pied',
@@ -71,24 +63,6 @@ export default function DashboardPerformanceChart({
 
         {/* Controles */}
         <div className="flex items-center gap-3 flex-wrap">
-          {/* Toggle intervalle J/S/M */}
-          <div className="inline-flex items-center bg-gray-100 rounded-lg p-1 gap-0.5">
-            {intervalOptions.map((opt) => (
-              <button
-                key={opt.value}
-                onClick={() => onIntervalChange(opt.value)}
-                title={opt.title}
-                className={
-                  chartInterval === opt.value
-                    ? 'px-3 py-1.5 text-xs font-medium rounded-md bg-white text-gray-900 shadow-sm transition-all duration-200'
-                    : 'px-3 py-1.5 text-xs font-medium rounded-md text-gray-500 hover:text-gray-700 transition-all duration-200'
-                }
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-
           {/* Toggle metrique */}
           <div className="inline-flex items-center bg-gray-100 rounded-lg p-1 gap-0.5">
             {metricOptions.map((opt) => (

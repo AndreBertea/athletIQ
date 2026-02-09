@@ -314,6 +314,7 @@ export default function Dashboard() {
   }, [enrichedItems, weatherQueries])
 
   // --- Données dérivées ---
+  const selectedPeriodLabel = periodOptions.find(p => p.days === selectedPeriod)?.label ?? `${selectedPeriod}j`
 
   const isLoading = useEnrichedData ? enrichedLoading : originalLoading
   const filteredStats = useMemo((): ActivityStats | EnrichedActivityStats | null | undefined => {
@@ -327,8 +328,13 @@ export default function Dashboard() {
   }, [enrichedStats, originalStats, selectedSportFilter, useEnrichedData])
 
   const chartData = useMemo(
-    () => generateChartData(performanceActivities, selectedSportFilter, chartInterval),
-    [performanceActivities, selectedSportFilter, chartInterval],
+    () => generateChartData(performanceActivities, selectedSportFilter, chartGranularity),
+    [performanceActivities, selectedSportFilter, chartGranularity],
+  )
+
+  const aggregatedChronicLoadData = useMemo(
+    () => aggregateChronicLoadData(chronicLoadData || [], chartGranularity),
+    [chronicLoadData, chartGranularity],
   )
 
   // --- Rendu ---
@@ -404,21 +410,39 @@ export default function Dashboard() {
       {/* Filtres — sticky bar */}
       <div className="sticky top-0 z-10 bg-gray-50/80 backdrop-blur-sm border-b border-gray-200/60 -mx-4 px-4 py-3 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
         <div className="flex items-center justify-between gap-4 flex-wrap">
-          {/* Toggle période */}
-          <div className="inline-flex items-center bg-gray-100 rounded-lg p-1 gap-0.5">
-            {periodOptions.map((p) => (
-              <button
-                key={p.days}
-                onClick={() => setSelectedPeriod(p.days)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-200 ${
-                  selectedPeriod === p.days
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                {p.label}
-              </button>
-            ))}
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* Toggle période */}
+            <div className="inline-flex items-center bg-gray-100 rounded-lg p-1 gap-0.5">
+              {periodOptions.map((p) => (
+                <button
+                  key={p.days}
+                  onClick={() => setSelectedPeriod(p.days)}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-200 ${
+                    selectedPeriod === p.days
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            {/* Toggle granularité */}
+            <div className="inline-flex items-center bg-gray-100 rounded-lg p-1 gap-0.5">
+              {granularityOptions.map((g) => (
+                <button
+                  key={g.value}
+                  onClick={() => setChartGranularity(g.value)}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-200 ${
+                    chartGranularity === g.value
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  {g.label}
+                </button>
+              ))}
+            </div>
           </div>
           {/* Select sport */}
           <select
@@ -439,7 +463,7 @@ export default function Dashboard() {
           <DashboardStatsCards stats={filteredStats ?? null} useEnrichedData={useEnrichedData} isLoading={isLoading} />
         </div>
         <div className="xl:col-span-2">
-          <DashboardPerformanceChart chartData={chartData} selectedMetric={selectedMetric} onMetricChange={setSelectedMetric} chartInterval={chartInterval} onIntervalChange={setChartInterval} metricOptions={metricOptions} isLoading={isLoading || performanceLoading} selectedSportLabel={sportFilterOptions.find(o => o.value === selectedSportFilter)?.label || 'Toutes les activités'} />
+          <DashboardPerformanceChart chartData={chartData} selectedMetric={selectedMetric} onMetricChange={setSelectedMetric} chartInterval={chartGranularity} metricOptions={metricOptions} isLoading={isLoading || performanceLoading} selectedSportLabel={sportFilterOptions.find(o => o.value === selectedSportFilter)?.label || 'Toutes les activités'} />
         </div>
       </div>
 
@@ -448,10 +472,12 @@ export default function Dashboard() {
         data={garminDaily ?? []}
         isLoading={garminDailyLoading}
         isConnected={garminConnected}
+        granularity={chartGranularity}
+        periodLabel={selectedPeriodLabel}
       />
 
       {/* Charge Chronique */}
-      <ChronicLoadChart data={chronicLoadData || []} isLoading={chronicLoadLoading} rhrDelta7d={lastRhrDelta7d} />
+      <ChronicLoadChart data={aggregatedChronicLoadData} isLoading={chronicLoadLoading} rhrDelta7d={lastRhrDelta7d} />
 
       {/* Zone Activités + Insights */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">

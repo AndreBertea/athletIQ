@@ -1,26 +1,13 @@
-import { useState, useMemo } from 'react'
+import { useMemo } from 'react'
 import {
   ComposedChart, Bar, Line,
   ResponsiveContainer, Tooltip as RechartsTooltip, XAxis, YAxis, Legend,
 } from 'recharts'
-import { Moon, Wind, Activity, Droplets, ChevronLeft, ChevronRight, Calendar } from 'lucide-react'
+import { Moon, Wind, Activity, Droplets } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import { useQuery } from '@tanstack/react-query'
-import { garminService } from '../../services/garminService'
 import type { GarminDailyEntry } from '../../services/garminService'
-
-const SLEEP_RANGE_OPTIONS = [
-  { days: 1, label: '1 nuit' },
-  { days: 7, label: '7j' },
-  { days: 30, label: '30j' },
-  { days: 90, label: '3 mois' },
-  { days: 180, label: '6 mois' },
-]
-
-function toLocaleDateStr(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
+import { formatBucketLabel, getBucketKey, GRANULARITY_DESCRIPTIONS, GRANULARITY_LABELS, type TimeGranularity } from '../../utils/timeBuckets'
 
 function formatMinutes(min: number | null): string {
   if (min === null) return '--'
@@ -268,71 +255,128 @@ function SleepNightDetail({ entry, showTitle }: { entry: GarminDailyEntry; showT
 }
 
 // ============================================================
-// Composant principal — fetch autonome
+// Composant principal — piloté par la topbar
 // ============================================================
-export default function GarminSleepTab() {
-  const [sleepRange, setSleepRange] = useState(7)
-  const [selectedDateIdx, setSelectedDateIdx] = useState(-1)
+interface GarminSleepTabProps {
+  data: GarminDailyEntry[]
+  granularity: TimeGranularity
+  periodLabel?: string
+}
 
-  const isSingleDay = sleepRange === 1
+interface SleepTrendPoint {
+  dateKey: string
+  dateLabel: string
+  sleep_score: number | null
+  deep_min: number
+  light_min: number
+  rem_min: number
+  awake_min: number
+  deep_sleep_seconds: number | null
+  light_sleep_seconds: number | null
+  rem_sleep_seconds: number | null
+  awake_sleep_seconds: number | null
+  sleep_duration_min: number | null
+  sleep_start_time?: string | null
+  sleep_end_time?: string | null
+}
 
-  const fetchDays = isSingleDay ? 30 : sleepRange
-  const { data: rawData, isLoading } = useQuery({
-    queryKey: ['garmin-sleep', fetchDays],
-    queryFn: () => {
-      const end = toLocaleDateStr(new Date())
-      const start = new Date()
-      start.setDate(start.getDate() - Math.max(fetchDays - 1, 0))
-      return garminService.getGarminDaily(toLocaleDateStr(start), end)
-    },
-    staleTime: 5 * 60_000,
-  })
+function aggregateSleepTrend(data: GarminDailyEntry[], granularity: TimeGranularity): SleepTrendPoint[] {
+  if (!data || data.length === 0) return []
 
-  const data = useMemo(() => {
-    if (!rawData || rawData.length === 0) return []
-    return [...rawData].sort((a, b) => a.date.localeCompare(b.date))
-  }, [rawData])
+  if (granularity === 'day') {
+    return data.map(entry => ({
+      dateKey: entry.date,
+      dateLabel: formatBucketLabel(entry.date, granularity),
+      sleep_score: entry.sleep_score,
+      deep_min: entry.deep_sleep_seconds ? Math.round(entry.deep_sleep_seconds / 60) : 0,
+      light_min: entry.light_sleep_seconds ? Math.round(entry.light_sleep_seconds / 60) : 0,
+      rem_min: entry.rem_sleep_seconds ? Math.round(entry.rem_sleep_seconds / 60) : 0,
+      awake_min: entry.awake_sleep_seconds ? Math.round(entry.awake_sleep_seconds / 60) : 0,
+      deep_sleep_seconds: entry.deep_sleep_seconds,
+      light_sleep_seconds: entry.light_sleep_seconds,
+      rem_sleep_seconds: entry.rem_sleep_seconds,
+      awake_sleep_seconds: entry.awake_sleep_seconds,
+      sleep_duration_min: entry.sleep_duration_min,
+      sleep_start_time: entry.sleep_start_time,
+      sleep_end_time: entry.sleep_end_time,
+    }))
+  }
 
-  const availableDates = useMemo(() => {
-    if (data.length === 0) return []
-    return data.map(d => d.date)
+  const buckets = new Map<string, {
+    counts: Record<string, number>
+    sums: Record<string, number>
+  }>()
+
+  for (const entry of data) {
+    if (!hasSleepData(entry)) continue
+    const key = getBucketKey(entry.date, granularity)
+    const bucket = buckets.get(key) ?? { counts: {}, sums: {} }
+
+    const numericFields: Array<[string, number | null]> = [
+      ['sleep_score', entry.sleep_score],
+      ['sleep_duration_min', entry.sleep_duration_min],
+      ['deep_sleep_seconds', entry.deep_sleep_seconds],
+      ['light_sleep_seconds', entry.light_sleep_seconds],
+      ['rem_sleep_seconds', entry.rem_sleep_seconds],
+      ['awake_sleep_seconds', entry.awake_sleep_seconds],
+    ]
+
+    for (const [field, value] of numericFields) {
+      if (typeof value === 'number') {
+        bucket.sums[field] = (bucket.sums[field] ?? 0) + value
+        bucket.counts[field] = (bucket.counts[field] ?? 0) + 1
+      }
+    }
+
+    buckets.set(key, bucket)
+  }
+
+  return Array.from(buckets.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, bucket]) => {
+      const avgScore = bucket.counts.sleep_score ? bucket.sums.sleep_score / bucket.counts.sleep_score : null
+      const avgDuration = bucket.counts.sleep_duration_min ? bucket.sums.sleep_duration_min / bucket.counts.sleep_duration_min : null
+      const avgDeep = bucket.counts.deep_sleep_seconds ? bucket.sums.deep_sleep_seconds / bucket.counts.deep_sleep_seconds : null
+      const avgLight = bucket.counts.light_sleep_seconds ? bucket.sums.light_sleep_seconds / bucket.counts.light_sleep_seconds : null
+      const avgRem = bucket.counts.rem_sleep_seconds ? bucket.sums.rem_sleep_seconds / bucket.counts.rem_sleep_seconds : null
+      const avgAwake = bucket.counts.awake_sleep_seconds ? bucket.sums.awake_sleep_seconds / bucket.counts.awake_sleep_seconds : null
+
+      return {
+        dateKey: key,
+        dateLabel: formatBucketLabel(key, granularity),
+        sleep_score: avgScore,
+        sleep_duration_min: avgDuration,
+        deep_sleep_seconds: avgDeep,
+        light_sleep_seconds: avgLight,
+        rem_sleep_seconds: avgRem,
+        awake_sleep_seconds: avgAwake,
+        deep_min: avgDeep ? Math.round(avgDeep / 60) : 0,
+        light_min: avgLight ? Math.round(avgLight / 60) : 0,
+        rem_min: avgRem ? Math.round(avgRem / 60) : 0,
+        awake_min: avgAwake ? Math.round(avgAwake / 60) : 0,
+      }
+    })
+}
+
+export default function GarminSleepTab({ data, granularity, periodLabel }: GarminSleepTabProps) {
+  const sortedData = useMemo(() => {
+    if (!data || data.length === 0) return []
+    return [...data].sort((a, b) => a.date.localeCompare(b.date))
   }, [data])
 
-  const filteredData = data
-
-  const defaultDateIdx = useMemo(() => {
-    if (!isSingleDay || data.length === 0) return -1
-    for (let i = data.length - 1; i >= 0; i -= 1) {
-      if (hasSleepData(data[i])) return i
-    }
-    return data.length - 1
-  }, [isSingleDay, data])
-
-  const currentDateIdx = useMemo(() => {
-    if (!isSingleDay || data.length === 0) return -1
-    if (selectedDateIdx === -1 || selectedDateIdx >= data.length) {
-      return defaultDateIdx
-    }
-    return selectedDateIdx
-  }, [isSingleDay, selectedDateIdx, data.length, defaultDateIdx])
-
-  const selectedEntry = useMemo(() => {
-    if (isSingleDay && currentDateIdx >= 0 && currentDateIdx < data.length) {
-      return data[currentDateIdx]
-    }
-    return null
-  }, [isSingleDay, currentDateIdx, data])
+  const granularityLabel = GRANULARITY_LABELS[granularity]
+  const granularityDescription = GRANULARITY_DESCRIPTIONS[granularity]
+  const isAggregated = granularity !== 'day'
 
   const latest = useMemo(() => {
-    if (filteredData.length === 0) return null
-    const latestWithSleep = [...filteredData].reverse().find(hasSleepData)
-    return latestWithSleep ?? filteredData[filteredData.length - 1]
-  }, [filteredData])
+    if (sortedData.length === 0) return null
+    const latestWithSleep = [...sortedData].reverse().find(hasSleepData)
+    return latestWithSleep ?? sortedData[sortedData.length - 1]
+  }, [sortedData])
 
-  // KPIs resume pour mode multi-jours
   const summaryKpis = useMemo(() => {
-    if (isSingleDay || filteredData.length === 0) return null
-    const withSleep = filteredData.filter(hasSleepData)
+    if (sortedData.length === 0) return null
+    const withSleep = sortedData.filter(hasSleepData)
     if (withSleep.length === 0) return null
 
     const scores = withSleep.map(d => d.sleep_score).filter((v): v is number => v !== null)
@@ -343,54 +387,14 @@ export default function GarminSleepTab() {
       avgDuration: durations.length > 0 ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length) : null,
       nightsCount: withSleep.length,
     }
-  }, [isSingleDay, filteredData])
+  }, [sortedData])
 
-  const trendData = useMemo(() => {
-    if (isSingleDay) return []
-    return filteredData.map(entry => ({
-      date: entry.date,
-      sleep_score: entry.sleep_score,
-      deep_min: entry.deep_sleep_seconds ? Math.round(entry.deep_sleep_seconds / 60) : 0,
-      light_min: entry.light_sleep_seconds ? Math.round(entry.light_sleep_seconds / 60) : 0,
-      rem_min: entry.rem_sleep_seconds ? Math.round(entry.rem_sleep_seconds / 60) : 0,
-      awake_min: entry.awake_sleep_seconds ? Math.round(entry.awake_sleep_seconds / 60) : 0,
-      deep_sleep_seconds: entry.deep_sleep_seconds,
-      light_sleep_seconds: entry.light_sleep_seconds,
-      rem_sleep_seconds: entry.rem_sleep_seconds,
-      awake_sleep_seconds: entry.awake_sleep_seconds,
-      sleep_start_time: entry.sleep_start_time,
-      sleep_end_time: entry.sleep_end_time,
-      sleep_duration_min: entry.sleep_duration_min,
-    }))
-  }, [filteredData, isSingleDay])
+  const trendData = useMemo(
+    () => aggregateSleepTrend(sortedData, granularity),
+    [sortedData, granularity],
+  )
 
-  const canGoPrev = currentDateIdx > 0
-  const canGoNext = currentDateIdx < availableDates.length - 1
-
-  const goPrev = () => {
-    if (canGoPrev) setSelectedDateIdx(currentDateIdx - 1)
-  }
-  const goNext = () => {
-    if (canGoNext) setSelectedDateIdx(currentDateIdx + 1)
-  }
-
-  const handleRangeChange = (days: number) => {
-    setSleepRange(days)
-    setSelectedDateIdx(-1)
-  }
-
-  // --- Chargement ---
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12 text-gray-400">
-        <div className="h-6 w-6 border-2 border-gray-200 border-t-orange-500 rounded-full animate-spin" />
-        <span className="ml-3 text-sm">Chargement...</span>
-      </div>
-    )
-  }
-
-  // --- Aucune donnee ---
-  if (data.length === 0) {
+  if (sortedData.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-gray-400">
         <Moon className="h-10 w-10 mb-3 text-gray-300" />
@@ -402,207 +406,144 @@ export default function GarminSleepTab() {
 
   return (
     <div className="space-y-5">
-      {/* FILTRES DE PERIODE — toggle segmente unifie */}
       <div className="flex items-center justify-between">
         <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
           <Moon className="h-4 w-4 text-indigo-500" />
-          {isSingleDay ? 'Detail nuit' : 'Tendances sommeil'}
+          Tendances sommeil
         </h4>
-        <div className="inline-flex items-center bg-gray-100 rounded-lg p-1 gap-0.5">
-          {SLEEP_RANGE_OPTIONS.map(opt => (
-            <button
-              key={opt.days}
-              onClick={() => handleRangeChange(opt.days)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-200 ${
-                sleepRange === opt.days
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
+        <p className="text-xs text-gray-400">
+          Periode {periodLabel ?? `${sortedData.length}j`} • Temporalite {granularityLabel}
+        </p>
       </div>
 
-      {/* MODE 1 NUIT */}
-      {isSingleDay && (
-        <>
-          {/* Selecteur de date */}
-          <div className="flex items-center justify-center gap-4">
-            <button
-              onClick={goPrev}
-              disabled={!canGoPrev}
-              className={`p-2 rounded-lg transition-colors ${
-                canGoPrev
-                  ? 'text-gray-700 hover:bg-gray-100'
-                  : 'text-gray-300 cursor-not-allowed'
-              }`}
-            >
-              <ChevronLeft className="h-5 w-5" />
-            </button>
-            <div className="flex items-center gap-2 px-4 py-2 bg-indigo-50 rounded-lg border border-indigo-100">
-              <Calendar className="h-4 w-4 text-indigo-500" />
-              <span className="text-sm font-semibold text-indigo-700">
-                {selectedEntry
-                  ? format(parseISO(selectedEntry.date), 'EEEE d MMMM yyyy', { locale: fr })
-                  : '--'}
-              </span>
-            </div>
-            <button
-              onClick={goNext}
-              disabled={!canGoNext}
-              className={`p-2 rounded-lg transition-colors ${
-                canGoNext
-                  ? 'text-gray-700 hover:bg-gray-100'
-                  : 'text-gray-300 cursor-not-allowed'
-              }`}
-            >
-              <ChevronRight className="h-5 w-5" />
-            </button>
-          </div>
-
-          {selectedEntry ? (
-            <SleepNightDetail entry={selectedEntry} showTitle />
-          ) : (
-            <div className="flex flex-col items-center justify-center py-12 rounded-2xl bg-gradient-to-br from-slate-900 to-indigo-950 text-indigo-400/60">
-              <Moon className="h-10 w-10 mb-3" />
-              <p className="text-sm font-medium">Aucune donnee pour cette date</p>
+      {/* KPIs resume de la periode */}
+      {summaryKpis && (
+        <div className="grid grid-cols-3 gap-3">
+          {summaryKpis.avgScore !== null && (
+            <div className="bg-gray-50 rounded-lg p-3 border border-gray-100 text-center">
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Score moy.</p>
+              <p className="text-xl font-bold text-gray-900">{summaryKpis.avgScore}</p>
             </div>
           )}
-        </>
+          {summaryKpis.avgDuration !== null && (
+            <div className="bg-gray-50 rounded-lg p-3 border border-gray-100 text-center">
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Duree moy.</p>
+              <p className="text-xl font-bold text-gray-900">{formatMinutes(summaryKpis.avgDuration)}</p>
+            </div>
+          )}
+          <div className="bg-gray-50 rounded-lg p-3 border border-gray-100 text-center">
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Nuits</p>
+            <p className="text-xl font-bold text-gray-900">{summaryKpis.nightsCount}</p>
+          </div>
+        </div>
       )}
 
-      {/* MODE MULTI-JOURS */}
-      {!isSingleDay && (
-        <>
-          {/* KPIs resume de la periode */}
-          {summaryKpis && (
-            <div className="grid grid-cols-3 gap-3">
-              {summaryKpis.avgScore !== null && (
-                <div className="bg-gray-50 rounded-lg p-3 border border-gray-100 text-center">
-                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Score moy.</p>
-                  <p className="text-xl font-bold text-gray-900">{summaryKpis.avgScore}</p>
-                </div>
-              )}
-              {summaryKpis.avgDuration !== null && (
-                <div className="bg-gray-50 rounded-lg p-3 border border-gray-100 text-center">
-                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Duree moy.</p>
-                  <p className="text-xl font-bold text-gray-900">{formatMinutes(summaryKpis.avgDuration)}</p>
-                </div>
-              )}
-              <div className="bg-gray-50 rounded-lg p-3 border border-gray-100 text-center">
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Nuits</p>
-                <p className="text-xl font-bold text-gray-900">{summaryKpis.nightsCount}</p>
-              </div>
-            </div>
-          )}
+      {/* Detail de la derniere nuit */}
+      {latest ? (
+        <SleepNightDetail entry={latest} />
+      ) : (
+        <div className="flex flex-col items-center justify-center py-12 rounded-2xl bg-gradient-to-br from-slate-900 to-indigo-950 text-indigo-400/60">
+          <Moon className="h-10 w-10 mb-3" />
+          <p className="text-sm font-medium">Aucune donnee de sommeil sur cette periode</p>
+        </div>
+      )}
 
-          {/* Detail de la derniere nuit */}
-          {latest ? (
-            <SleepNightDetail entry={latest} />
-          ) : (
-            <div className="flex flex-col items-center justify-center py-12 rounded-2xl bg-gradient-to-br from-slate-900 to-indigo-950 text-indigo-400/60">
-              <Moon className="h-10 w-10 mb-3" />
-              <p className="text-sm font-medium">Aucune donnee de sommeil sur cette periode</p>
-            </div>
-          )}
+      {/* Graphique de tendances */}
+      {trendData.length > 1 && (
+        <div>
+          <h4 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+            <Moon className="h-4 w-4 text-indigo-500" />
+            Evolution {isAggregated ? `(moyennes ${granularityDescription})` : ''}
+          </h4>
+          <div className="h-[300px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={trendData} margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
+                <XAxis
+                  dataKey="dateLabel"
+                  tick={{ fontSize: 11, fill: '#9ca3af' }}
+                  tickLine={false}
+                  axisLine={false}
+                  minTickGap={20}
+                />
+                <YAxis
+                  yAxisId="left"
+                  tick={{ fontSize: 11, fill: '#9ca3af' }}
+                  tickLine={false}
+                  axisLine={false}
+                  width={45}
+                  tickFormatter={(v: number) => `${Math.round(v / 60)}h`}
+                />
+                <YAxis
+                  yAxisId="right"
+                  orientation="right"
+                  domain={[0, 100]}
+                  tick={{ fontSize: 11, fill: '#9ca3af' }}
+                  tickLine={false}
+                  axisLine={false}
+                  width={35}
+                />
+                <RechartsTooltip
+                  content={({ active, payload }) => {
+                    if (!active || !payload || payload.length === 0) return null
+                    const d = payload[0]?.payload as SleepTrendPoint
+                    if (!d?.dateKey) return null
+                    const title = isAggregated
+                      ? d.dateLabel
+                      : format(parseISO(d.dateKey), 'd MMMM yyyy', { locale: fr })
 
-          {/* Graphique de tendances */}
-          {trendData.length > 1 && (
-            <div>
-              <h4 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
-                <Moon className="h-4 w-4 text-indigo-500" />
-                Evolution sur {SLEEP_RANGE_OPTIONS.find(o => o.days === sleepRange)?.label}
-              </h4>
-              <div className="h-[300px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={trendData} margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
-                    <XAxis
-                      dataKey="date"
-                      tick={{ fontSize: 11, fill: '#9ca3af' }}
-                      tickLine={false}
-                      axisLine={false}
-                      minTickGap={20}
-                      tickFormatter={(value: string) => format(parseISO(value), 'd MMM', { locale: fr })}
-                    />
-                    <YAxis
-                      yAxisId="left"
-                      tick={{ fontSize: 11, fill: '#9ca3af' }}
-                      tickLine={false}
-                      axisLine={false}
-                      width={45}
-                      tickFormatter={(v: number) => `${Math.round(v / 60)}h`}
-                    />
-                    <YAxis
-                      yAxisId="right"
-                      orientation="right"
-                      domain={[0, 100]}
-                      tick={{ fontSize: 11, fill: '#9ca3af' }}
-                      tickLine={false}
-                      axisLine={false}
-                      width={35}
-                    />
-                    <RechartsTooltip
-                      content={({ active, payload }) => {
-                        if (!active || !payload || payload.length === 0) return null
-                        const d = payload[0]?.payload
-                        if (!d?.date) return null
-                        return (
-                          <div className="rounded-lg border border-gray-200/60 bg-white p-3 shadow-lg text-sm">
-                            <p className="font-semibold text-gray-900 mb-2">{format(parseISO(d.date), 'd MMMM yyyy', { locale: fr })}</p>
-                            <div className="space-y-1">
-                              {d.sleep_score !== null && (
-                                <div className="flex justify-between gap-4">
-                                  <span className="text-gray-500">Score</span>
-                                  <span className="font-medium text-indigo-600">{d.sleep_score}</span>
-                                </div>
-                              )}
-                              {d.sleep_duration_min !== null && (
-                                <div className="flex justify-between gap-4">
-                                  <span className="text-gray-500">Duree</span>
-                                  <span className="font-medium text-sky-600">{formatMinutes(d.sleep_duration_min)}</span>
-                                </div>
-                              )}
-                              {d.sleep_start_time && d.sleep_end_time && (
-                                <div className="flex justify-between gap-4">
-                                  <span className="text-gray-500">Horaires</span>
-                                  <span className="font-medium text-purple-600">{d.sleep_start_time} - {d.sleep_end_time}</span>
-                                </div>
-                              )}
-                              {d.deep_sleep_seconds !== null && (
-                                <div className="flex justify-between gap-4">
-                                  <span className="text-gray-500">Profond</span>
-                                  <span className="font-medium" style={{ color: '#4338ca' }}>{formatSeconds(d.deep_sleep_seconds)}</span>
-                                </div>
-                              )}
-                              {d.rem_sleep_seconds !== null && (
-                                <div className="flex justify-between gap-4">
-                                  <span className="text-gray-500">REM</span>
-                                  <span className="font-medium" style={{ color: '#a78bfa' }}>{formatSeconds(d.rem_sleep_seconds)}</span>
-                                </div>
-                              )}
+                    return (
+                      <div className="rounded-lg border border-gray-200/60 bg-white p-3 shadow-lg text-sm">
+                        <p className="font-semibold text-gray-900 mb-2">{title}</p>
+                        <div className="space-y-1">
+                          {d.sleep_score !== null && (
+                            <div className="flex justify-between gap-4">
+                              <span className="text-gray-500">{isAggregated ? 'Score moy.' : 'Score'}</span>
+                              <span className="font-medium text-indigo-600">{Math.round(d.sleep_score)}</span>
                             </div>
-                          </div>
-                        )
-                      }}
-                    />
-                    <Legend
-                      verticalAlign="bottom"
-                      iconType="square"
-                      wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
-                    />
-                    <Bar yAxisId="left" dataKey="deep_min" name="Profond" stackId="sleep" fill="#4338ca" radius={[0, 0, 0, 0]} />
-                    <Bar yAxisId="left" dataKey="light_min" name="Leger" stackId="sleep" fill="#60a5fa" />
-                    <Bar yAxisId="left" dataKey="rem_min" name="REM" stackId="sleep" fill="#a78bfa" />
-                    <Bar yAxisId="left" dataKey="awake_min" name="Eveille" stackId="sleep" fill="#9ca3af" radius={[2, 2, 0, 0]} />
-                    <Line yAxisId="right" type="monotone" dataKey="sleep_score" name="Score" stroke="#818cf8" strokeWidth={2.5} dot={false} />
-                  </ComposedChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          )}
-        </>
+                          )}
+                          {d.sleep_duration_min !== null && (
+                            <div className="flex justify-between gap-4">
+                              <span className="text-gray-500">{isAggregated ? 'Duree moy.' : 'Duree'}</span>
+                              <span className="font-medium text-sky-600">{formatMinutes(d.sleep_duration_min)}</span>
+                            </div>
+                          )}
+                          {!isAggregated && d.sleep_start_time && d.sleep_end_time && (
+                            <div className="flex justify-between gap-4">
+                              <span className="text-gray-500">Horaires</span>
+                              <span className="font-medium text-purple-600">{d.sleep_start_time} - {d.sleep_end_time}</span>
+                            </div>
+                          )}
+                          {d.deep_sleep_seconds !== null && (
+                            <div className="flex justify-between gap-4">
+                              <span className="text-gray-500">Profond</span>
+                              <span className="font-medium" style={{ color: '#4338ca' }}>{formatSeconds(d.deep_sleep_seconds)}</span>
+                            </div>
+                          )}
+                          {d.rem_sleep_seconds !== null && (
+                            <div className="flex justify-between gap-4">
+                              <span className="text-gray-500">REM</span>
+                              <span className="font-medium" style={{ color: '#a78bfa' }}>{formatSeconds(d.rem_sleep_seconds)}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  }}
+                />
+                <Legend
+                  verticalAlign="bottom"
+                  iconType="square"
+                  wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
+                />
+                <Bar yAxisId="left" dataKey="deep_min" name="Profond" stackId="sleep" fill="#4338ca" radius={[0, 0, 0, 0]} />
+                <Bar yAxisId="left" dataKey="light_min" name="Leger" stackId="sleep" fill="#60a5fa" />
+                <Bar yAxisId="left" dataKey="rem_min" name="REM" stackId="sleep" fill="#a78bfa" />
+                <Bar yAxisId="left" dataKey="awake_min" name="Eveille" stackId="sleep" fill="#9ca3af" radius={[2, 2, 0, 0]} />
+                <Line yAxisId="right" type="monotone" dataKey="sleep_score" name="Score" stroke="#818cf8" strokeWidth={2.5} dot={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
       )}
     </div>
   )

@@ -8,15 +8,16 @@ import {
   YAxis,
 } from 'recharts'
 import { Watch, TrendingUp, TrendingDown, Minus, Heart, Brain, Moon, Activity, Weight, Droplets } from 'lucide-react'
-import { format, parseISO } from 'date-fns'
-import { fr } from 'date-fns/locale'
 import type { GarminDailyEntry } from '../../services/garminService'
 import GarminSleepTab from './GarminSleepTab'
+import { formatBucketLabel, getBucketKey, GRANULARITY_LABELS, type TimeGranularity } from '../../utils/timeBuckets'
 
 interface GarminDailyMonitorProps {
   data: GarminDailyEntry[]
   isLoading: boolean
   isConnected: boolean
+  granularity: TimeGranularity
+  periodLabel?: string
 }
 
 interface MetricConfig {
@@ -36,19 +37,52 @@ const METRICS: MetricConfig[] = [
 
 const DEFAULT_VISIBLE = new Set(['hrv_rmssd', 'training_readiness', 'sleep_score'])
 
-function avg7d(data: GarminDailyEntry[], key: keyof GarminDailyEntry): number | null {
-  const last7 = data.slice(-7)
-  const values = last7.map(d => d[key]).filter((v): v is number => v !== null && typeof v === 'number')
-  if (values.length === 0) return null
-  return values.reduce((a, b) => a + b, 0) / values.length
+type AggregatedGarminPoint = {
+  dateKey: string
+  dateLabel: string
+  hrv_rmssd: number | null
+  training_readiness: number | null
+  sleep_score: number | null
+  stress_score: number | null
+  body_battery_max: number | null
+  resting_hr: number | null
 }
 
-function avg7dPrev(data: GarminDailyEntry[], key: keyof GarminDailyEntry): number | null {
-  if (data.length < 8) return null
-  const prev7 = data.slice(-14, -7)
-  const values = prev7.map(d => d[key]).filter((v): v is number => v !== null && typeof v === 'number')
-  if (values.length === 0) return null
-  return values.reduce((a, b) => a + b, 0) / values.length
+function aggregateGarminDaily(data: GarminDailyEntry[], granularity: TimeGranularity): AggregatedGarminPoint[] {
+  if (!data || data.length === 0) return []
+
+  const buckets = new Map<string, {
+    counts: Record<string, number>
+    sums: Record<string, number>
+  }>()
+
+  for (const entry of data) {
+    const key = getBucketKey(entry.date, granularity)
+    const bucket = buckets.get(key) ?? { counts: {}, sums: {} }
+
+    for (const metric of METRICS) {
+      const value = entry[metric.key as keyof GarminDailyEntry]
+      if (typeof value === 'number') {
+        bucket.sums[metric.key] = (bucket.sums[metric.key] ?? 0) + value
+        bucket.counts[metric.key] = (bucket.counts[metric.key] ?? 0) + 1
+      }
+    }
+
+    buckets.set(key, bucket)
+  }
+
+  return Array.from(buckets.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, bucket]) => ({
+      dateKey: key,
+      dateLabel: formatBucketLabel(key, granularity),
+      hrv_rmssd: bucket.counts.hrv_rmssd ? bucket.sums.hrv_rmssd / bucket.counts.hrv_rmssd : null,
+      training_readiness: bucket.counts.training_readiness ? bucket.sums.training_readiness / bucket.counts.training_readiness : null,
+      sleep_score: bucket.counts.sleep_score ? bucket.sums.sleep_score / bucket.counts.sleep_score : null,
+      stress_score: bucket.counts.stress_score ? bucket.sums.stress_score / bucket.counts.stress_score : null,
+      body_battery_max: bucket.counts.body_battery_max ? bucket.sums.body_battery_max / bucket.counts.body_battery_max : null,
+      resting_hr: bucket.counts.resting_hr ? bucket.sums.resting_hr / bucket.counts.resting_hr : null,
+    }))
 }
 
 function TrendArrow({ current, previous }: { current: number | null; previous: number | null }) {
@@ -59,7 +93,7 @@ function TrendArrow({ current, previous }: { current: number | null; previous: n
   return <TrendingDown className="h-3.5 w-3.5 text-red-500" />
 }
 
-export default function GarminDailyMonitor({ data, isLoading, isConnected }: GarminDailyMonitorProps) {
+export default function GarminDailyMonitor({ data, isLoading, isConnected, granularity, periodLabel }: GarminDailyMonitorProps) {
   const [activeTab, setActiveTab] = useState<'monitoring' | 'sleep'>('monitoring')
   const [visibleMetrics, setVisibleMetrics] = useState<Set<string>>(new Set(DEFAULT_VISIBLE))
 
@@ -67,6 +101,13 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
     if (!data || data.length === 0) return []
     return [...data].sort((a, b) => a.date.localeCompare(b.date))
   }, [data])
+
+  const aggregatedData = useMemo(
+    () => aggregateGarminDaily(orderedData, granularity),
+    [orderedData, granularity],
+  )
+
+  const granularityLabel = GRANULARITY_LABELS[granularity]
 
   const toggleMetric = (key: string) => {
     setVisibleMetrics(prev => {
@@ -82,19 +123,23 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
 
   // Mini-cartes recapitulatives
   const summaryCards = useMemo(() => {
-    if (orderedData.length === 0) return null
+    if (aggregatedData.length === 0) return null
 
-    const hrvAvg = avg7d(orderedData, 'hrv_rmssd')
-    const hrvPrev = avg7dPrev(orderedData, 'hrv_rmssd')
-    const readinessAvg = avg7d(orderedData, 'training_readiness')
-    const readinessPrev = avg7dPrev(orderedData, 'training_readiness')
-    const sleepAvg = avg7d(orderedData, 'sleep_score')
-    const sleepPrev = avg7dPrev(orderedData, 'sleep_score')
-    const latestRhr = orderedData[orderedData.length - 1]?.resting_hr
-    const rhrAvg = avg7d(orderedData, 'resting_hr')
-    const rhrPrev = avg7dPrev(orderedData, 'resting_hr')
-    const latestVo2 = orderedData[orderedData.length - 1]?.vo2max_estimated
-    const latestWeight = orderedData[orderedData.length - 1]?.weight_kg
+    const current = aggregatedData[aggregatedData.length - 1]
+    const previous = aggregatedData.length > 1 ? aggregatedData[aggregatedData.length - 2] : null
+    const latestDaily = orderedData[orderedData.length - 1]
+
+    const hrvAvg = current?.hrv_rmssd ?? null
+    const hrvPrev = previous?.hrv_rmssd ?? null
+    const readinessAvg = current?.training_readiness ?? null
+    const readinessPrev = previous?.training_readiness ?? null
+    const sleepAvg = current?.sleep_score ?? null
+    const sleepPrev = previous?.sleep_score ?? null
+    const rhrAvg = current?.resting_hr ?? null
+    const rhrPrev = previous?.resting_hr ?? null
+    const latestRhr = latestDaily?.resting_hr
+    const latestVo2 = latestDaily?.vo2max_estimated
+    const latestWeight = latestDaily?.weight_kg
 
     const cards: Array<{
       label: string
@@ -107,7 +152,7 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
       subtitle?: string
     }> = [
       {
-        label: 'HRV moy. 7j',
+        label: `HRV moy. ${granularityLabel}`,
         value: hrvAvg !== null ? hrvAvg.toFixed(0) : '--',
         unit: 'ms',
         icon: Heart,
@@ -116,7 +161,7 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
         trend: { current: hrvAvg, previous: hrvPrev },
       },
       {
-        label: 'Readiness moy. 7j',
+        label: `Readiness moy. ${granularityLabel}`,
         value: readinessAvg !== null ? readinessAvg.toFixed(0) : '--',
         unit: '',
         icon: Brain,
@@ -125,7 +170,7 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
         trend: { current: readinessAvg, previous: readinessPrev },
       },
       {
-        label: 'Sleep Score moy. 7j',
+        label: `Sleep Score moy. ${granularityLabel}`,
         value: sleepAvg !== null ? sleepAvg.toFixed(0) : '--',
         unit: '',
         icon: Moon,
@@ -134,13 +179,13 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
         trend: { current: sleepAvg, previous: sleepPrev },
       },
       {
-        label: 'Resting HR',
-        value: latestRhr !== null && latestRhr !== undefined ? `${latestRhr}` : '--',
+        label: `FC repos moy. ${granularityLabel}`,
+        value: rhrAvg !== null ? rhrAvg.toFixed(0) : '--',
         unit: 'bpm',
         icon: Activity,
         color: 'text-rose-600',
         bgColor: 'bg-rose-100',
-        subtitle: rhrAvg !== null ? `Moy. 7j : ${rhrAvg.toFixed(0)} bpm` : undefined,
+        subtitle: latestRhr !== null && latestRhr !== undefined ? `Dernier : ${latestRhr} bpm` : undefined,
         trend: { current: rhrAvg, previous: rhrPrev },
       },
     ]
@@ -170,7 +215,7 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
     }
 
     return cards
-  }, [orderedData])
+  }, [aggregatedData, orderedData, granularityLabel])
 
   // Badges secondaires (derniere entree)
   const latestBadges = useMemo(() => {
@@ -199,10 +244,9 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
 
   // Donnees formatees pour le graphique
   const chartData = useMemo(() => {
-    if (orderedData.length === 0) return []
-    return orderedData.map(entry => ({
-      date: entry.date,
-      dateFormatted: format(parseISO(entry.date), 'd MMM', { locale: fr }),
+    if (aggregatedData.length === 0) return []
+    return aggregatedData.map(entry => ({
+      dateLabel: entry.dateLabel,
       hrv_rmssd: entry.hrv_rmssd,
       training_readiness: entry.training_readiness,
       sleep_score: entry.sleep_score,
@@ -210,7 +254,7 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
       body_battery_max: entry.body_battery_max,
       resting_hr: entry.resting_hr,
     }))
-  }, [orderedData])
+  }, [aggregatedData])
 
   // --- Etat non connecte ---
   if (!isConnected) {
@@ -281,7 +325,9 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
           </div>
           <div>
             <h3 className="text-base font-semibold text-gray-900">Monitoring Garmin Daily</h3>
-            <p className="text-xs text-gray-400">{orderedData.length} jours de donnees</p>
+            <p className="text-xs text-gray-400">
+              Periode {periodLabel ?? `${orderedData.length}j`} • Temporalite {granularityLabel}
+            </p>
           </div>
         </div>
       </div>
@@ -397,7 +443,7 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
                   ))}
                 </defs>
                 <XAxis
-                  dataKey="dateFormatted"
+                  dataKey="dateLabel"
                   tick={{ fontSize: 11, fill: '#9ca3af' }}
                   tickLine={false}
                   axisLine={false}
@@ -412,20 +458,18 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
                 <Tooltip
                   content={({ active, payload, label }) => {
                     if (!active || !payload || payload.length === 0) return null
-                    const entry = orderedData.find(d =>
-                      format(parseISO(d.date), 'd MMM', { locale: fr }) === label
-                    )
+                    const entry = payload[0]?.payload as Record<string, any>
                     if (!entry) return null
 
                     return (
                       <div className="rounded-lg border border-gray-200/60 bg-white p-3 shadow-lg text-sm">
                         <p className="font-semibold text-gray-900 mb-2">
-                          {format(parseISO(entry.date), 'd MMMM yyyy', { locale: fr })}
+                          {label}
                         </p>
                         <div className="space-y-1">
                           {METRICS.filter(m => visibleMetrics.has(m.key)).map(metric => {
-                            const val = entry[metric.key as keyof GarminDailyEntry]
-                            if (val === null) return null
+                            const val = entry[metric.key]
+                            if (val === null || val === undefined) return null
                             const unit = metric.key === 'hrv_rmssd' ? ' ms'
                               : metric.key === 'resting_hr' ? ' bpm'
                               : ''
@@ -462,7 +506,7 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
           </div>
         </>
       ) : (
-        <GarminSleepTab />
+        <GarminSleepTab data={orderedData} granularity={granularity} periodLabel={periodLabel} />
       )}
     </div>
   )
