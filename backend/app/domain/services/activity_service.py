@@ -361,7 +361,15 @@ class ActivityService:
         if not activity.streams_data:
             return {"activity_id": activity_id, "streams": {}, "message": "Aucun stream disponible pour cette activite"}
 
-        streams_clean = {k: v for k, v in activity.streams_data.items() if k != "segment_efforts"}
+        streams_clean = {}
+        for k, v in activity.streams_data.items():
+            if k == "segment_efforts":
+                continue
+            # Dérouler le format Strava {data: [...], series_type, resolution} en tableau brut
+            if isinstance(v, dict) and "data" in v:
+                streams_clean[k] = v["data"]
+            else:
+                streams_clean[k] = v
         return {"activity_id": activity_id, "streams": streams_clean, "laps_data": activity.laps_data}
 
     def check_strava_connected(self, session: Session, user_id: str) -> None:
