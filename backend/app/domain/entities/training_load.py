@@ -23,6 +23,12 @@ class TrainingLoad(SQLModel, table=True):
     atl_7d: Optional[float] = None
     tsb: Optional[float] = None
 
+    # Métriques Edwards
+    edwards_trimp_daily: Optional[float] = None
+    ctl_42d_edwards: Optional[float] = None
+    atl_7d_edwards: Optional[float] = None
+    tsb_edwards: Optional[float] = None
+
     # Delta RHR (si Garmin disponible)
     rhr_delta_7d: Optional[float] = None
 
@@ -39,6 +45,10 @@ class TrainingLoadRead(SQLModel):
     ctl_42d: Optional[float]
     atl_7d: Optional[float]
     tsb: Optional[float]
+    edwards_trimp_daily: Optional[float]
+    ctl_42d_edwards: Optional[float]
+    atl_7d_edwards: Optional[float]
+    tsb_edwards: Optional[float]
     rhr_delta_7d: Optional[float]
     created_at: datetime
     updated_at: datetime

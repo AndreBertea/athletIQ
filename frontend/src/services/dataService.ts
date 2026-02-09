@@ -32,6 +32,10 @@ export interface TrainingLoadEntry {
   atl_7d: number | null
   tsb: number | null
   rhr_delta_7d: number | null
+  edwards_trimp_daily: number | null
+  ctl_42d_edwards: number | null
+  atl_7d_edwards: number | null
+  tsb_edwards: number | null
   created_at: string
   updated_at: string
 }

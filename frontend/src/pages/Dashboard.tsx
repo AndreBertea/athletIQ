@@ -357,7 +357,7 @@ export default function Dashboard() {
       <div className="card">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-medium text-gray-900">Charge Chronique d'Entraînement</h3>
-          <div className="text-sm text-gray-500">Modèle de Banister (TRIMP)</div>
+          <div className="text-sm text-gray-500">Banister & Edwards (TRIMP)</div>
         </div>
         <ChronicLoadChart data={chronicLoadData || []} isLoading={chronicLoadLoading} rhrDelta7d={lastRhrDelta7d} />
       </div>

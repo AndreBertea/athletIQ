@@ -6,6 +6,9 @@ interface ChronicLoadData {
   chronicLoad: number
   acuteLoad: number
   trainingStressBalance: number
+  chronicLoadEdwards: number
+  acuteLoadEdwards: number
+  tsbEdwards: number
 }
 
 interface ChronicLoadResult {
@@ -39,6 +42,9 @@ class ChronicLoadService {
         chronicLoad: entry.ctl_42d ?? 0,
         acuteLoad: entry.atl_7d ?? 0,
         trainingStressBalance: entry.tsb ?? 0,
+        chronicLoadEdwards: entry.ctl_42d_edwards ?? 0,
+        acuteLoadEdwards: entry.atl_7d_edwards ?? 0,
+        tsbEdwards: entry.tsb_edwards ?? 0,
       }))
 
       const lastEntry = entries[entries.length - 1]

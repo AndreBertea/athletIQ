@@ -2,7 +2,9 @@
 Service de features derivees avancees (Tache 4.2.1).
 Axe A — Per-segment : minetti_cost, grade_variability, efficiency_factor, cardiac_drift, cadence_decay.
 Axe B — Per-day : TRIMP, CTL (EWMA 42j), ATL (EWMA 7j), TSB = CTL - ATL, rhr_delta_7d.
+         Edwards TRIMP : temps dans chaque zone HR x coefficient (1-5).
 """
+import json
 import logging
 import statistics
 from datetime import date as date_type, timedelta
@@ -249,6 +251,142 @@ def compute_all_segment_features(
 # Axe B — Features per-day (TRIMP, CTL, ATL, TSB)
 # ===================================================================
 
+# Coefficients Edwards par zone HR (%HRmax)
+EDWARDS_ZONES = [
+    (0.50, 0.60, 1),  # Zone 1 : 50-59%
+    (0.60, 0.70, 2),  # Zone 2 : 60-69%
+    (0.70, 0.80, 3),  # Zone 3 : 70-79%
+    (0.80, 0.90, 4),  # Zone 4 : 80-89%
+    (0.90, 1.01, 5),  # Zone 5 : 90-100% (1.01 pour inclure 100%)
+]
+
+
+def _get_user_max_hr(session: Session, user_id: UUID) -> Optional[float]:
+    """Retourne la FCmax physiologique estimee = MAX(max_heartrate) sur tout l'historique."""
+    result = session.exec(
+        select(func.max(Activity.max_heartrate)).where(
+            Activity.user_id == user_id,
+            Activity.max_heartrate.is_not(None),
+        )
+    ).one()
+    return float(result) if result else None
+
+
+def _parse_streams_for_trimp(activity: Activity) -> Optional[Dict[str, Any]]:
+    """Extrait streams_data en gerant le bug connu 'null' string."""
+    raw = activity.streams_data
+    if raw is None:
+        return None
+    if isinstance(raw, str):
+        if raw.strip().lower() == "null":
+            return None
+        try:
+            raw = json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            return None
+    if not isinstance(raw, dict):
+        return None
+    return raw
+
+
+def _get_stream_data(streams: Dict[str, Any], key: str) -> Optional[List]:
+    """Recupere streams[key]['data'] si present."""
+    entry = streams.get(key)
+    if entry is None:
+        return None
+    if isinstance(entry, dict):
+        return entry.get("data")
+    if isinstance(entry, list):
+        return entry
+    return None
+
+
+def _get_edwards_zone_coeff(hr_pct: float) -> int:
+    """Retourne le coefficient Edwards pour un %HRmax donne. 0 si sous 50%."""
+    for low, high, coeff in EDWARDS_ZONES:
+        if low <= hr_pct < high:
+            return coeff
+    return 0
+
+
+def compute_edwards_trimp(activity: Activity, user_max_hr: Optional[float] = None) -> Optional[float]:
+    """Calcule le TRIMP Edwards base sur le temps passe dans chaque zone HR.
+
+    Zones basees sur %HRmax (FCmax globale de l'utilisateur) :
+    - Zone 1 (50-59%): coeff 1
+    - Zone 2 (60-69%): coeff 2
+    - Zone 3 (70-79%): coeff 3
+    - Zone 4 (80-89%): coeff 4
+    - Zone 5 (90-100%): coeff 5
+
+    Utilise user_max_hr (FCmax physiologique estimee) pour des zones coherentes.
+    Retourne None si pas de donnees HR stream ou pas de FCmax.
+    """
+    if not user_max_hr or user_max_hr <= 0:
+        return None
+    max_hr = user_max_hr
+
+    streams = _parse_streams_for_trimp(activity)
+    if streams is None:
+        return None
+
+    hr_data = _get_stream_data(streams, "heartrate")
+    time_data = _get_stream_data(streams, "time")
+
+    if not hr_data or not time_data or len(hr_data) < 2 or len(time_data) < 2:
+        return None
+
+    n = min(len(hr_data), len(time_data))
+    total_trimp = 0.0
+
+    for i in range(1, n):
+        hr = hr_data[i]
+        if hr is None or hr <= 0:
+            continue
+
+        hr_pct = hr / max_hr
+        coeff = _get_edwards_zone_coeff(hr_pct)
+        if coeff == 0:
+            continue
+
+        delta_s = time_data[i] - time_data[i - 1]
+        if delta_s <= 0:
+            continue
+
+        total_trimp += (delta_s / 60.0) * coeff
+
+    return total_trimp if total_trimp > 0 else None
+
+
+def _get_daily_edwards_trimp(
+    session: Session, user_id: UUID, target_date: date_type, user_max_hr: Optional[float] = None
+) -> float:
+    """Somme les TRIMP Edwards de toutes les activites d'un jour donne.
+
+    user_max_hr : FCmax physiologique de l'utilisateur (coherente entre les jours).
+    """
+    if not user_max_hr:
+        return 0.0
+
+    start_dt = _date_to_datetime_range(target_date)
+    end_dt = _date_to_datetime_range(target_date + timedelta(days=1))
+
+    activities = session.exec(
+        select(Activity).where(
+            Activity.user_id == user_id,
+            Activity.start_date >= start_dt,
+            Activity.start_date < end_dt,
+        )
+    ).all()
+
+    total = 0.0
+    for act in activities:
+        trimp = compute_edwards_trimp(act, user_max_hr)
+        if trimp is not None:
+            total += trimp
+    return total
+
+
 def compute_trimp(avg_hr: Optional[float], duration_min: float, max_hr: Optional[float] = None) -> Optional[float]:
     """Calcule le TRIMP (Training Impulse) simplifie.
 
@@ -344,16 +482,27 @@ def compute_training_load(
 
     ctl = prev_load.ctl_42d if prev_load and prev_load.ctl_42d is not None else 0.0
     atl = prev_load.atl_7d if prev_load and prev_load.atl_7d is not None else 0.0
+    ctl_edwards = prev_load.ctl_42d_edwards if prev_load and prev_load.ctl_42d_edwards is not None else 0.0
+    atl_edwards = prev_load.atl_7d_edwards if prev_load and prev_load.atl_7d_edwards is not None else 0.0
+
+    # FCmax globale de l'utilisateur (estimee = MAX observee sur tout l'historique)
+    user_max_hr = _get_user_max_hr(session, user_id)
 
     days_computed = 0
     current = date_from
     while current <= date_to:
         trimp = _get_daily_trimp(session, user_id, current)
+        trimp_edwards = _get_daily_edwards_trimp(session, user_id, current, user_max_hr)
 
-        # EWMA
+        # EWMA Banister
         ctl = ctl * (1 - 1 / CTL_DAYS) + trimp * (1 / CTL_DAYS)
         atl = atl * (1 - 1 / ATL_DAYS) + trimp * (1 / ATL_DAYS)
         tsb = ctl - atl
+
+        # EWMA Edwards
+        ctl_edwards = ctl_edwards * (1 - 1 / CTL_DAYS) + trimp_edwards * (1 / CTL_DAYS)
+        atl_edwards = atl_edwards * (1 - 1 / ATL_DAYS) + trimp_edwards * (1 / ATL_DAYS)
+        tsb_edwards = ctl_edwards - atl_edwards
 
         rhr_delta = _get_rhr_delta_7d(session, user_id, current)
 
@@ -369,6 +518,10 @@ def compute_training_load(
             existing.ctl_42d = round(ctl, 2)
             existing.atl_7d = round(atl, 2)
             existing.tsb = round(tsb, 2)
+            existing.edwards_trimp_daily = round(trimp_edwards, 2) if trimp_edwards > 0 else None
+            existing.ctl_42d_edwards = round(ctl_edwards, 2)
+            existing.atl_7d_edwards = round(atl_edwards, 2)
+            existing.tsb_edwards = round(tsb_edwards, 2)
             existing.rhr_delta_7d = rhr_delta
             session.add(existing)
         else:
@@ -378,6 +531,10 @@ def compute_training_load(
                 ctl_42d=round(ctl, 2),
                 atl_7d=round(atl, 2),
                 tsb=round(tsb, 2),
+                edwards_trimp_daily=round(trimp_edwards, 2) if trimp_edwards > 0 else None,
+                ctl_42d_edwards=round(ctl_edwards, 2),
+                atl_7d_edwards=round(atl_edwards, 2),
+                tsb_edwards=round(tsb_edwards, 2),
                 rhr_delta_7d=rhr_delta,
             )
             session.add(tl)
