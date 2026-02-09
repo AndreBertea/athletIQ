@@ -44,6 +44,7 @@ def _activity_to_enriched_dict(a: Activity) -> dict:
         "location_city": a.location_city,
         "location_country": a.location_country,
         "summary_polyline": a.summary_polyline,
+        "polyline": a.polyline,
         "start_latlng": a.start_latlng,
         "end_latlng": a.end_latlng,
     }

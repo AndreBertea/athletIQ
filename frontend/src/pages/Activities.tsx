@@ -988,7 +988,7 @@ export default function Activities() {
                       <ActivityMap
                         streamsLatlng={streamsData?.streams?.latlng}
                         streamsAltitude={streamsData?.streams?.altitude}
-                        polylineEncoded={activity.summary_polyline || enrichedData?.summary_polyline}
+                        polylineEncoded={activity.polyline || enrichedData?.polyline || activity.summary_polyline || enrichedData?.summary_polyline}
                         startLatlng={activity.start_latlng || enrichedData?.start_latlng}
                         endLatlng={activity.end_latlng || enrichedData?.end_latlng}
                       />
