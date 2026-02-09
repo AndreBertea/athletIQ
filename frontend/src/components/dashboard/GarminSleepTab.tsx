@@ -39,6 +39,18 @@ function formatSeconds(s: number | null): string {
   return h > 0 ? `${h}h ${m.toString().padStart(2, '0')}min` : `${m}min`
 }
 
+function hasSleepData(entry: GarminDailyEntry): boolean {
+  if (entry.sleep_score !== null) return true
+  if (entry.sleep_duration_min !== null) return true
+  if (entry.sleep_start_time !== null || entry.sleep_end_time !== null) return true
+  const totalSeconds =
+    (entry.deep_sleep_seconds || 0) +
+    (entry.light_sleep_seconds || 0) +
+    (entry.rem_sleep_seconds || 0) +
+    (entry.awake_sleep_seconds || 0)
+  return totalSeconds > 0
+}
+
 interface PhaseInfo {
   key: string
   label: string
@@ -302,13 +314,21 @@ export default function GarminSleepTab() {
   const filteredData = data
 
   // En mode 1j : entree selectionnee
+  const defaultDateIdx = useMemo(() => {
+    if (!isSingleDay || data.length === 0) return -1
+    for (let i = data.length - 1; i >= 0; i -= 1) {
+      if (hasSleepData(data[i])) return i
+    }
+    return data.length - 1
+  }, [isSingleDay, data])
+
   const currentDateIdx = useMemo(() => {
-    if (!isSingleDay || availableDates.length === 0) return -1
-    if (selectedDateIdx === -1 || selectedDateIdx >= availableDates.length) {
-      return availableDates.length - 1
+    if (!isSingleDay || data.length === 0) return -1
+    if (selectedDateIdx === -1 || selectedDateIdx >= data.length) {
+      return defaultDateIdx
     }
     return selectedDateIdx
-  }, [isSingleDay, selectedDateIdx, availableDates])
+  }, [isSingleDay, selectedDateIdx, data.length, defaultDateIdx])
 
   const selectedEntry = useMemo(() => {
     if (isSingleDay && currentDateIdx >= 0 && currentDateIdx < data.length) {
@@ -318,7 +338,11 @@ export default function GarminSleepTab() {
   }, [isSingleDay, currentDateIdx, data])
 
   // Derniere entree pour le mode multi-jours
-  const latest = filteredData.length > 0 ? filteredData[filteredData.length - 1] : null
+  const latest = useMemo(() => {
+    if (filteredData.length === 0) return null
+    const latestWithSleep = [...filteredData].reverse().find(hasSleepData)
+    return latestWithSleep ?? filteredData[filteredData.length - 1]
+  }, [filteredData])
 
   // Donnees pour le graphique de tendances
   const trendData = useMemo(() => {
