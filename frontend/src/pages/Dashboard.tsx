@@ -40,7 +40,8 @@ const periodOptions = [
   { days: 7, label: '7 derniers jours' },
   { days: 30, label: '30 derniers jours' },
   { days: 90, label: '3 mois' },
-  { days: 365, label: 'Cette année' },
+  { days: 180, label: '6 mois' },
+  { days: 365, label: '1 an' },
 ]
 
 const sportTypeMapping: Record<string, string[]> = {
