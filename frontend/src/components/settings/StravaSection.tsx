@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link2, CheckCircle, AlertCircle, RefreshCw, Download, Database } from 'lucide-react'
 import { Link } from 'react-router-dom'
@@ -11,6 +11,9 @@ export default function StravaSection() {
   const [syncStatus, setSyncStatus] = useState('')
   const [selectedDays, setSelectedDays] = useState(30)
   const [isEnriching, setIsEnriching] = useState(false)
+  const stopEnrichRef = useRef(false)
+  const retryCountRef = useRef(0)
+  const MAX_RETRIES = 5
   const queryClient = useQueryClient()
   const toast = useToast()
 
@@ -65,6 +68,12 @@ export default function StravaSection() {
 
       queryClient.invalidateQueries({ queryKey: ['activities'] })
       queryClient.invalidateQueries({ queryKey: ['activity-stats'] })
+      // Auto-enrichissement apres sync
+      refetchEnrichment().then((result) => {
+        if (result.data && result.data.pending_activities > 0 && result.data.can_enrich_more) {
+          startAutoEnrichment()
+        }
+      })
     },
     onError: (error: ApiError) => {
       const msg = error.response?.data?.detail || 'Echec de la synchronisation'
@@ -107,14 +116,46 @@ export default function StravaSection() {
       })
   }
 
-  const handleStartEnrichment = async () => {
-    if (!enrichmentStatus) return
+  const startAutoEnrichment = async () => {
+    stopEnrichRef.current = false
+    retryCountRef.current = 0
     setIsEnriching(true)
-    try {
-      const maxActivities = Math.min(enrichmentStatus.pending_activities, 10)
-      await enrichBatchMutation.mutateAsync(maxActivities)
-    } finally {
+    await runEnrichmentLoop()
+  }
+
+  const stopAutoEnrichment = () => {
+    stopEnrichRef.current = true
+    setIsEnriching(false)
+  }
+
+  const runEnrichmentLoop = async () => {
+    if (stopEnrichRef.current) {
       setIsEnriching(false)
+      return
+    }
+    try {
+      const batch = Math.min(enrichmentStatus?.pending_activities ?? 10, 10)
+      await enrichBatchMutation.mutateAsync(batch)
+      retryCountRef.current = 0
+      const updated = await refetchEnrichment()
+      if (stopEnrichRef.current) {
+        setIsEnriching(false)
+        return
+      }
+      if (updated.data && updated.data.pending_activities > 0 && updated.data.can_enrich_more) {
+        setTimeout(() => runEnrichmentLoop(), 1000)
+      } else {
+        setIsEnriching(false)
+      }
+    } catch {
+      retryCountRef.current += 1
+      if (retryCountRef.current >= MAX_RETRIES) {
+        setIsEnriching(false)
+        toast.error(`Enrichissement arrete apres ${MAX_RETRIES} erreurs consecutives`)
+        return
+      }
+      toast.error('Erreur enrichissement Strava, nouvelle tentative...')
+      setTimeout(() => runEnrichmentLoop(), 5000)
     }
   }
 
@@ -417,23 +458,26 @@ export default function StravaSection() {
                 <div className="flex items-center justify-between text-sm border-t pt-4">
                   <div className="flex items-center space-x-2">
                     {enrichmentStatus.pending_activities > 0 ? (
-                      <button
-                        onClick={handleStartEnrichment}
-                        disabled={isEnriching || enrichBatchMutation.isPending}
-                        className="px-3 py-1.5 bg-green-100 hover:bg-green-200 text-green-800 rounded text-sm font-medium disabled:opacity-50"
-                      >
-                        {isEnriching || enrichBatchMutation.isPending ? (
+                      isEnriching ? (
+                        <button
+                          onClick={stopAutoEnrichment}
+                          className="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-800 rounded text-sm font-medium"
+                        >
                           <div className="flex items-center">
-                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-green-600 mr-1"></div>
-                            Enrichissement en cours...
+                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-red-600 mr-1"></div>
+                            Arreter l'enrichissement
                           </div>
-                        ) : (
-                          <>
-                            <Database className="h-3 w-3 mr-1" />
-                            Enrichir {Math.min(enrichmentStatus.pending_activities, 10)} activite(s)
-                          </>
-                        )}
-                      </button>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={startAutoEnrichment}
+                          disabled={enrichBatchMutation.isPending}
+                          className="px-3 py-1.5 bg-green-100 hover:bg-green-200 text-green-800 rounded text-sm font-medium disabled:opacity-50"
+                        >
+                          <Database className="h-3 w-3 mr-1" />
+                          Enrichir {Math.min(enrichmentStatus.pending_activities, 10)} activite(s)
+                        </button>
+                      )
                     ) : (
                       <div className="flex items-center text-green-600">
                         <CheckCircle className="h-4 w-4 mr-1" />

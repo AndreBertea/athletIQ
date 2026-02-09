@@ -909,10 +909,46 @@ async def enrich_garmin_activity_fit(
     return result
 
 
+def get_garmin_enrichment_status(session: Session, user_id: UUID) -> Dict[str, Any]:
+    """
+    Retourne le statut d'enrichissement FIT pour les activites Garmin d'un utilisateur.
+
+    Returns:
+        dict avec total_garmin_activities, enriched_activities, pending_activities, enrichment_percentage
+    """
+    total = session.exec(
+        select(func.count()).select_from(Activity).where(
+            Activity.user_id == user_id,
+            Activity.garmin_activity_id.is_not(None),
+        )
+    ).one()
+
+    enriched = session.exec(
+        select(func.count()).select_from(FitMetrics).where(
+            FitMetrics.activity_id.in_(
+                select(Activity.id).where(
+                    Activity.user_id == user_id,
+                    Activity.garmin_activity_id.is_not(None),
+                )
+            )
+        )
+    ).one()
+
+    pending = max(0, total - enriched)
+    percentage = round((enriched / total) * 100) if total > 0 else 0
+
+    return {
+        "total_garmin_activities": total,
+        "enriched_activities": enriched,
+        "pending_activities": pending,
+        "enrichment_percentage": percentage,
+    }
+
+
 async def batch_enrich_garmin_fit(
     session: Session,
     user_id: UUID,
-    max_activities: int = 10,
+    max_activities: int = 50,
 ) -> Dict[str, Any]:
     """
     Enrichit en batch les activites Garmin sans metriques FIT.

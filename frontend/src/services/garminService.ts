@@ -92,6 +92,13 @@ export interface BatchEnrichResult {
   total: number
 }
 
+export interface GarminEnrichmentStatus {
+  total_garmin_activities: number
+  enriched_activities: number
+  pending_activities: number
+  enrichment_percentage: number
+}
+
 export interface GarminDailyEntry {
   date: string
   hrv_rmssd: number | null
@@ -156,6 +163,11 @@ export const garminService = {
 
   async getActivityFitMetrics(activityId: string): Promise<FitMetrics> {
     const res = await api.get(`/garmin/activities/${activityId}/fit-metrics`)
+    return res.data
+  },
+
+  async getGarminEnrichmentStatus(): Promise<GarminEnrichmentStatus> {
+    const res = await api.get('/garmin/enrichment-status')
     return res.data
   },
 }

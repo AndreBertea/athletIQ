@@ -21,6 +21,7 @@ from app.domain.services.garmin_sync_service import (
     sync_garmin_activities,
     enrich_garmin_activity_fit,
     batch_enrich_garmin_fit,
+    get_garmin_enrichment_status,
 )
 from app.api.routers._shared import security, limiter, resolve_activity
 
@@ -152,6 +153,16 @@ async def sync_garmin_act(
         )
 
 
+@router.get("/garmin/enrichment-status")
+async def garmin_enrichment_status(
+    token: str = Depends(security),
+    session: Session = Depends(get_session),
+):
+    """Retourne le statut d'enrichissement FIT des activites Garmin."""
+    user_id = get_current_user_id(token.credentials)
+    return get_garmin_enrichment_status(session, UUID(user_id))
+
+
 @router.post("/garmin/activities/{activity_id}/enrich-fit")
 async def enrich_garmin_fit(
     activity_id: UUID,
@@ -177,7 +188,7 @@ async def enrich_garmin_fit(
 async def batch_enrich_fit(
     token: str = Depends(security),
     session: Session = Depends(get_session),
-    max_activities: int = Query(default=10, ge=1, le=50),
+    max_activities: int = Query(default=50, ge=1, le=200),
 ):
     """Enrichit en batch les activites Garmin sans streams_data."""
     user_id = get_current_user_id(token.credentials)

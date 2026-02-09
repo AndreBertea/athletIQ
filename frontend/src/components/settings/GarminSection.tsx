@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   CheckCircle,
@@ -12,6 +12,7 @@ import {
   Shield,
   Download,
   Zap,
+  Database,
 } from 'lucide-react'
 import { useToast } from '../../contexts/ToastContext'
 import { garminService } from '../../services/garminService'
@@ -24,6 +25,10 @@ export default function GarminSection() {
   const [daysBack, setDaysBack] = useState(30)
   const queryClient = useQueryClient()
   const toast = useToast()
+  const [isEnriching, setIsEnriching] = useState(false)
+  const stopEnrichRef = useRef(false)
+  const retryCountRef = useRef(0)
+  const MAX_RETRIES = 5
 
   // Vider le mot de passe au unmount pour éviter qu'il reste en mémoire
   useEffect(() => {
@@ -53,6 +58,18 @@ export default function GarminSection() {
     },
     enabled: isConnected,
     staleTime: 60_000,
+  })
+
+  const {
+    data: enrichmentStatus,
+    refetch: refetchEnrichment,
+    isLoading: enrichmentLoading,
+  } = useQuery({
+    queryKey: ['garmin-enrichment-status'],
+    queryFn: garminService.getGarminEnrichmentStatus,
+    enabled: isConnected,
+    staleTime: 30_000,
+    refetchInterval: isEnriching ? 5_000 : 30_000,
   })
 
   // --- Mutations ---
@@ -89,21 +106,17 @@ export default function GarminSection() {
       toast.success(
         `Activites : ${data.created} creees, ${data.linked} liees, ${data.skipped} deja syncees`,
       )
+      // Auto-enrichissement apres sync
+      refetchEnrichment().then((result) => {
+        if (result.data && result.data.pending_activities > 0) {
+          startAutoEnrichment()
+        }
+      })
     },
     onError: (error: ApiError) => {
       toast.error(
         error.response?.data?.detail || 'Echec de la synchronisation des activites',
       )
-    },
-  })
-
-  const batchEnrichMutation = useMutation({
-    mutationFn: () => garminService.batchEnrichGarminFit(10),
-    onSuccess: (data) => {
-      toast.success(`FIT : ${data.enriched}/${data.total} activites enrichies`)
-    },
-    onError: (error: ApiError) => {
-      toast.error(error.response?.data?.detail || "Echec de l'enrichissement FIT")
     },
   })
 
@@ -118,6 +131,50 @@ export default function GarminSection() {
       toast.error(error.response?.data?.detail || 'Echec de la deconnexion')
     },
   })
+
+  const startAutoEnrichment = async () => {
+    stopEnrichRef.current = false
+    retryCountRef.current = 0
+    setIsEnriching(true)
+    await runEnrichmentLoop()
+  }
+
+  const stopAutoEnrichment = () => {
+    stopEnrichRef.current = true
+    setIsEnriching(false)
+  }
+
+  const runEnrichmentLoop = async () => {
+    if (stopEnrichRef.current) {
+      setIsEnriching(false)
+      return
+    }
+    try {
+      await garminService.batchEnrichGarminFit(50)
+      retryCountRef.current = 0
+      queryClient.invalidateQueries({ queryKey: ['garmin-enrichment-status'] })
+      const updated = await refetchEnrichment()
+      if (stopEnrichRef.current) {
+        setIsEnriching(false)
+        return
+      }
+      if (updated.data && updated.data.pending_activities > 0) {
+        setTimeout(() => runEnrichmentLoop(), 1000)
+      } else {
+        setIsEnriching(false)
+        toast.success('Enrichissement FIT termine !')
+      }
+    } catch {
+      retryCountRef.current += 1
+      if (retryCountRef.current >= MAX_RETRIES) {
+        setIsEnriching(false)
+        toast.error(`Enrichissement FIT arrete apres ${MAX_RETRIES} erreurs consecutives`)
+        return
+      }
+      toast.error('Erreur enrichissement FIT, nouvelle tentative...')
+      setTimeout(() => runEnrichmentLoop(), 3000)
+    }
+  }
 
   // --- Handlers ---
 
@@ -282,16 +339,17 @@ export default function GarminSection() {
             </div>
           </div>
 
-          {/* Activites Garmin */}
+          {/* Activites Garmin — Enrichissement FIT */}
           <div className="card">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">
-              Activites Garmin
-            </h3>
-            <p className="text-sm text-gray-500 mb-4">
-              Synchronisez vos activites Garmin et enrichissez-les avec les fichiers FIT
-              (Running Dynamics, puissance, Training Effect).
-            </p>
-            <div className="space-y-3">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-medium text-gray-900 flex items-center">
+                <Database className="h-5 w-5 mr-2" />
+                Activites Garmin
+              </h3>
+            </div>
+
+            <div className="space-y-4">
+              {/* Sync button */}
               <button
                 onClick={() => syncActivitiesMutation.mutate()}
                 disabled={syncActivitiesMutation.isPending}
@@ -309,23 +367,107 @@ export default function GarminSection() {
                   </>
                 )}
               </button>
-              <button
-                onClick={() => batchEnrichMutation.mutate()}
-                disabled={batchEnrichMutation.isPending}
-                className="w-full px-4 py-2 text-sm bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors disabled:opacity-50 flex items-center justify-center"
-              >
-                {batchEnrichMutation.isPending ? (
-                  <div className="flex items-center justify-center">
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    Enrichissement FIT en cours...
+
+              {enrichmentLoading ? (
+                <div className="flex items-center justify-center py-8 bg-purple-50 rounded">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-500 mr-3"></div>
+                  <span className="text-purple-700">Chargement du statut d'enrichissement...</span>
+                </div>
+              ) : enrichmentStatus ? (
+                <>
+                  {/* Stats grid */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="text-center p-3 bg-blue-50 rounded">
+                      <div className="text-xl font-bold text-blue-600">
+                        {enrichmentStatus.total_garmin_activities}
+                      </div>
+                      <div className="text-xs text-blue-700">Activites Garmin</div>
+                    </div>
+                    <div className="text-center p-3 bg-green-50 rounded">
+                      <div className="text-xl font-bold text-green-600">
+                        {enrichmentStatus.enriched_activities}
+                      </div>
+                      <div className="text-xs text-green-700">Enrichies FIT</div>
+                    </div>
+                    <div className="text-center p-3 bg-orange-50 rounded">
+                      <div className="text-xl font-bold text-orange-600">
+                        {enrichmentStatus.pending_activities}
+                      </div>
+                      <div className="text-xs text-orange-700">En attente</div>
+                    </div>
+                    <div className="text-center p-3 bg-purple-50 rounded">
+                      <div className="text-xl font-bold text-purple-600">
+                        {enrichmentStatus.enrichment_percentage}%
+                      </div>
+                      <div className="text-xs text-purple-700">Progression</div>
+                    </div>
                   </div>
-                ) : (
-                  <>
-                    <Zap className="h-4 w-4 mr-2" />
-                    Enrichir les fichiers FIT (max 10)
-                  </>
-                )}
-              </button>
+
+                  {/* Progress bar */}
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm text-gray-600">
+                      <span>Progression de l'enrichissement FIT</span>
+                      <span>{enrichmentStatus.enrichment_percentage}% complete</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-3">
+                      <div
+                        className="bg-gradient-to-r from-purple-500 to-blue-500 h-3 rounded-full transition-all duration-500 ease-out"
+                        style={{ width: `${enrichmentStatus.enrichment_percentage}%` }}
+                      ></div>
+                    </div>
+                  </div>
+
+                  {/* Info box */}
+                  <div className="bg-purple-50 border border-purple-200 rounded p-4">
+                    <div className="flex items-start">
+                      <div className="w-2 h-2 bg-purple-500 rounded-full mt-2 mr-3 flex-shrink-0"></div>
+                      <div className="text-sm text-purple-800">
+                        <strong>Donnees FIT :</strong> Running Dynamics, puissance, Training Effect, oscillation verticale depuis les fichiers FIT Garmin.
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Enrich action */}
+                  <div className="flex items-center justify-between text-sm border-t pt-4">
+                    <div className="flex items-center space-x-2">
+                      {enrichmentStatus.pending_activities > 0 ? (
+                        isEnriching ? (
+                          <button
+                            onClick={stopAutoEnrichment}
+                            className="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-800 rounded text-sm font-medium"
+                          >
+                            <div className="flex items-center">
+                              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-red-600 mr-1"></div>
+                              Arreter l'enrichissement
+                            </div>
+                          </button>
+                        ) : (
+                          <button
+                            onClick={startAutoEnrichment}
+                            className="px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-800 rounded text-sm font-medium"
+                          >
+                            <Zap className="h-3 w-3 mr-1" />
+                            Enrichir {enrichmentStatus.pending_activities} activite(s)
+                          </button>
+                        )
+                      ) : (
+                        <div className="flex items-center text-green-600">
+                          <CheckCircle className="h-4 w-4 mr-1" />
+                          <span className="text-sm font-medium">Toutes les activites enrichies</span>
+                        </div>
+                      )}
+
+                      <button
+                        onClick={() => refetchEnrichment()}
+                        className="px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded text-gray-700 text-xs"
+                      >
+                        <RefreshCw className="h-3 w-3 mr-1" />
+                        Actualiser
+                      </button>
+                    </div>
+                  </div>
+                </>
+              ) : null}
             </div>
           </div>
 
