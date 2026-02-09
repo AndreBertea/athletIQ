@@ -172,14 +172,25 @@ function MiniBar({ label, value, maxValue, colorClass, unit, count }: MiniBarPro
   )
 }
 
-// --- Calculs des 4 cartes (logique inchangée) ---
+// --- Calculs des cartes ---
+
+/** Score de récupération composite : training_readiness > body_battery > sleep_score */
+function getRecoveryScore(garmin: GarminDailyEntry): number | null {
+  if (garmin.training_readiness !== null) return garmin.training_readiness
+  if (garmin.body_battery_max !== null) return garmin.body_battery_max
+  if (garmin.sleep_score !== null) return garmin.sleep_score
+  return null
+}
+
+type PerfMetric = 'pace' | 'hr'
 
 interface RecoveryPerformanceResult {
   hasData: boolean
-  highReadinessCount: number
-  lowReadinessCount: number
-  highReadinessAvgPace: number | null
-  lowReadinessAvgPace: number | null
+  metric: PerfMetric
+  highCount: number
+  lowCount: number
+  highAvgValue: number | null
+  lowAvgValue: number | null
   deltaPct: number | null
 }
 
@@ -187,44 +198,66 @@ function computeRecoveryPerformance(
   activities: EnrichedActivity[],
   garminMap: Map<string, GarminDailyEntry>,
 ): RecoveryPerformanceResult {
-  const paired: { readiness: number; pace: number }[] = []
+  const empty: RecoveryPerformanceResult = {
+    hasData: false, metric: 'pace', highCount: 0, lowCount: 0,
+    highAvgValue: null, lowAvgValue: null, deltaPct: null,
+  }
+
+  // Essayer d'abord avec le pace (meilleur indicateur)
+  const pacePaired: { recovery: number; value: number }[] = []
+  const hrPaired: { recovery: number; value: number }[] = []
 
   for (const act of activities) {
-    if (!act.avg_speed_m_s || act.avg_speed_m_s <= 0) continue
-    const pace = speedToPace(act.avg_speed_m_s)
-    if (!pace) continue
-
     const actDate = dateKey(parseISO(act.start_date_utc))
     const garmin = garminMap.get(actDate)
-    if (!garmin || garmin.training_readiness === null) continue
+    if (!garmin) continue
+    const recovery = getRecoveryScore(garmin)
+    if (recovery === null) continue
 
-    paired.push({ readiness: garmin.training_readiness, pace })
+    const pace = speedToPace(act.avg_speed_m_s)
+    if (pace) {
+      pacePaired.push({ recovery, value: pace })
+    }
+    if (act.avg_heartrate_bpm && act.avg_heartrate_bpm > 0) {
+      hrPaired.push({ recovery, value: act.avg_heartrate_bpm })
+    }
   }
 
-  if (paired.length < 5) {
-    return { hasData: false, highReadinessCount: 0, lowReadinessCount: 0, highReadinessAvgPace: null, lowReadinessAvgPace: null, deltaPct: null }
-  }
+  // Utiliser pace si ≥ 3 paires, sinon FC si ≥ 3 paires
+  const paired = pacePaired.length >= 3 ? pacePaired : hrPaired.length >= 3 ? hrPaired : null
+  const metric: PerfMetric = pacePaired.length >= 3 ? 'pace' : 'hr'
 
-  const high = paired.filter(p => p.readiness >= 60)
-  const low = paired.filter(p => p.readiness < 60)
+  if (!paired || paired.length < 3) return empty
 
-  const avgPace = (items: typeof paired) =>
-    items.length > 0 ? items.reduce((s, i) => s + i.pace, 0) / items.length : null
+  const high = paired.filter(p => p.recovery >= 60)
+  const low = paired.filter(p => p.recovery < 60)
 
-  const highAvg = avgPace(high)
-  const lowAvg = avgPace(low)
+  if (high.length === 0 || low.length === 0) return empty
+
+  const avg = (items: typeof paired) =>
+    items.length > 0 ? items.reduce((s, i) => s + i.value, 0) / items.length : null
+
+  const highAvg = avg(high)
+  const lowAvg = avg(low)
 
   let deltaPct: number | null = null
   if (highAvg !== null && lowAvg !== null && lowAvg > 0) {
-    deltaPct = ((lowAvg - highAvg) / lowAvg) * 100
+    if (metric === 'pace') {
+      // Pour le pace : plus bas = plus rapide, donc delta positif = amélioration
+      deltaPct = ((lowAvg - highAvg) / lowAvg) * 100
+    } else {
+      // Pour la FC : plus bas = meilleur rendement cardiaque
+      deltaPct = ((lowAvg - highAvg) / lowAvg) * 100
+    }
   }
 
   return {
     hasData: true,
-    highReadinessCount: high.length,
-    lowReadinessCount: low.length,
-    highReadinessAvgPace: highAvg,
-    lowReadinessAvgPace: lowAvg,
+    metric,
+    highCount: high.length,
+    lowCount: low.length,
+    highAvgValue: highAvg,
+    lowAvgValue: lowAvg,
     deltaPct,
   }
 }
@@ -686,42 +719,52 @@ export default function CorrelationInsights({
           {!hasGarmin ? (
             <GarminNotConnected />
           ) : !recoveryPerf.hasData ? (
-            <InsufficientData />
+            <InsufficientData message="Pas assez de croisements récupération/activité (min. 3)" />
           ) : (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs text-gray-500">Readiness ≥ 60 vs &lt; 60</span>
+                <span className="text-xs text-gray-500">Récupération ≥ 60 vs &lt; 60</span>
                 {recoveryPerf.deltaPct !== null && (
                   <TrendBadge value={recoveryPerf.deltaPct} />
                 )}
               </div>
               <div className="flex items-baseline gap-3">
-                {recoveryPerf.highReadinessAvgPace !== null && (
+                {recoveryPerf.highAvgValue !== null && (
                   <div className="text-center">
                     <p className="text-lg font-bold text-gray-900">
-                      {formatPace(recoveryPerf.highReadinessAvgPace)}
+                      {recoveryPerf.metric === 'pace'
+                        ? formatPace(recoveryPerf.highAvgValue)
+                        : `${recoveryPerf.highAvgValue.toFixed(0)}`}
                     </p>
-                    <p className="text-xs text-gray-400">/km haute</p>
+                    <p className="text-xs text-gray-400">
+                      {recoveryPerf.metric === 'pace' ? '/km haute' : 'bpm haute'}
+                    </p>
                   </div>
                 )}
                 <span className="text-xs text-gray-300">vs</span>
-                {recoveryPerf.lowReadinessAvgPace !== null && (
+                {recoveryPerf.lowAvgValue !== null && (
                   <div className="text-center">
                     <p className="text-lg font-bold text-gray-400">
-                      {formatPace(recoveryPerf.lowReadinessAvgPace)}
+                      {recoveryPerf.metric === 'pace'
+                        ? formatPace(recoveryPerf.lowAvgValue)
+                        : `${recoveryPerf.lowAvgValue.toFixed(0)}`}
                     </p>
-                    <p className="text-xs text-gray-400">/km basse</p>
+                    <p className="text-xs text-gray-400">
+                      {recoveryPerf.metric === 'pace' ? '/km basse' : 'bpm basse'}
+                    </p>
                   </div>
                 )}
               </div>
               <p className="text-xs text-gray-500">
                 {recoveryPerf.deltaPct !== null && recoveryPerf.deltaPct > 0
-                  ? 'Planifiez vos séances qualité les jours où votre readiness est élevée.'
+                  ? recoveryPerf.metric === 'pace'
+                    ? 'Planifiez vos séances qualité les jours où votre récupération est élevée.'
+                    : 'FC plus basse quand vous êtes bien récupéré — meilleur rendement cardiaque.'
                   : 'Pas de différence significative détectée.'}
               </p>
               <div className="flex gap-3 text-xs text-gray-400">
-                <span>{recoveryPerf.highReadinessCount} act. haute</span>
-                <span>{recoveryPerf.lowReadinessCount} act. basse</span>
+                <span>{recoveryPerf.highCount} act. haute</span>
+                <span>{recoveryPerf.lowCount} act. basse</span>
               </div>
             </div>
           )}
