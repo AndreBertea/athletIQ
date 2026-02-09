@@ -16,6 +16,7 @@ import { chronicLoadService } from '../services/chronicLoadService'
 import { garminService } from '../services/garminService'
 import { dataService } from '../services/dataService'
 import type { ActivityWeather } from '../services/dataService'
+import { formatBucketLabel, getBucketKey, GRANULARITY_LABELS, type TimeGranularity } from '../utils/timeBuckets'
 
 // --- Options statiques ---
 
@@ -42,6 +43,12 @@ const periodOptions = [
   { days: 90, label: '3m' },
   { days: 180, label: '6m' },
   { days: 365, label: '1a' },
+]
+
+const granularityOptions: Array<{ value: TimeGranularity; label: string }> = [
+  { value: 'day', label: GRANULARITY_LABELS.day },
+  { value: 'week', label: GRANULARITY_LABELS.week },
+  { value: 'month', label: GRANULARITY_LABELS.month },
 ]
 
 const sportTypeMapping: Record<string, string[]> = {
@@ -139,12 +146,67 @@ function generateChartData(activities: EnrichedActivity[], sportFilter: string, 
   })
 }
 
+type ChronicLoadPoint = {
+  date: string
+  chronicLoad: number
+  acuteLoad: number
+  trainingStressBalance: number
+  chronicLoadEdwards: number
+  acuteLoadEdwards: number
+  tsbEdwards: number
+}
+
+function aggregateChronicLoadData(data: ChronicLoadPoint[], granularity: TimeGranularity): ChronicLoadPoint[] {
+  if (!data || data.length === 0) return []
+  if (granularity === 'day') return data
+
+  const buckets = new Map<string, {
+    count: number
+    sums: Omit<ChronicLoadPoint, 'date'>
+  }>()
+
+  for (const entry of data) {
+    const key = getBucketKey(entry.date, granularity)
+    const bucket = buckets.get(key) ?? {
+      count: 0,
+      sums: {
+        chronicLoad: 0,
+        acuteLoad: 0,
+        trainingStressBalance: 0,
+        chronicLoadEdwards: 0,
+        acuteLoadEdwards: 0,
+        tsbEdwards: 0,
+      },
+    }
+    bucket.count += 1
+    bucket.sums.chronicLoad += entry.chronicLoad
+    bucket.sums.acuteLoad += entry.acuteLoad
+    bucket.sums.trainingStressBalance += entry.trainingStressBalance
+    bucket.sums.chronicLoadEdwards += entry.chronicLoadEdwards
+    bucket.sums.acuteLoadEdwards += entry.acuteLoadEdwards
+    bucket.sums.tsbEdwards += entry.tsbEdwards
+    buckets.set(key, bucket)
+  }
+
+  return Array.from(buckets.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, bucket]) => ({
+      date: formatBucketLabel(key, granularity),
+      chronicLoad: bucket.sums.chronicLoad / bucket.count,
+      acuteLoad: bucket.sums.acuteLoad / bucket.count,
+      trainingStressBalance: bucket.sums.trainingStressBalance / bucket.count,
+      chronicLoadEdwards: bucket.sums.chronicLoadEdwards / bucket.count,
+      acuteLoadEdwards: bucket.sums.acuteLoadEdwards / bucket.count,
+      tsbEdwards: bucket.sums.tsbEdwards / bucket.count,
+    }))
+}
+
 export default function Dashboard() {
   const [selectedPeriod, setSelectedPeriod] = useState(30)
   const [useEnrichedData, setUseEnrichedData] = useState(true)
   const [selectedSportFilter, setSelectedSportFilter] = useState('all')
   const [selectedMetric, setSelectedMetric] = useState('distance')
-  const [chartInterval, setChartInterval] = useState<'day' | 'week' | 'month'>('day')
+  const [chartGranularity, setChartGranularity] = useState<TimeGranularity>('day')
 
   // --- Queries existantes ---
 
@@ -218,6 +280,18 @@ export default function Dashboard() {
 
   const enrichedItems = recentEnrichedActivities?.items ?? []
 
+  const performanceDateFrom = useMemo(() => {
+    const start = new Date()
+    start.setDate(start.getDate() - selectedPeriod)
+    return start.toISOString().split('T')[0]
+  }, [selectedPeriod])
+
+  const { data: performanceActivities = [], isLoading: performanceLoading } = useQuery({
+    queryKey: ['performance-activities', selectedPeriod],
+    queryFn: () => activityService.getAllEnrichedActivities(undefined, performanceDateFrom),
+    staleTime: 5 * 60_000,
+  })
+
   // Charger la météo pour chaque activité récente (pour CorrelationInsights)
   const weatherQueries = useQueries({
     queries: enrichedItems.map((act) => ({
@@ -252,16 +326,9 @@ export default function Dashboard() {
     }
   }, [enrichedStats, originalStats, selectedSportFilter, useEnrichedData])
 
-  const filteredActivities = useMemo((): EnrichedActivity[] => {
-    if (!useEnrichedData) return []
-    if (selectedSportFilter === 'all') return enrichedItems
-    const targets = sportTypeMapping[selectedSportFilter] || []
-    return enrichedItems.filter(a => targets.includes(a.sport_type))
-  }, [enrichedItems, selectedSportFilter, useEnrichedData])
-
   const chartData = useMemo(
-    () => generateChartData(filteredActivities, selectedSportFilter, chartInterval),
-    [filteredActivities, selectedSportFilter, chartInterval],
+    () => generateChartData(performanceActivities, selectedSportFilter, chartInterval),
+    [performanceActivities, selectedSportFilter, chartInterval],
   )
 
   // --- Rendu ---
@@ -372,7 +439,7 @@ export default function Dashboard() {
           <DashboardStatsCards stats={filteredStats ?? null} useEnrichedData={useEnrichedData} isLoading={isLoading} />
         </div>
         <div className="xl:col-span-2">
-          <DashboardPerformanceChart chartData={chartData} selectedMetric={selectedMetric} onMetricChange={setSelectedMetric} chartInterval={chartInterval} onIntervalChange={setChartInterval} metricOptions={metricOptions} isLoading={isLoading} selectedSportLabel={sportFilterOptions.find(o => o.value === selectedSportFilter)?.label || 'Toutes les activités'} />
+          <DashboardPerformanceChart chartData={chartData} selectedMetric={selectedMetric} onMetricChange={setSelectedMetric} chartInterval={chartInterval} onIntervalChange={setChartInterval} metricOptions={metricOptions} isLoading={isLoading || performanceLoading} selectedSportLabel={sportFilterOptions.find(o => o.value === selectedSportFilter)?.label || 'Toutes les activités'} />
         </div>
       </div>
 
@@ -397,9 +464,10 @@ export default function Dashboard() {
         </div>
         <div className="lg:col-span-2">
           <CorrelationInsights
-            activities={enrichedItems}
+            activities={performanceActivities}
             garminDaily={garminDaily ?? []}
             weatherData={weatherMap}
+            trainingLoadData={chronicLoadData}
           />
         </div>
       </div>

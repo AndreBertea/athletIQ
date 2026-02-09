@@ -9,16 +9,27 @@ import {
   Heart,
   Activity,
   Link as LinkIcon,
+  Calendar,
+  BarChart3,
+  Zap,
 } from 'lucide-react'
 import { format, parseISO, subDays } from 'date-fns'
 import type { GarminDailyEntry } from '../../services/garminService'
 import type { ActivityWeather } from '../../services/dataService'
 import type { EnrichedActivity } from '../../services/activityService'
 
+interface TrainingLoadPoint {
+  date: string
+  chronicLoad: number
+  acuteLoad: number
+  trainingStressBalance: number
+}
+
 interface CorrelationInsightsProps {
   activities: EnrichedActivity[]
   garminDaily: GarminDailyEntry[]
   weatherData: Map<string, ActivityWeather>
+  trainingLoadData?: TrainingLoadPoint[]
 }
 
 // --- Helpers ---
@@ -407,12 +418,199 @@ const sleepLoadConfig: Record<SleepLoadState, {
   },
 }
 
+// --- Volume hebdo ---
+
+interface VolumeTrendResult {
+  hasData: boolean
+  weeks: { label: string; distanceKm: number; count: number }[]
+  currentVsPrevPct: number | null
+}
+
+function computeVolumeTrend(activities: EnrichedActivity[]): VolumeTrendResult {
+  if (activities.length < 3) {
+    return { hasData: false, weeks: [], currentVsPrevPct: null }
+  }
+
+  const now = new Date()
+  const currentDay = now.getDay()
+  const mondayOffset = currentDay === 0 ? -6 : 1 - currentDay
+  const currentMonday = new Date(now)
+  currentMonday.setDate(now.getDate() + mondayOffset)
+  currentMonday.setHours(0, 0, 0, 0)
+
+  const weeks: { label: string; start: Date; distanceKm: number; count: number }[] = []
+  for (let i = 0; i < 4; i++) {
+    const weekStart = new Date(currentMonday)
+    weekStart.setDate(currentMonday.getDate() - i * 7)
+    weeks.push({
+      label: i === 0 ? 'Actuelle' : `S-${i}`,
+      start: weekStart,
+      distanceKm: 0,
+      count: 0,
+    })
+  }
+
+  for (const act of activities) {
+    const actDate = parseISO(act.start_date_utc)
+    for (let i = 0; i < weeks.length; i++) {
+      const weekEnd = new Date(weeks[i].start)
+      weekEnd.setDate(weeks[i].start.getDate() + 7)
+      if (actDate >= weeks[i].start && actDate < weekEnd) {
+        weeks[i].distanceKm += act.distance_m / 1000
+        weeks[i].count++
+        break
+      }
+    }
+  }
+
+  const hasAnyData = weeks.some(w => w.count > 0)
+  if (!hasAnyData) {
+    return { hasData: false, weeks: [], currentVsPrevPct: null }
+  }
+
+  let currentVsPrevPct: number | null = null
+  if (weeks.length >= 2 && weeks[1].distanceKm > 0) {
+    currentVsPrevPct = ((weeks[0].distanceKm - weeks[1].distanceKm) / weeks[1].distanceKm) * 100
+  }
+
+  return {
+    hasData: true,
+    weeks: weeks.map(w => ({ label: w.label, distanceKm: w.distanceKm, count: w.count })),
+    currentVsPrevPct,
+  }
+}
+
+// --- Meilleur jour de la semaine ---
+
+interface BestDayResult {
+  hasData: boolean
+  days: { day: string; avgPace: number | null; count: number }[]
+  bestDay: string | null
+  bestPace: number | null
+  globalAvgPace: number | null
+}
+
+const DAY_NAMES = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam']
+
+function computeBestDay(activities: EnrichedActivity[]): BestDayResult {
+  const dayBuckets: number[][] = Array.from({ length: 7 }, () => [])
+
+  for (const act of activities) {
+    const pace = speedToPace(act.avg_speed_m_s)
+    if (!pace) continue
+    const dayIdx = parseISO(act.start_date_utc).getDay()
+    dayBuckets[dayIdx].push(pace)
+  }
+
+  const totalPaces = dayBuckets.flat()
+  if (totalPaces.length < 5) {
+    return { hasData: false, days: [], bestDay: null, bestPace: null, globalAvgPace: null }
+  }
+
+  const globalAvgPace = totalPaces.reduce((a, b) => a + b, 0) / totalPaces.length
+
+  const days = dayBuckets.map((paces, idx) => ({
+    day: DAY_NAMES[idx],
+    avgPace: paces.length > 0 ? paces.reduce((a, b) => a + b, 0) / paces.length : null,
+    count: paces.length,
+  }))
+
+  let bestDay: string | null = null
+  let bestPace: number | null = null
+  for (const d of days) {
+    if (d.avgPace !== null && d.count >= 2) {
+      if (bestPace === null || d.avgPace < bestPace) {
+        bestPace = d.avgPace
+        bestDay = d.day
+      }
+    }
+  }
+
+  return { hasData: true, days, bestDay, bestPace, globalAvgPace }
+}
+
+// --- Forme TSB ---
+
+interface TsbZoneResult {
+  hasData: boolean
+  currentTsb: number | null
+  zone: 'surcharge' | 'fatigue' | 'optimal' | 'frais' | 'tres_frais' | null
+  trend7d: number | null
+  acuteLoad: number | null
+  chronicLoad: number | null
+}
+
+function computeTsbZone(data?: TrainingLoadPoint[]): TsbZoneResult {
+  if (!data || data.length < 7) {
+    return { hasData: false, currentTsb: null, zone: null, trend7d: null, acuteLoad: null, chronicLoad: null }
+  }
+
+  const latest = data[data.length - 1]
+  const weekAgo = data[Math.max(0, data.length - 8)]
+
+  const tsb = latest.trainingStressBalance
+  let zone: TsbZoneResult['zone']
+  if (tsb < -25) zone = 'surcharge'
+  else if (tsb < -10) zone = 'fatigue'
+  else if (tsb <= 10) zone = 'optimal'
+  else if (tsb <= 25) zone = 'frais'
+  else zone = 'tres_frais'
+
+  return {
+    hasData: true,
+    currentTsb: tsb,
+    zone,
+    trend7d: tsb - weekAgo.trainingStressBalance,
+    acuteLoad: latest.acuteLoad,
+    chronicLoad: latest.chronicLoad,
+  }
+}
+
+const tsbZoneConfig: Record<NonNullable<TsbZoneResult['zone']>, {
+  label: string
+  dotColor: string
+  textColor: string
+  recommendation: string
+}> = {
+  surcharge: {
+    label: 'Surchargé',
+    dotColor: 'bg-red-500',
+    textColor: 'text-red-700',
+    recommendation: 'Risque de blessure. Prévoyez du repos ou réduisez l\'intensité.',
+  },
+  fatigue: {
+    label: 'Fatigué',
+    dotColor: 'bg-amber-500',
+    textColor: 'text-amber-700',
+    recommendation: 'Fatigue accumulée. Allégez les prochaines séances.',
+  },
+  optimal: {
+    label: 'Optimal',
+    dotColor: 'bg-emerald-500',
+    textColor: 'text-emerald-700',
+    recommendation: 'Bon équilibre charge/récupération. Zone idéale d\'entraînement.',
+  },
+  frais: {
+    label: 'Frais',
+    dotColor: 'bg-blue-500',
+    textColor: 'text-blue-700',
+    recommendation: 'Bien reposé. Idéal pour une compétition ou une séance intense.',
+  },
+  tres_frais: {
+    label: 'Très frais',
+    dotColor: 'bg-indigo-500',
+    textColor: 'text-indigo-700',
+    recommendation: 'Très reposé. Vous pouvez augmenter le volume ou l\'intensité.',
+  },
+}
+
 // --- Composant principal ---
 
 export default function CorrelationInsights({
   activities,
   garminDaily,
   weatherData,
+  trainingLoadData,
 }: CorrelationInsightsProps) {
   const garminMap = useMemo(() => buildGarminMap(garminDaily), [garminDaily])
   const hasGarmin = garminDaily.length > 0
@@ -443,6 +641,26 @@ export default function CorrelationInsights({
       .filter((v): v is number => v !== null && v !== undefined)
     return values.length > 0 ? Math.max(...values) * 1.1 : 200
   }, [weatherHr])
+
+  const volumeTrend = useMemo(
+    () => computeVolumeTrend(activities),
+    [activities],
+  )
+
+  const bestDay = useMemo(
+    () => computeBestDay(activities),
+    [activities],
+  )
+
+  const tsbZone = useMemo(
+    () => computeTsbZone(trainingLoadData),
+    [trainingLoadData],
+  )
+
+  const maxWeeklyKm = useMemo(() => {
+    if (!volumeTrend.hasData) return 1
+    return Math.max(...volumeTrend.weeks.map(w => w.distanceKm), 1) * 1.1
+  }, [volumeTrend])
 
   return (
     <div className="bg-white rounded-xl border border-gray-200/60 p-6">
@@ -624,6 +842,123 @@ export default function CorrelationInsights({
               <p className="text-xs text-gray-500 italic">{hrvPerf.recommendation}</p>
             </div>
           )}
+        </InsightCard>
+
+        {/* Carte 5 — Volume hebdo (Strava-only) */}
+        <InsightCard
+          title="Volume hebdo"
+          icon={<BarChart3 className="h-3.5 w-3.5 text-blue-500" />}
+          iconBgClass="bg-blue-50"
+          borderColorClass="border-l-blue-500"
+        >
+          {!volumeTrend.hasData ? (
+            <InsufficientData message="Pas assez d'activités récentes" />
+          ) : (
+            <div className="space-y-2">
+              {volumeTrend.currentVsPrevPct !== null && (
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-500">vs semaine précédente</span>
+                  <TrendBadge value={volumeTrend.currentVsPrevPct} />
+                </div>
+              )}
+              {volumeTrend.weeks.map((w) => (
+                <MiniBar
+                  key={w.label}
+                  label={w.label}
+                  value={w.distanceKm > 0 ? w.distanceKm : null}
+                  maxValue={maxWeeklyKm}
+                  colorClass="bg-blue-400"
+                  unit="km"
+                  count={w.count}
+                />
+              ))}
+            </div>
+          )}
+        </InsightCard>
+
+        {/* Carte 6 — Meilleur jour (Strava-only) */}
+        <InsightCard
+          title="Meilleur jour"
+          icon={<Calendar className="h-3.5 w-3.5 text-cyan-500" />}
+          iconBgClass="bg-cyan-50"
+          borderColorClass="border-l-cyan-500"
+        >
+          {!bestDay.hasData ? (
+            <InsufficientData />
+          ) : bestDay.bestDay !== null ? (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-lg font-bold text-gray-900">{bestDay.bestDay}</span>
+                <span className="text-sm text-gray-500">{formatPace(bestDay.bestPace!)} /km</span>
+                {bestDay.globalAvgPace && bestDay.bestPace && (
+                  <TrendBadge
+                    value={((bestDay.globalAvgPace - bestDay.bestPace) / bestDay.globalAvgPace) * 100}
+                    invertColor
+                  />
+                )}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {bestDay.days.map(d => (
+                  <div
+                    key={d.day}
+                    className={`text-center px-2 py-1 rounded-md text-xs ${
+                      d.day === bestDay.bestDay
+                        ? 'bg-cyan-50 text-cyan-700 font-semibold'
+                        : d.count > 0
+                        ? 'bg-gray-50 text-gray-600'
+                        : 'bg-gray-50 text-gray-300'
+                    }`}
+                  >
+                    <div>{d.day}</div>
+                    {d.avgPace ? (
+                      <div className="font-medium">{formatPace(d.avgPace)}</div>
+                    ) : (
+                      <div>—</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-gray-500">
+                Moy. globale : {bestDay.globalAvgPace ? formatPace(bestDay.globalAvgPace) : '--'} /km
+              </p>
+            </div>
+          ) : (
+            <InsufficientData message="Min. 2 activités par jour pour comparer" />
+          )}
+        </InsightCard>
+
+        {/* Carte 7 — Forme TSB */}
+        <InsightCard
+          title="Forme (TSB)"
+          icon={<Zap className="h-3.5 w-3.5 text-amber-500" />}
+          iconBgClass="bg-amber-50"
+          borderColorClass="border-l-amber-500"
+        >
+          {!tsbZone.hasData ? (
+            <InsufficientData message="Pas assez de données de charge d'entraînement" />
+          ) : tsbZone.zone !== null ? (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className={`inline-block w-2.5 h-2.5 rounded-full ${tsbZoneConfig[tsbZone.zone].dotColor}`} />
+                  <span className={`text-sm font-semibold ${tsbZoneConfig[tsbZone.zone].textColor}`}>
+                    {tsbZoneConfig[tsbZone.zone].label}
+                  </span>
+                </div>
+                {tsbZone.trend7d !== null && (
+                  <TrendBadge value={tsbZone.trend7d} suffix="" />
+                )}
+              </div>
+              <div className="flex items-center gap-4 text-xs text-gray-500">
+                <span>TSB : <span className="font-medium text-gray-700">{tsbZone.currentTsb?.toFixed(0)}</span></span>
+                <span>CTL : <span className="font-medium text-gray-700">{tsbZone.chronicLoad?.toFixed(0)}</span></span>
+                <span>ATL : <span className="font-medium text-gray-700">{tsbZone.acuteLoad?.toFixed(0)}</span></span>
+              </div>
+              <p className="text-xs text-gray-500">
+                {tsbZoneConfig[tsbZone.zone].recommendation}
+              </p>
+            </div>
+          ) : null}
         </InsightCard>
       </div>
     </div>
