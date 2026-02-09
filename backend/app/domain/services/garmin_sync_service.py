@@ -807,12 +807,26 @@ async def enrich_garmin_activity_fit(
     #    - Si streams_data est vide : ecrire tout
     #    - Si streams_data existe deja (Strava) : fusionner les cles
     #      exclusives FIT (stance_time, vertical_oscillation, etc.)
+    #    - Harmoniser les doublons : power->watts, temperature->temp
     stored_streams = False
+
+    # Cles exclusives Garmin (Running Dynamics)
     garmin_exclusive_keys = {
         "stance_time", "vertical_oscillation", "step_length",
-        "vertical_ratio", "power", "temperature",
+        "vertical_ratio",
     }
+    # Mapping des cles Garmin vers les cles Strava equivalentes
+    garmin_to_strava_key = {
+        "power": "watts",
+        "temperature": "temp",
+    }
+
     if streams:
+        # Harmoniser les cles avant fusion : renommer power->watts, temperature->temp
+        for garmin_key, strava_key in garmin_to_strava_key.items():
+            if garmin_key in streams:
+                streams[strava_key] = streams.pop(garmin_key)
+
         if not activity.streams_data:
             # Pas de streams existants : tout ecrire
             activity.streams_data = streams
@@ -825,6 +839,11 @@ async def enrich_garmin_activity_fit(
                 if key in streams and key not in existing:
                     existing[key] = streams[key]
                     merged_keys.append(key)
+            # Aussi fusionner watts/temp si absents (activites sans Strava)
+            for strava_key in garmin_to_strava_key.values():
+                if strava_key in streams and strava_key not in existing:
+                    existing[strava_key] = streams[strava_key]
+                    merged_keys.append(strava_key)
             if merged_keys:
                 activity.streams_data = existing
                 stored_streams = True

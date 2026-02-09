@@ -113,6 +113,10 @@ export interface EnrichedActivity {
   has_strava?: boolean
   has_garmin?: boolean
   has_weather?: boolean
+  // Données GPS
+  summary_polyline?: string
+  start_latlng?: [number, number]
+  end_latlng?: [number, number]
 }
 
 export interface EnrichedActivityStats {

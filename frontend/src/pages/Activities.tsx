@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Activity, MapPin, Clock, TrendingUp, Eye, Calendar, X, Heart, Target, Trophy, Mountain, Zap, Gauge, BarChart3, Layers, CloudSun, Watch, Thermometer, Footprints, Timer, MoveVertical, ArrowLeftRight } from 'lucide-react'
+import { Activity, MapPin, Clock, TrendingUp, Eye, Calendar, X, Heart, Target, Trophy, Mountain, Zap, Gauge, BarChart3, Layers, CloudSun, Watch, Thermometer, Footprints, Timer, MoveVertical, ArrowLeftRight, Flame, Map } from 'lucide-react'
 import { activityService } from '../services/activityService'
 import { dataService } from '../services/dataService'
 import { garminService } from '../services/garminService'
@@ -12,6 +12,7 @@ import ActivityTypeEditor from '../components/ActivityTypeEditor'
 import SegmentAnalysis from '../components/activity/SegmentAnalysis'
 import LapsTable from '../components/activity/LapsTable'
 import WeatherWidget from '../components/activity/WeatherWidget'
+import ActivityMap from '../components/activity/ActivityMap'
 
 const PER_PAGE = 30
 
@@ -34,7 +35,7 @@ function ActivityWeatherInline({ activityId, hasWeather }: { activityId: number 
   )
 }
 
-function FitTabContent({ activityId, hasGarmin }: { activityId: number | string | null; hasGarmin?: boolean }) {
+function FitTabContent({ activityId, hasGarmin, streamsData }: { activityId: number | string | null; hasGarmin?: boolean; streamsData?: any }) {
   const { data, isLoading, isError } = useQuery({
     queryKey: ['fit-metrics', activityId],
     queryFn: () => garminService.getActivityFitMetrics(String(activityId)),
@@ -60,7 +61,17 @@ function FitTabContent({ activityId, hasGarmin }: { activityId: number | string 
     return <div className="text-sm text-gray-500">Données FIT indisponibles.</div>
   }
 
-  const metrics = [
+  const formatSeconds = (seconds?: number | null) => {
+    if (seconds == null) return null
+    const hours = Math.floor(seconds / 3600)
+    const minutes = Math.floor((seconds % 3600) / 60)
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`
+    }
+    return `${minutes}m`
+  }
+
+  const dynamics = [
     data.ground_contact_time_avg != null && {
       label: 'GCT',
       value: `${data.ground_contact_time_avg.toFixed(0)} ms`,
@@ -68,25 +79,9 @@ function FitTabContent({ activityId, hasGarmin }: { activityId: number | string 
       colorClass: 'text-purple-600',
       bgClass: 'bg-purple-50',
     },
-    data.power_avg != null && {
-      label: 'Puissance',
-      value: `${data.power_avg.toFixed(0)} W`,
-      icon: Zap,
-      colorClass: 'text-blue-600',
-      bgClass: 'bg-blue-50',
-    },
-    data.aerobic_training_effect != null && {
-      label: 'Training Effect',
-      value: data.anaerobic_training_effect != null
-        ? `${data.aerobic_training_effect.toFixed(1)} / ${data.anaerobic_training_effect.toFixed(1)}`
-        : `${data.aerobic_training_effect.toFixed(1)}`,
-      icon: Timer,
-      colorClass: 'text-green-600',
-      bgClass: 'bg-green-50',
-    },
     data.vertical_oscillation_avg != null && {
       label: 'Oscillation',
-      value: `${data.vertical_oscillation_avg.toFixed(1)} cm`,
+      value: `${data.vertical_oscillation_avg.toFixed(1)} mm`,
       icon: MoveVertical,
       colorClass: 'text-teal-600',
       bgClass: 'bg-teal-50',
@@ -98,6 +93,27 @@ function FitTabContent({ activityId, hasGarmin }: { activityId: number | string 
       colorClass: 'text-slate-600',
       bgClass: 'bg-slate-100',
     },
+    data.stance_time_percent_avg != null && {
+      label: 'Temps au sol',
+      value: `${data.stance_time_percent_avg.toFixed(1)}%`,
+      icon: Footprints,
+      colorClass: 'text-indigo-600',
+      bgClass: 'bg-indigo-50',
+    },
+    data.step_length_avg != null && {
+      label: 'Longueur foulée',
+      value: `${(data.step_length_avg / 10).toFixed(1)} cm`,
+      icon: Footprints,
+      colorClass: 'text-amber-700',
+      bgClass: 'bg-amber-50',
+    },
+    data.vertical_ratio_avg != null && {
+      label: 'Ratio vertical',
+      value: `${data.vertical_ratio_avg.toFixed(2)}%`,
+      icon: MoveVertical,
+      colorClass: 'text-emerald-700',
+      bgClass: 'bg-emerald-50',
+    },
   ].filter(Boolean) as Array<{
     label: string
     value: string
@@ -106,24 +122,278 @@ function FitTabContent({ activityId, hasGarmin }: { activityId: number | string 
     bgClass: string
   }>
 
-  if (metrics.length === 0) {
+  const power = [
+    data.power_avg != null && {
+      label: 'Puissance moy.',
+      value: `${data.power_avg.toFixed(0)} W`,
+      icon: Zap,
+      colorClass: 'text-blue-600',
+      bgClass: 'bg-blue-50',
+    },
+    data.power_max != null && {
+      label: 'Puissance max',
+      value: `${data.power_max.toFixed(0)} W`,
+      icon: Zap,
+      colorClass: 'text-blue-700',
+      bgClass: 'bg-blue-100',
+    },
+    data.normalized_power != null && {
+      label: 'Puissance norm.',
+      value: `${data.normalized_power.toFixed(0)} W`,
+      icon: Zap,
+      colorClass: 'text-blue-500',
+      bgClass: 'bg-blue-50',
+    },
+  ].filter(Boolean) as typeof dynamics
+
+  const trainingEffect = [
+    data.aerobic_training_effect != null && {
+      label: 'TE Aérobie',
+      value: `${data.aerobic_training_effect.toFixed(1)}`,
+      icon: Target,
+      colorClass: 'text-green-600',
+      bgClass: 'bg-green-50',
+    },
+    data.anaerobic_training_effect != null && {
+      label: 'TE Anaérobie',
+      value: `${data.anaerobic_training_effect.toFixed(1)}`,
+      icon: Target,
+      colorClass: 'text-orange-600',
+      bgClass: 'bg-orange-50',
+    },
+  ].filter(Boolean) as typeof dynamics
+
+  const cadence = [
+    data.cadence_avg != null && {
+      label: 'Cadence moy.',
+      value: `${data.cadence_avg.toFixed(0)} spm`,
+      icon: Zap,
+      colorClass: 'text-purple-600',
+      bgClass: 'bg-purple-50',
+    },
+    data.cadence_max != null && {
+      label: 'Cadence max',
+      value: `${data.cadence_max.toFixed(0)} spm`,
+      icon: Zap,
+      colorClass: 'text-purple-700',
+      bgClass: 'bg-purple-100',
+    },
+  ].filter(Boolean) as typeof dynamics
+
+  const heartRate = [
+    data.heart_rate_avg != null && {
+      label: 'FC moy.',
+      value: `${data.heart_rate_avg} bpm`,
+      icon: Heart,
+      colorClass: 'text-red-600',
+      bgClass: 'bg-red-50',
+    },
+    data.heart_rate_max != null && {
+      label: 'FC max',
+      value: `${data.heart_rate_max} bpm`,
+      icon: Heart,
+      colorClass: 'text-red-700',
+      bgClass: 'bg-red-100',
+    },
+  ].filter(Boolean) as typeof dynamics
+
+  const speed = [
+    data.speed_avg != null && {
+      label: 'Vitesse moy.',
+      value: `${(data.speed_avg * 3.6).toFixed(1)} km/h`,
+      icon: Gauge,
+      colorClass: 'text-orange-600',
+      bgClass: 'bg-orange-50',
+    },
+    data.speed_max != null && {
+      label: 'Vitesse max',
+      value: `${(data.speed_max * 3.6).toFixed(1)} km/h`,
+      icon: Gauge,
+      colorClass: 'text-orange-700',
+      bgClass: 'bg-orange-100',
+    },
+  ].filter(Boolean) as typeof dynamics
+
+  const temperature = [
+    data.temperature_avg != null && {
+      label: 'Temp. moy.',
+      value: `${data.temperature_avg.toFixed(1)}°C`,
+      icon: Thermometer,
+      colorClass: 'text-amber-600',
+      bgClass: 'bg-amber-50',
+    },
+    data.temperature_max != null && {
+      label: 'Temp. max',
+      value: `${data.temperature_max.toFixed(1)}°C`,
+      icon: Thermometer,
+      colorClass: 'text-amber-700',
+      bgClass: 'bg-amber-100',
+    },
+  ].filter(Boolean) as typeof dynamics
+
+  const totals = [
+    data.total_distance != null && {
+      label: 'Distance',
+      value: `${(data.total_distance / 1000).toFixed(2)} km`,
+      icon: TrendingUp,
+      colorClass: 'text-blue-600',
+      bgClass: 'bg-blue-50',
+    },
+    data.total_timer_time != null && {
+      label: 'Temps actif',
+      value: formatSeconds(data.total_timer_time) ?? '',
+      icon: Clock,
+      colorClass: 'text-green-600',
+      bgClass: 'bg-green-50',
+    },
+    data.total_elapsed_time != null && {
+      label: 'Temps total',
+      value: formatSeconds(data.total_elapsed_time) ?? '',
+      icon: Clock,
+      colorClass: 'text-emerald-700',
+      bgClass: 'bg-emerald-50',
+    },
+    data.total_calories != null && {
+      label: 'Calories',
+      value: `${data.total_calories} kcal`,
+      icon: Flame,
+      colorClass: 'text-orange-600',
+      bgClass: 'bg-orange-50',
+    },
+    data.total_strides != null && {
+      label: 'Foulées',
+      value: `${data.total_strides}`,
+      icon: Footprints,
+      colorClass: 'text-slate-700',
+      bgClass: 'bg-slate-100',
+    },
+    data.total_ascent != null && {
+      label: 'D+',
+      value: `${data.total_ascent} m`,
+      icon: Mountain,
+      colorClass: 'text-emerald-700',
+      bgClass: 'bg-emerald-50',
+    },
+    data.total_descent != null && {
+      label: 'D-',
+      value: `${data.total_descent} m`,
+      icon: Mountain,
+      colorClass: 'text-emerald-600',
+      bgClass: 'bg-emerald-50',
+    },
+  ].filter(Boolean) as typeof dynamics
+
+  const sections = [
+    { title: 'Running Dynamics', items: dynamics },
+    { title: 'Puissance', items: power },
+    { title: 'Training Effect', items: trainingEffect },
+    { title: 'Cadence', items: cadence },
+    { title: 'Fréquence cardiaque', items: heartRate },
+    { title: 'Vitesse', items: speed },
+    { title: 'Température', items: temperature },
+    { title: 'Totaux', items: totals },
+  ].filter(section => section.items.length > 0)
+
+  // Préparer les streams FIT pour les graphiques
+  const streams = streamsData?.streams
+  const timeArr: number[] | null = streams?.time ? (streams.time.data || streams.time) : null
+
+  const fitCharts: Array<{
+    title: string
+    streamKey: string
+    color: string
+    unit: string
+    icon: typeof Footprints
+    transform?: (v: number) => number
+  }> = [
+    { title: 'Temps de contact au sol (GCT)', streamKey: 'stance_time', color: '#7c3aed', unit: 'ms', icon: Footprints },
+    { title: 'Oscillation verticale', streamKey: 'vertical_oscillation', color: '#0d9488', unit: 'mm', icon: MoveVertical },
+    { title: 'Longueur de foulée', streamKey: 'step_length', color: '#d97706', unit: 'cm', icon: Footprints, transform: (v: number) => v / 10 },
+    { title: 'Ratio vertical', streamKey: 'vertical_ratio', color: '#059669', unit: '%', icon: MoveVertical },
+  ]
+
+  const availableCharts = fitCharts.filter(c => streams?.[c.streamKey] && timeArr)
+
+  if (sections.length === 0 && availableCharts.length === 0) {
     return <div className="text-sm text-gray-500">Aucune métrique FIT disponible.</div>
   }
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        {metrics.map((metric) => {
-          const Icon = metric.icon
-          return (
-            <div key={metric.label} className={`${metric.bgClass} p-3 rounded-lg text-center`}>
-              <Icon className={`h-4 w-4 mx-auto mb-1 ${metric.colorClass}`} />
-              <div className={`text-xs ${metric.colorClass}`}>{metric.label}</div>
-              <div className={`text-sm font-bold ${metric.colorClass}`}>{metric.value}</div>
+    <div className="space-y-6">
+      {/* Métriques session */}
+      {sections.length > 0 && (
+        <div className="space-y-4">
+          {sections.map((section) => (
+            <div key={section.title} className="space-y-2">
+              <h4 className="text-sm font-medium text-gray-700">{section.title}</h4>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                {section.items.map((metric) => {
+                  const Icon = metric.icon
+                  return (
+                    <div key={`${section.title}-${metric.label}`} className={`${metric.bgClass} p-3 rounded-lg text-center`}>
+                      <Icon className={`h-4 w-4 mx-auto mb-1 ${metric.colorClass}`} />
+                      <div className={`text-xs ${metric.colorClass}`}>{metric.label}</div>
+                      <div className={`text-sm font-bold ${metric.colorClass}`}>{metric.value}</div>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
-          )
-        })}
-      </div>
+          ))}
+        </div>
+      )}
+
+      {/* Graphiques Running Dynamics par seconde */}
+      {availableCharts.length > 0 && (
+        <div className="space-y-2">
+          <h4 className="text-sm font-medium text-gray-700">Running Dynamics (par seconde)</h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {availableCharts.map((chart) => {
+              const rawData = streams[chart.streamKey].data || streams[chart.streamKey]
+              const yData = chart.transform ? rawData.map(chart.transform) : rawData
+              const xData = timeArr!.map((t: number) => t / 60)
+              const ChartIcon = chart.icon
+              return (
+                <div key={chart.streamKey} className="bg-white rounded-lg border">
+                  <div className="flex items-center p-3 border-b">
+                    <ChartIcon className="h-4 w-4 mr-2" style={{ color: chart.color }} />
+                    <span className="text-sm font-medium text-gray-900">{chart.title}</span>
+                  </div>
+                  <div className="p-2">
+                    {/* @ts-expect-error: Types manquants pour react-plotly.js */}
+                    <Plot
+                      data={[{
+                        x: xData,
+                        y: yData,
+                        type: 'scatter',
+                        mode: 'lines',
+                        line: { color: chart.color, width: 1.5 },
+                        fill: 'tozeroy',
+                        fillcolor: `${chart.color}15`,
+                        hovertemplate: `<b>%{y:.1f} ${chart.unit}</b><br>Temps: %{x:.1f} min<extra></extra>`,
+                      }]}
+                      layout={{
+                        margin: { t: 10, r: 15, b: 35, l: 45 },
+                        height: 180,
+                        xaxis: { title: 'Temps (min)', titlefont: { size: 11 } },
+                        yaxis: { title: chart.unit, titlefont: { size: 11 } },
+                        showlegend: false,
+                        font: { family: 'Inter, system-ui, sans-serif', size: 11 },
+                        plot_bgcolor: 'rgba(0,0,0,0)',
+                        paper_bgcolor: 'rgba(0,0,0,0)',
+                      }}
+                      config={{ displayModeBar: false, responsive: true }}
+                      style={{ width: '100%' }}
+                    />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Métadonnées */}
       <div className="flex flex-wrap gap-4 text-xs text-gray-500">
         {data.record_count != null && (
           <span>Enregistrements FIT : <span className="font-medium text-gray-700">{data.record_count}</span></span>
@@ -182,7 +452,7 @@ export default function Activities() {
   const [selectedActivityDetail, setSelectedActivityDetail] = useState<any | null>(null)
   const [useEnrichedData, setUseEnrichedData] = useState<boolean>(true)
   const [page, setPage] = useState(1)
-  const [activeTab, setActiveTab] = useState<'streams' | 'segments' | 'laps' | 'fit' | 'weather'>('streams')
+  const [activeTab, setActiveTab] = useState<'streams' | 'segments' | 'laps' | 'fit' | 'weather' | 'map'>('streams')
 
   // Récupérer les activités originales (paginées)
   const { data: originalData, isLoading: originalLoading } = useQuery({
@@ -505,6 +775,7 @@ export default function Activities() {
                         { id: 'laps' as const, label: 'Tours', icon: <Layers className="h-3.5 w-3.5 mr-1.5" /> },
                         { id: 'fit' as const, label: 'FIT', icon: <Watch className="h-3.5 w-3.5 mr-1.5" /> },
                         { id: 'weather' as const, label: 'Météo', icon: <CloudSun className="h-3.5 w-3.5 mr-1.5" /> },
+                        { id: 'map' as const, label: 'Carte', icon: <Map className="h-3.5 w-3.5 mr-1.5" /> },
                       ]).map(tab => (
                         <button
                           key={tab.id}
@@ -706,11 +977,33 @@ export default function Activities() {
                     )}
 
                     {activeTab === 'fit' && (
-                      <FitTabContent activityId={activityId} hasGarmin={hasGarmin} />
+                      <FitTabContent activityId={activityId} hasGarmin={hasGarmin} streamsData={streamsData} />
                     )}
 
                     {activeTab === 'weather' && (
                       <WeatherTabContent activityId={weatherActivityId} hasWeather={hasWeather} />
+                    )}
+
+                    {activeTab === 'map' && (
+                      <ActivityMap
+                        streamsLatlng={
+                          streamsData?.streams?.latlng
+                            ? (Array.isArray(streamsData.streams.latlng)
+                                ? streamsData.streams.latlng
+                                : (streamsData.streams.latlng as any).data)
+                            : undefined
+                        }
+                        streamsAltitude={
+                          streamsData?.streams?.altitude
+                            ? (Array.isArray(streamsData.streams.altitude)
+                                ? streamsData.streams.altitude
+                                : (streamsData.streams.altitude as any).data)
+                            : undefined
+                        }
+                        polylineEncoded={activity.summary_polyline || enrichedData?.summary_polyline}
+                        startLatlng={activity.start_latlng || enrichedData?.start_latlng}
+                        endLatlng={activity.end_latlng || enrichedData?.end_latlng}
+                      />
                     )}
                   </div>
                 )}

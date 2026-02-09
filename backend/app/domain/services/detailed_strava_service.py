@@ -223,6 +223,36 @@ class DetailedStravaService:
             logger.error(f"Erreur récupération segments {strava_activity_id}: {e}")
             return None
     
+    def fetch_activity_detail(self, access_token: str, strava_activity_id: int) -> Optional[Dict[str, Any]]:
+        """Récupère le détail complet d'une activité (pour le polyline, etc.)"""
+        if not self.quota_manager.check_and_wait_if_needed():
+            return None
+
+        headers = {"Authorization": f"Bearer {access_token}"}
+
+        try:
+            response = requests.get(
+                f"{self.api_url}/activities/{strava_activity_id}",
+                headers=headers,
+                timeout=30
+            )
+
+            self.quota_manager.increment_usage()
+
+            if response.status_code == 404:
+                return None
+            if response.status_code == 429:
+                logger.warning("Rate limit Strava atteint (429).")
+                self.quota_manager.daily_count = self.quota_manager.daily_limit
+                return None
+
+            response.raise_for_status()
+            return response.json()
+
+        except requests.RequestException as e:
+            logger.error(f"Erreur récupération détail activité {strava_activity_id}: {e}")
+            return None
+
     def enrich_activity_with_details(
         self, 
         session: Session, 
@@ -263,7 +293,20 @@ class DetailedStravaService:
                 activity.streams_data["segment_efforts"] = segments
             elif segments:
                 activity.streams_data = {"segment_efforts": segments}
-            
+
+            # Récupérer le détail pour le polyline complet
+            detail = self.fetch_activity_detail(access_token, activity.strava_id)
+            if detail:
+                strava_map = detail.get("map", {})
+                if strava_map:
+                    polyline_full = strava_map.get("polyline")
+                    if polyline_full:
+                        activity.polyline = polyline_full
+                    if not activity.summary_polyline:
+                        summary = strava_map.get("summary_polyline")
+                        if summary:
+                            activity.summary_polyline = summary
+
             activity.updated_at = datetime.utcnow()
             session.commit()
             

@@ -4,6 +4,7 @@ Représente une activité sportive réelle (vs WorkoutPlan qui est planifiée)
 """
 from sqlmodel import SQLModel, Field, Relationship, JSON, Column
 from sqlalchemy import BigInteger
+import sqlalchemy as sa
 from typing import Optional, List, Dict, Any, TYPE_CHECKING
 from datetime import datetime
 from uuid import UUID, uuid4
@@ -75,12 +76,33 @@ class Activity(ActivityBase, table=True):
     normalized_power: Optional[float] = None
     training_stress_score: Optional[float] = None
     
+    # Métriques supplémentaires
+    calories: Optional[float] = None
+    start_date_local: Optional[datetime] = None
+    workout_type: Optional[int] = None
+    trainer: Optional[bool] = None
+    commute: Optional[bool] = None
+    manual: Optional[bool] = None
+    suffer_score: Optional[int] = None
+
+    # Puissance
+    average_watts: Optional[float] = None
+    max_watts: Optional[float] = None
+    weighted_average_watts: Optional[float] = None
+    kilojoules: Optional[float] = None
+
+    # Données GPS
+    start_latlng: Optional[List] = Field(sa_column=Column(JSON), default=None)
+    end_latlng: Optional[List] = Field(sa_column=Column(JSON), default=None)
+    summary_polyline: Optional[str] = Field(sa_column=Column(sa.Text), default=None)
+    polyline: Optional[str] = Field(sa_column=Column(sa.Text), default=None)
+
     # Métadonnées
     gear_id: Optional[str] = None
     location_city: Optional[str] = None
     location_country: Optional[str] = None
     timezone: Optional[str] = None
-    
+
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
@@ -98,6 +120,23 @@ class ActivityCreate(ActivityBase):
     average_pace: Optional[float] = None
     streams_data: Optional[Dict[str, Any]] = None
     laps_data: Optional[List[Dict[str, Any]]] = None
+    # Métriques supplémentaires
+    calories: Optional[float] = None
+    start_date_local: Optional[datetime] = None
+    workout_type: Optional[int] = None
+    trainer: Optional[bool] = None
+    commute: Optional[bool] = None
+    manual: Optional[bool] = None
+    suffer_score: Optional[int] = None
+    # Puissance
+    average_watts: Optional[float] = None
+    max_watts: Optional[float] = None
+    weighted_average_watts: Optional[float] = None
+    kilojoules: Optional[float] = None
+    # Données GPS
+    start_latlng: Optional[List] = None
+    end_latlng: Optional[List] = None
+    summary_polyline: Optional[str] = None
 
 
 class ActivityRead(ActivityBase):

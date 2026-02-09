@@ -154,6 +154,18 @@ class StravaSyncService:
             time_min = moving_time_sec / 60
             average_pace = time_min / distance_km
 
+        # Données GPS du résumé
+        strava_map = strava_activity.get("map", {})
+        summary_polyline = strava_map.get("summary_polyline") if strava_map else None
+
+        # start_date_local
+        start_date_local_str = strava_activity.get("start_date_local")
+        start_date_local = datetime.fromisoformat(start_date_local_str.replace("Z", "+00:00")) if start_date_local_str else None
+
+        # Coordonnées
+        start_latlng = strava_activity.get("start_latlng")
+        end_latlng = strava_activity.get("end_latlng")
+
         return ActivityCreate(
             name=strava_activity.get("name", "Activité sans nom"),
             activity_type=mapped_type,
@@ -169,8 +181,21 @@ class StravaSyncService:
             average_cadence=strava_activity.get("average_cadence"),
             description=strava_activity.get("description"),
             strava_id=strava_activity.get("id"),
-            average_pace=average_pace
-            # Les champs optionnels streams/laps peuvent être ajoutés plus tard
+            average_pace=average_pace,
+            calories=strava_activity.get("calories"),
+            start_date_local=start_date_local,
+            start_latlng=start_latlng,
+            end_latlng=end_latlng,
+            summary_polyline=summary_polyline,
+            workout_type=strava_activity.get("workout_type"),
+            trainer=strava_activity.get("trainer"),
+            commute=strava_activity.get("commute"),
+            manual=strava_activity.get("manual"),
+            suffer_score=strava_activity.get("suffer_score"),
+            average_watts=strava_activity.get("average_watts"),
+            max_watts=strava_activity.get("max_watts"),
+            weighted_average_watts=strava_activity.get("weighted_average_watts"),
+            kilojoules=strava_activity.get("kilojoules"),
         )
     
     def sync_activities(self, session: Session, user_id: str, days_back: int = 30) -> Dict[str, Any]:
