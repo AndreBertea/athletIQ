@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import zipfile
 from io import BytesIO
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
@@ -209,6 +210,7 @@ def _upsert(
 def download_fit_file(client: garth.Client, garmin_activity_id: int) -> Optional[bytes]:
     """
     Telecharge le fichier FIT original d'une activite Garmin.
+    Garmin Connect retourne un ZIP contenant le .fit — on extrait le FIT du ZIP.
 
     Args:
         client: Client garth authentifie
@@ -218,14 +220,33 @@ def download_fit_file(client: garth.Client, garmin_activity_id: int) -> Optional
         Contenu du fichier FIT en bytes, ou None si echec
     """
     try:
-        fit_bytes = client.download(
+        raw_bytes = client.download(
             f"/download-service/files/activity/{garmin_activity_id}"
         )
-        if fit_bytes:
-            logger.info(f"FIT file telecharge pour activite {garmin_activity_id} ({len(fit_bytes)} bytes)")
-            return fit_bytes
-        logger.warning(f"FIT file vide pour activite {garmin_activity_id}")
-        return None
+        if not raw_bytes:
+            logger.warning(f"FIT file vide pour activite {garmin_activity_id}")
+            return None
+
+        logger.info(f"Download activite {garmin_activity_id}: {len(raw_bytes)} bytes")
+
+        # Garmin Connect retourne un ZIP contenant le fichier .fit
+        if raw_bytes[:2] == b"PK":
+            try:
+                with zipfile.ZipFile(BytesIO(raw_bytes)) as zf:
+                    fit_names = [n for n in zf.namelist() if n.lower().endswith(".fit")]
+                    if not fit_names:
+                        logger.warning(f"ZIP pour activite {garmin_activity_id} ne contient aucun .fit: {zf.namelist()}")
+                        return None
+                    fit_bytes = zf.read(fit_names[0])
+                    logger.info(f"FIT extrait du ZIP pour activite {garmin_activity_id}: {fit_names[0]} ({len(fit_bytes)} bytes)")
+                    return fit_bytes
+            except zipfile.BadZipFile:
+                logger.warning(f"Fichier corrompu (ni ZIP ni FIT valide) pour activite {garmin_activity_id}")
+                return None
+
+        # Si ce n'est pas un ZIP, c'est peut-etre du FIT brut
+        logger.info(f"FIT brut (non-ZIP) pour activite {garmin_activity_id} ({len(raw_bytes)} bytes)")
+        return raw_bytes
     except Exception as e:
         logger.warning(f"Echec telechargement FIT pour activite {garmin_activity_id}: {e}")
         return None
