@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Activity, MapPin, Clock, TrendingUp, Eye, Calendar, X, Heart, Target, Trophy, Mountain, Zap, Gauge, BarChart3, Layers, CloudSun, Watch, Thermometer, Footprints, Timer, MoveVertical, ArrowLeftRight, Flame, Map } from 'lucide-react'
+import { Activity, MapPin, Clock, TrendingUp, Eye, Calendar, X, Heart, Target, Trophy, Mountain, Zap, Gauge, BarChart3, Layers, CloudSun, Watch, Thermometer, Footprints, Timer, MoveVertical, ArrowLeftRight, Flame, Map as MapIcon } from 'lucide-react'
 import { activityService } from '../services/activityService'
 import { dataService } from '../services/dataService'
 import { garminService } from '../services/garminService'
@@ -775,7 +775,7 @@ export default function Activities() {
                         { id: 'laps' as const, label: 'Tours', icon: <Layers className="h-3.5 w-3.5 mr-1.5" /> },
                         { id: 'fit' as const, label: 'FIT', icon: <Watch className="h-3.5 w-3.5 mr-1.5" /> },
                         { id: 'weather' as const, label: 'Météo', icon: <CloudSun className="h-3.5 w-3.5 mr-1.5" /> },
-                        { id: 'map' as const, label: 'Carte', icon: <Map className="h-3.5 w-3.5 mr-1.5" /> },
+                        { id: 'map' as const, label: 'Carte', icon: <MapIcon className="h-3.5 w-3.5 mr-1.5" /> },
                       ]).map(tab => (
                         <button
                           key={tab.id}
