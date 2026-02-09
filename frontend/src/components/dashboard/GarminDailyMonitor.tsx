@@ -11,6 +11,7 @@ import { Watch, TrendingUp, TrendingDown, Minus, Heart, Brain, Moon, Activity, W
 import { format, parseISO } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import type { GarminDailyEntry } from '../../services/garminService'
+import GarminSleepTab from './GarminSleepTab'
 
 interface GarminDailyMonitorProps {
   data: GarminDailyEntry[]
@@ -31,14 +32,6 @@ const METRICS: MetricConfig[] = [
   { key: 'stress_score', label: 'Stress', color: '#ef4444' },
   { key: 'body_battery_max', label: 'Body Battery', color: '#10b981' },
   { key: 'resting_hr', label: 'FC repos', color: '#f43f5e' },
-]
-
-const RANGE_OPTIONS = [
-  { days: 1, label: "Aujourd'hui" },
-  { days: 7, label: '7j' },
-  { days: 30, label: '30j' },
-  { days: 90, label: '3 mois' },
-  { days: 180, label: '6 mois' },
 ]
 
 function avg7d(data: GarminDailyEntry[], key: keyof GarminDailyEntry): number | null {
@@ -65,19 +58,10 @@ function TrendArrow({ current, previous }: { current: number | null; previous: n
 }
 
 export default function GarminDailyMonitor({ data, isLoading, isConnected }: GarminDailyMonitorProps) {
-  const [selectedRange, setSelectedRange] = useState(7)
+  const [activeTab, setActiveTab] = useState<'monitoring' | 'sleep'>('monitoring')
   const [visibleMetrics, setVisibleMetrics] = useState<Set<string>>(
     new Set(METRICS.map(m => m.key))
   )
-
-  const filteredData = useMemo(() => {
-    if (!data || data.length === 0) return []
-    if (selectedRange === 0) return data
-    const cutoff = new Date()
-    cutoff.setDate(cutoff.getDate() - selectedRange)
-    const cutoffStr = cutoff.toISOString().split('T')[0]
-    return data.filter(d => d.date >= cutoffStr)
-  }, [data, selectedRange])
 
   const toggleMetric = (key: string) => {
     setVisibleMetrics(prev => {
@@ -91,27 +75,18 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
     })
   }
 
-  // Helpers
-  function formatSleepDuration(minutes: number | null): string {
-    if (minutes === null) return '—'
-    const h = Math.floor(minutes / 60)
-    const m = Math.round(minutes % 60)
-    return `${h}h ${m.toString().padStart(2, '0')}min`
-  }
-
   // Mini-cartes récapitulatives
   const summaryCards = useMemo(() => {
-    if (!filteredData || filteredData.length === 0) return null
+    if (!data || data.length === 0) return null
 
-    const hrvAvg = avg7d(filteredData, 'hrv_rmssd')
-    const hrvPrev = avg7dPrev(filteredData, 'hrv_rmssd')
-    const readinessAvg = avg7d(filteredData, 'training_readiness')
-    const sleepAvg = avg7d(filteredData, 'sleep_score')
-    const latestRhr = filteredData[filteredData.length - 1]?.resting_hr
-    const rhrAvg = avg7d(filteredData, 'resting_hr')
-    const latestVo2 = filteredData[filteredData.length - 1]?.vo2max_estimated
-    const latestWeight = filteredData[filteredData.length - 1]?.weight_kg
-    const sleepDurAvg = avg7d(filteredData, 'sleep_duration_min')
+    const hrvAvg = avg7d(data, 'hrv_rmssd')
+    const hrvPrev = avg7dPrev(data, 'hrv_rmssd')
+    const readinessAvg = avg7d(data, 'training_readiness')
+    const sleepAvg = avg7d(data, 'sleep_score')
+    const latestRhr = data[data.length - 1]?.resting_hr
+    const rhrAvg = avg7d(data, 'resting_hr')
+    const latestVo2 = data[data.length - 1]?.vo2max_estimated
+    const latestWeight = data[data.length - 1]?.weight_kg
 
     const cards: Array<{
       label: string
@@ -188,26 +163,13 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
       })
     }
 
-    // Durée sommeil — moyenne 7j
-    if (sleepDurAvg != null) {
-      cards.push({
-        label: 'Durée sommeil 7j',
-        value: formatSleepDuration(sleepDurAvg),
-        unit: '',
-        icon: Moon,
-        color: 'text-indigo-600',
-        bgColor: 'bg-indigo-100',
-        trend: null,
-      })
-    }
-
     return cards
-  }, [filteredData])
+  }, [data])
 
   // Badges secondaires (dernière entrée)
   const latestBadges = useMemo(() => {
-    if (!filteredData || filteredData.length === 0) return null
-    const latest = filteredData[filteredData.length - 1]
+    if (!data || data.length === 0) return null
+    const latest = data[data.length - 1]
 
     const trainingStatusColors: Record<string, string> = {
       Productive: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
@@ -227,12 +189,12 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
       bodyBatteryMin: latest.body_battery_min,
       bodyBatteryMax: latest.body_battery_max,
     }
-  }, [filteredData])
+  }, [data])
 
   // Données formatées pour le graphique
   const chartData = useMemo(() => {
-    if (!filteredData || filteredData.length === 0) return []
-    return filteredData.map(entry => ({
+    if (!data || data.length === 0) return []
+    return data.map(entry => ({
       date: entry.date,
       dateFormatted: format(parseISO(entry.date), 'd MMM', { locale: fr }),
       hrv_rmssd: entry.hrv_rmssd,
@@ -242,7 +204,7 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
       body_battery_max: entry.body_battery_max,
       resting_hr: entry.resting_hr,
     }))
-  }, [filteredData])
+  }, [data])
 
   // --- État non connecté ---
   if (!isConnected) {
@@ -282,7 +244,7 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
   }
 
   // --- Pas de données ---
-  if (!filteredData || filteredData.length === 0) {
+  if (!data || data.length === 0) {
     return (
       <div className="card">
         <div className="flex items-center space-x-2 mb-4">
@@ -305,349 +267,239 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
   // --- État connecté avec données ---
   return (
     <div className="card">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center space-x-2">
-          <Watch className="h-5 w-5 text-purple-600" />
-          <h3 className="text-lg font-medium text-gray-900">Monitoring Garmin Daily</h3>
-          <span className="text-xs text-gray-400">{filteredData.length} jours</span>
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {RANGE_OPTIONS.map(opt => (
-            <button
-              key={opt.days}
-              onClick={() => setSelectedRange(opt.days)}
-              className={`px-2.5 py-1 text-xs rounded-full transition-colors ${
-                selectedRange === opt.days
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
+      {/* Header avec titre */}
+      <div className="flex items-center space-x-2 mb-2">
+        <Watch className="h-5 w-5 text-purple-600" />
+        <h3 className="text-lg font-medium text-gray-900">Monitoring Garmin Daily</h3>
+        <span className="text-xs text-gray-400">{data.length} jours</span>
       </div>
 
-      {/* Mini-cartes récapitulatives */}
-      {summaryCards && (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
-          {summaryCards.map((card) => {
-            const Icon = card.icon
-            return (
-              <div key={card.label} className="bg-white p-4 rounded-lg border">
-                <div className="flex items-center justify-between">
-                  <div className={`p-2 rounded-lg ${card.bgColor}`}>
-                    <Icon className={`h-4 w-4 ${card.color}`} />
-                  </div>
-                  {card.trend && (
-                    <TrendArrow current={card.trend.current} previous={card.trend.previous} />
-                  )}
-                </div>
-                <p className="text-sm font-medium text-gray-500 mt-3">{card.label}</p>
-                <p className="text-2xl font-semibold text-gray-900">
-                  {card.value}
-                  {card.unit && <span className="text-sm font-normal text-gray-500 ml-1">{card.unit}</span>}
-                </p>
-                {card.subtitle && (
-                  <p className="text-xs text-gray-400 mt-1">{card.subtitle}</p>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      )}
-
-      {/* Badges secondaires */}
-      {latestBadges && (
-        <div className="flex flex-wrap items-center gap-2 mb-4">
-          {latestBadges.trainingStatus && latestBadges.trainingStatusColor && (
-            <span className={`inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full ${latestBadges.trainingStatusColor}`}>
-              {latestBadges.trainingStatus}
-            </span>
-          )}
-          {latestBadges.spo2 != null && (
-            <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300">
-              <Droplets className="h-3 w-3" />
-              SpO₂ {latestBadges.spo2}%
-            </span>
-          )}
-          {latestBadges.bodyBatteryMax != null && latestBadges.bodyBatteryMin != null && (
-            <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300">
-              BB {latestBadges.bodyBatteryMin} → {latestBadges.bodyBatteryMax}
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* Sous-section Sommeil */}
-      {filteredData.length > 0 && (() => {
-        const latest = filteredData[filteredData.length - 1]
-        const hasPhases = latest.deep_sleep_seconds !== null || latest.light_sleep_seconds !== null ||
-          latest.rem_sleep_seconds !== null || latest.awake_sleep_seconds !== null
-        const hasSleepData = latest.sleep_score !== null || latest.sleep_duration_min !== null ||
-          latest.sleep_start_time !== null || hasPhases
-
-        if (!hasSleepData) return null
-
-        const phases = [
-          { key: 'deep', label: 'Profond', seconds: latest.deep_sleep_seconds, color: 'bg-indigo-600' },
-          { key: 'light', label: 'Leger', seconds: latest.light_sleep_seconds, color: 'bg-blue-400' },
-          { key: 'rem', label: 'REM', seconds: latest.rem_sleep_seconds, color: 'bg-purple-500' },
-          { key: 'awake', label: 'Eveille', seconds: latest.awake_sleep_seconds, color: 'bg-gray-300' },
-        ]
-        const totalPhaseSeconds = phases.reduce((sum, p) => sum + (p.seconds || 0), 0)
-
-        function formatSeconds(s: number | null): string {
-          if (s === null || s === 0) return '0min'
-          const h = Math.floor(s / 3600)
-          const m = Math.round((s % 3600) / 60)
-          return h > 0 ? `${h}h ${m.toString().padStart(2, '0')}min` : `${m}min`
-        }
-
-        return (
-          <div className="mb-4 p-4 bg-gray-50 rounded-lg border">
-            <div className="flex items-center gap-2 mb-3">
-              <Moon className="h-4 w-4 text-indigo-600" />
-              <h4 className="text-sm font-semibold text-gray-900">Sommeil</h4>
-              <span className="text-xs text-gray-400">Derniere nuit</span>
-            </div>
-
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
-              {latest.sleep_start_time && (
-                <div>
-                  <p className="text-xs text-gray-500">Coucher</p>
-                  <p className="text-sm font-medium text-gray-900">{latest.sleep_start_time}</p>
-                </div>
-              )}
-              {latest.sleep_end_time && (
-                <div>
-                  <p className="text-xs text-gray-500">Reveil</p>
-                  <p className="text-sm font-medium text-gray-900">{latest.sleep_end_time}</p>
-                </div>
-              )}
-              {latest.sleep_score !== null && (
-                <div>
-                  <p className="text-xs text-gray-500">Score</p>
-                  <p className="text-sm font-medium text-gray-900">{latest.sleep_score}</p>
-                </div>
-              )}
-              {latest.sleep_duration_min !== null && (
-                <div>
-                  <p className="text-xs text-gray-500">Duree totale</p>
-                  <p className="text-sm font-medium text-gray-900">{formatSleepDuration(latest.sleep_duration_min)}</p>
-                </div>
-              )}
-            </div>
-
-            {hasPhases && totalPhaseSeconds > 0 && (
-              <>
-                <div className="flex h-4 rounded-full overflow-hidden mb-2">
-                  {phases.map(p => {
-                    if (!p.seconds || p.seconds === 0) return null
-                    const pct = (p.seconds / totalPhaseSeconds) * 100
-                    return (
-                      <div
-                        key={p.key}
-                        className={`${p.color} transition-all`}
-                        style={{ width: `${pct}%` }}
-                        title={`${p.label}: ${formatSeconds(p.seconds)}`}
-                      />
-                    )
-                  })}
-                </div>
-                <div className="flex flex-wrap gap-3 text-xs text-gray-600">
-                  {phases.map(p => {
-                    if (!p.seconds || p.seconds === 0) return null
-                    return (
-                      <div key={p.key} className="flex items-center gap-1">
-                        <div className={`w-2.5 h-2.5 rounded-full ${p.color}`} />
-                        <span>{p.label}: {formatSeconds(p.seconds)}</span>
-                      </div>
-                    )
-                  })}
-                </div>
-              </>
-            )}
-
-            {(latest.average_respiration !== null || latest.avg_sleep_stress !== null) && (
-              <div className="flex gap-2 mt-3">
-                {latest.average_respiration !== null && (
-                  <span className="inline-flex items-center text-xs font-medium px-2.5 py-1 rounded-full bg-cyan-100 text-cyan-700">
-                    Respiration {latest.average_respiration.toFixed(1)} rpm
-                  </span>
-                )}
-                {latest.avg_sleep_stress !== null && (
-                  <span className="inline-flex items-center text-xs font-medium px-2.5 py-1 rounded-full bg-orange-100 text-orange-700">
-                    Stress sommeil {latest.avg_sleep_stress.toFixed(0)}
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
-        )
-      })()}
-
-      {/* Toggles des métriques */}
-      <div className="flex flex-wrap gap-2 mb-4">
-        {METRICS.map((metric) => (
-          <button
-            key={metric.key}
-            onClick={() => toggleMetric(metric.key)}
-            className={`px-3 py-1.5 text-xs rounded-full border transition-colors ${
-              visibleMetrics.has(metric.key)
-                ? 'border-transparent text-white'
-                : 'border-gray-300 text-gray-500 bg-white hover:bg-gray-50'
-            }`}
-            style={visibleMetrics.has(metric.key) ? { backgroundColor: metric.color } : undefined}
-          >
-            {metric.label}
-          </button>
-        ))}
+      {/* Onglets */}
+      <div className="flex border-b border-gray-200 mb-6">
+        <button
+          onClick={() => setActiveTab('monitoring')}
+          className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'monitoring'
+              ? 'border-purple-600 text-purple-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <Watch className="inline h-4 w-4 mr-1.5 -mt-0.5" />
+          Monitoring
+        </button>
+        <button
+          onClick={() => setActiveTab('sleep')}
+          className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'sleep'
+              ? 'border-indigo-600 text-indigo-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <Moon className="inline h-4 w-4 mr-1.5 -mt-0.5" />
+          Sommeil
+        </button>
       </div>
 
-      {/* Graphique multi-lignes */}
-      <div className="h-[300px] w-full">
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
-            <defs>
-              {METRICS.filter(m => visibleMetrics.has(m.key)).map((metric) => (
-                <linearGradient key={metric.key} id={`gradient-${metric.key}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={metric.color} stopOpacity={0.2} />
-                  <stop offset="100%" stopColor={metric.color} stopOpacity={0} />
-                </linearGradient>
-              ))}
-            </defs>
-            <XAxis
-              dataKey="dateFormatted"
-              tick={{ fontSize: 12 }}
-              tickLine={false}
-              axisLine={false}
-              minTickGap={20}
-            />
-            <YAxis
-              tick={{ fontSize: 12 }}
-              tickLine={false}
-              axisLine={false}
-              width={40}
-            />
-            <Tooltip
-              content={({ active, payload, label }) => {
-                if (!active || !payload || payload.length === 0) return null
-                // Trouver l'entrée originale pour afficher toutes les valeurs
-                const entry = filteredData.find(d =>
-                  format(parseISO(d.date), 'd MMM', { locale: fr }) === label
-                )
-                if (!entry) return null
-
+      {activeTab === 'monitoring' ? (
+        <>
+          {/* Mini-cartes récapitulatives */}
+          {summaryCards && (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
+              {summaryCards.map((card) => {
+                const Icon = card.icon
                 return (
-                  <div className="rounded-lg border bg-white p-3 shadow-md text-sm">
-                    <p className="font-semibold text-gray-900 mb-2">
-                      {format(parseISO(entry.date), 'd MMMM yyyy', { locale: fr })}
-                    </p>
-                    <div className="space-y-1">
-                      {entry.hrv_rmssd !== null && (
-                        <div className="flex justify-between gap-4">
-                          <span className="text-gray-500">HRV</span>
-                          <span className="font-medium" style={{ color: '#8b5cf6' }}>{entry.hrv_rmssd.toFixed(0)} ms</span>
-                        </div>
-                      )}
-                      {entry.training_readiness !== null && (
-                        <div className="flex justify-between gap-4">
-                          <span className="text-gray-500">Readiness</span>
-                          <span className="font-medium" style={{ color: '#f59e0b' }}>{entry.training_readiness}</span>
-                        </div>
-                      )}
-                      {entry.sleep_score !== null && (
-                        <div className="flex justify-between gap-4">
-                          <span className="text-gray-500">Sommeil</span>
-                          <span className="font-medium" style={{ color: '#3b82f6' }}>{entry.sleep_score}</span>
-                        </div>
-                      )}
-                      {entry.stress_score !== null && (
-                        <div className="flex justify-between gap-4">
-                          <span className="text-gray-500">Stress</span>
-                          <span className="font-medium" style={{ color: '#ef4444' }}>{entry.stress_score}</span>
-                        </div>
-                      )}
-                      {entry.body_battery_max !== null && (
-                        <div className="flex justify-between gap-4">
-                          <span className="text-gray-500">Body Battery</span>
-                          <span className="font-medium" style={{ color: '#10b981' }}>{entry.body_battery_max}</span>
-                        </div>
-                      )}
-                      {entry.resting_hr !== null && (
-                        <div className="flex justify-between gap-4">
-                          <span className="text-gray-500">FC repos</span>
-                          <span className="font-medium" style={{ color: '#f43f5e' }}>{entry.resting_hr} bpm</span>
-                        </div>
-                      )}
-                      {entry.spo2 !== null && (
-                        <div className="flex justify-between gap-4">
-                          <span className="text-gray-500">SpO₂</span>
-                          <span className="font-medium text-sky-600">{entry.spo2}%</span>
-                        </div>
-                      )}
-                      {entry.sleep_duration_min !== null && (
-                        <div className="flex justify-between gap-4">
-                          <span className="text-gray-500">Durée sommeil</span>
-                          <span className="font-medium text-indigo-600">{formatSleepDuration(entry.sleep_duration_min)}</span>
-                        </div>
-                      )}
-                      {entry.sleep_start_time && entry.sleep_end_time && (
-                        <div className="flex justify-between gap-4">
-                          <span className="text-gray-500">Sommeil</span>
-                          <span className="font-medium text-indigo-600">{entry.sleep_start_time} - {entry.sleep_end_time}</span>
-                        </div>
-                      )}
-                      {entry.deep_sleep_seconds !== null && (
-                        <div className="flex justify-between gap-4">
-                          <span className="text-gray-500">Profond</span>
-                          <span className="font-medium text-indigo-600">{formatSleepDuration(entry.deep_sleep_seconds / 60)}</span>
-                        </div>
-                      )}
-                      {entry.rem_sleep_seconds !== null && (
-                        <div className="flex justify-between gap-4">
-                          <span className="text-gray-500">REM</span>
-                          <span className="font-medium text-purple-600">{formatSleepDuration(entry.rem_sleep_seconds / 60)}</span>
-                        </div>
-                      )}
-                      {entry.average_respiration !== null && (
-                        <div className="flex justify-between gap-4">
-                          <span className="text-gray-500">Respiration</span>
-                          <span className="font-medium text-cyan-600">{entry.average_respiration.toFixed(1)} rpm</span>
-                        </div>
-                      )}
-                      {entry.body_battery_min !== null && (
-                        <div className="flex justify-between gap-4">
-                          <span className="text-gray-500">BB min</span>
-                          <span className="font-medium text-emerald-600">{entry.body_battery_min}</span>
-                        </div>
-                      )}
-                      {entry.training_status !== null && (
-                        <div className="flex justify-between gap-4">
-                          <span className="text-gray-500">Statut</span>
-                          <span className="font-medium text-gray-700">{entry.training_status}</span>
-                        </div>
+                  <div key={card.label} className="bg-white p-4 rounded-lg border">
+                    <div className="flex items-center justify-between">
+                      <div className={`p-2 rounded-lg ${card.bgColor}`}>
+                        <Icon className={`h-4 w-4 ${card.color}`} />
+                      </div>
+                      {card.trend && (
+                        <TrendArrow current={card.trend.current} previous={card.trend.previous} />
                       )}
                     </div>
+                    <p className="text-sm font-medium text-gray-500 mt-3">{card.label}</p>
+                    <p className="text-2xl font-semibold text-gray-900">
+                      {card.value}
+                      {card.unit && <span className="text-sm font-normal text-gray-500 ml-1">{card.unit}</span>}
+                    </p>
+                    {card.subtitle && (
+                      <p className="text-xs text-gray-400 mt-1">{card.subtitle}</p>
+                    )}
                   </div>
                 )
-              }}
-            />
-            {METRICS.filter(m => visibleMetrics.has(m.key)).map((metric) => (
-              <Area
+              })}
+            </div>
+          )}
+
+          {/* Badges secondaires */}
+          {latestBadges && (
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              {latestBadges.trainingStatus && latestBadges.trainingStatusColor && (
+                <span className={`inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full ${latestBadges.trainingStatusColor}`}>
+                  {latestBadges.trainingStatus}
+                </span>
+              )}
+              {latestBadges.spo2 != null && (
+                <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300">
+                  <Droplets className="h-3 w-3" />
+                  SpO₂ {latestBadges.spo2}%
+                </span>
+              )}
+              {latestBadges.bodyBatteryMax != null && latestBadges.bodyBatteryMin != null && (
+                <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300">
+                  BB {latestBadges.bodyBatteryMin} → {latestBadges.bodyBatteryMax}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Toggles des métriques */}
+          <div className="flex flex-wrap gap-2 mb-4">
+            {METRICS.map((metric) => (
+              <button
                 key={metric.key}
-                type="monotone"
-                dataKey={metric.key}
-                stroke={metric.color}
-                strokeWidth={2}
-                fill={`url(#gradient-${metric.key})`}
-                connectNulls
-              />
+                onClick={() => toggleMetric(metric.key)}
+                className={`px-3 py-1.5 text-xs rounded-full border transition-colors ${
+                  visibleMetrics.has(metric.key)
+                    ? 'border-transparent text-white'
+                    : 'border-gray-300 text-gray-500 bg-white hover:bg-gray-50'
+                }`}
+                style={visibleMetrics.has(metric.key) ? { backgroundColor: metric.color } : undefined}
+              >
+                {metric.label}
+              </button>
             ))}
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
+          </div>
+
+          {/* Graphique multi-lignes */}
+          <div className="h-[300px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
+                <defs>
+                  {METRICS.filter(m => visibleMetrics.has(m.key)).map((metric) => (
+                    <linearGradient key={metric.key} id={`gradient-${metric.key}`} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={metric.color} stopOpacity={0.2} />
+                      <stop offset="100%" stopColor={metric.color} stopOpacity={0} />
+                    </linearGradient>
+                  ))}
+                </defs>
+                <XAxis
+                  dataKey="dateFormatted"
+                  tick={{ fontSize: 12 }}
+                  tickLine={false}
+                  axisLine={false}
+                  minTickGap={20}
+                />
+                <YAxis
+                  tick={{ fontSize: 12 }}
+                  tickLine={false}
+                  axisLine={false}
+                  width={40}
+                />
+                <Tooltip
+                  content={({ active, payload, label }) => {
+                    if (!active || !payload || payload.length === 0) return null
+                    const entry = data.find(d =>
+                      format(parseISO(d.date), 'd MMM', { locale: fr }) === label
+                    )
+                    if (!entry) return null
+
+                    return (
+                      <div className="rounded-lg border bg-white p-3 shadow-md text-sm">
+                        <p className="font-semibold text-gray-900 mb-2">
+                          {format(parseISO(entry.date), 'd MMMM yyyy', { locale: fr })}
+                        </p>
+                        <div className="space-y-1">
+                          {entry.hrv_rmssd !== null && (
+                            <div className="flex justify-between gap-4">
+                              <span className="text-gray-500">HRV</span>
+                              <span className="font-medium" style={{ color: '#8b5cf6' }}>{entry.hrv_rmssd.toFixed(0)} ms</span>
+                            </div>
+                          )}
+                          {entry.training_readiness !== null && (
+                            <div className="flex justify-between gap-4">
+                              <span className="text-gray-500">Readiness</span>
+                              <span className="font-medium" style={{ color: '#f59e0b' }}>{entry.training_readiness}</span>
+                            </div>
+                          )}
+                          {entry.sleep_score !== null && (
+                            <div className="flex justify-between gap-4">
+                              <span className="text-gray-500">Sommeil</span>
+                              <span className="font-medium" style={{ color: '#3b82f6' }}>{entry.sleep_score}</span>
+                            </div>
+                          )}
+                          {entry.stress_score !== null && (
+                            <div className="flex justify-between gap-4">
+                              <span className="text-gray-500">Stress</span>
+                              <span className="font-medium" style={{ color: '#ef4444' }}>{entry.stress_score}</span>
+                            </div>
+                          )}
+                          {entry.body_battery_max !== null && (
+                            <div className="flex justify-between gap-4">
+                              <span className="text-gray-500">Body Battery</span>
+                              <span className="font-medium" style={{ color: '#10b981' }}>{entry.body_battery_max}</span>
+                            </div>
+                          )}
+                          {entry.resting_hr !== null && (
+                            <div className="flex justify-between gap-4">
+                              <span className="text-gray-500">FC repos</span>
+                              <span className="font-medium" style={{ color: '#f43f5e' }}>{entry.resting_hr} bpm</span>
+                            </div>
+                          )}
+                          {entry.spo2 !== null && (
+                            <div className="flex justify-between gap-4">
+                              <span className="text-gray-500">SpO₂</span>
+                              <span className="font-medium text-sky-600">{entry.spo2}%</span>
+                            </div>
+                          )}
+                          {entry.sleep_duration_min !== null && (
+                            <div className="flex justify-between gap-4">
+                              <span className="text-gray-500">Durée sommeil</span>
+                              <span className="font-medium text-indigo-600">
+                                {(() => {
+                                  const minutes = entry.sleep_duration_min!
+                                  const h = Math.floor(minutes / 60)
+                                  const m = Math.round(minutes % 60)
+                                  return `${h}h ${m.toString().padStart(2, '0')}min`
+                                })()}
+                              </span>
+                            </div>
+                          )}
+                          {entry.body_battery_min !== null && (
+                            <div className="flex justify-between gap-4">
+                              <span className="text-gray-500">BB min</span>
+                              <span className="font-medium text-emerald-600">{entry.body_battery_min}</span>
+                            </div>
+                          )}
+                          {entry.training_status !== null && (
+                            <div className="flex justify-between gap-4">
+                              <span className="text-gray-500">Statut</span>
+                              <span className="font-medium text-gray-700">{entry.training_status}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  }}
+                />
+                {METRICS.filter(m => visibleMetrics.has(m.key)).map((metric) => (
+                  <Area
+                    key={metric.key}
+                    type="monotone"
+                    dataKey={metric.key}
+                    stroke={metric.color}
+                    strokeWidth={2}
+                    fill={`url(#gradient-${metric.key})`}
+                    connectNulls
+                  />
+                ))}
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </>
+      ) : (
+        <GarminSleepTab data={data} />
+      )}
     </div>
   )
 }
