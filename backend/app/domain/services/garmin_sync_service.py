@@ -16,6 +16,7 @@ from uuid import UUID
 
 import garth
 from sqlalchemy import and_, func
+from sqlalchemy.orm.attributes import flag_modified
 from sqlmodel import Session, select
 
 if TYPE_CHECKING:
@@ -802,13 +803,38 @@ async def enrich_garmin_activity_fit(
     # 3. Parse metriques FIT (Running Dynamics, power, TE)
     fit_data = parse_fit_file(fit_bytes)
 
-    # 4. Stocke streams_data (ne pas ecraser des streams existants)
+    # 4. Fusionner les streams Garmin dans streams_data
+    #    - Si streams_data est vide : ecrire tout
+    #    - Si streams_data existe deja (Strava) : fusionner les cles
+    #      exclusives FIT (stance_time, vertical_oscillation, etc.)
     stored_streams = False
-    if streams and not activity.streams_data:
-        activity.streams_data = streams
-        activity.updated_at = datetime.utcnow()
-        session.add(activity)
-        stored_streams = True
+    garmin_exclusive_keys = {
+        "stance_time", "vertical_oscillation", "step_length",
+        "vertical_ratio", "power", "temperature",
+    }
+    if streams:
+        if not activity.streams_data:
+            # Pas de streams existants : tout ecrire
+            activity.streams_data = streams
+            stored_streams = True
+        else:
+            # Fusionner les cles Garmin exclusives dans les streams existants
+            existing = dict(activity.streams_data)
+            merged_keys = []
+            for key in garmin_exclusive_keys:
+                if key in streams and key not in existing:
+                    existing[key] = streams[key]
+                    merged_keys.append(key)
+            if merged_keys:
+                activity.streams_data = existing
+                stored_streams = True
+                logger.info(
+                    f"Streams Garmin fusionnes pour activite {activity_id}: {merged_keys}"
+                )
+        if stored_streams:
+            flag_modified(activity, "streams_data")
+            activity.updated_at = datetime.utcnow()
+            session.add(activity)
 
     # 5. Cree/update FitMetrics
     existing_fm = session.exec(
