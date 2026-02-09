@@ -131,6 +131,7 @@ export default function Login() {
         {/* Form */}
         <form
           className="mt-8 space-y-6"
+          noValidate
           onSubmit={isSignup ? signupForm.handleSubmit(onSignupSubmit) : loginForm.handleSubmit(onLoginSubmit)}
         >
           <div className="space-y-4">

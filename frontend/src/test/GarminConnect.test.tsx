@@ -225,10 +225,10 @@ describe('GarminConnect — Connecte', () => {
     renderWithProviders(<GarminConnect />)
 
     await waitFor(() => {
-      expect(screen.getByText(/Synchroniser/)).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Synchroniser \(30 jours\)/ })).toBeInTheDocument()
     })
 
-    fireEvent.click(screen.getByText(/Synchroniser/))
+    fireEvent.click(screen.getByRole('button', { name: /Synchroniser \(30 jours\)/ }))
 
     await waitFor(() => {
       expect(garminService.syncGarminDaily).toHaveBeenCalledWith(30)
