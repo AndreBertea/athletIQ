@@ -21,12 +21,50 @@ export interface GarminStatus {
 export interface FitMetrics {
   id: string
   activity_id: string
+
+  // Running Dynamics
   ground_contact_time_avg: number | null
   vertical_oscillation_avg: number | null
   stance_time_balance_avg: number | null
+  stance_time_percent_avg: number | null
+  step_length_avg: number | null
+  vertical_ratio_avg: number | null
+
+  // Puissance
   power_avg: number | null
+  power_max: number | null
+  normalized_power: number | null
+
+  // Cadence
+  cadence_avg: number | null
+  cadence_max: number | null
+
+  // FC
+  heart_rate_avg: number | null
+  heart_rate_max: number | null
+
+  // Vitesse
+  speed_avg: number | null
+  speed_max: number | null
+
+  // Température
+  temperature_avg: number | null
+  temperature_max: number | null
+
+  // Training Effect
   aerobic_training_effect: number | null
   anaerobic_training_effect: number | null
+
+  // Totaux
+  total_calories: number | null
+  total_strides: number | null
+  total_ascent: number | null
+  total_descent: number | null
+  total_distance: number | null
+  total_timer_time: number | null
+  total_elapsed_time: number | null
+
+  // Metadata
   record_count: number | null
   fit_downloaded_at: string | null
 }

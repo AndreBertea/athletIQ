@@ -254,20 +254,15 @@ def download_fit_file(client: garth.Client, garmin_activity_id: int) -> Optional
 
 def parse_fit_file(fit_bytes: bytes) -> Dict[str, Any]:
     """
-    Parse un fichier FIT et extrait Running Dynamics, puissance, Training Effect.
+    Parse un fichier FIT et extrait TOUTES les metriques session exploitables.
 
-    Args:
-        fit_bytes: Contenu brut du fichier FIT
+    Extrait depuis les messages 'record' (moyennes calculees) :
+    - Running Dynamics : GCT, oscillation verticale, balance, ratio, longueur de foulee
+    - Puissance par seconde
 
-    Returns:
-        Dict avec:
-        - ground_contact_time_avg: temps de contact au sol moyen (ms)
-        - vertical_oscillation_avg: oscillation verticale moyenne (cm)
-        - stance_time_balance_avg: balance G/D moyenne (%)
-        - power_avg: puissance moyenne estimee (W)
-        - aerobic_training_effect: Training Effect aerobique (0.0-5.0)
-        - anaerobic_training_effect: Training Effect anaerobique (0.0-5.0)
-        - record_count: nombre d'enregistrements parses
+    Extrait depuis le message 'session' (valeurs Garmin) :
+    - FC, vitesse, cadence, temperature, puissance (avg/max)
+    - Training Effect, calories, strides, denivele, distances, temps
     """
     import fitparse
 
@@ -277,6 +272,9 @@ def parse_fit_file(fit_bytes: bytes) -> Dict[str, Any]:
     stance_times: List[float] = []
     vertical_oscillations: List[float] = []
     stance_balances: List[float] = []
+    stance_time_percents: List[float] = []
+    step_lengths: List[float] = []
+    vertical_ratios: List[float] = []
     powers: List[float] = []
 
     for record in fitfile.get_messages("record"):
@@ -292,6 +290,18 @@ def parse_fit_file(fit_bytes: bytes) -> Dict[str, Any]:
         if val is not None:
             stance_balances.append(float(val))
 
+        val = record.get_value("stance_time_percent")
+        if val is not None:
+            stance_time_percents.append(float(val))
+
+        val = record.get_value("step_length")
+        if val is not None:
+            step_lengths.append(float(val))
+
+        val = record.get_value("vertical_ratio")
+        if val is not None:
+            vertical_ratios.append(float(val))
+
         val = record.get_value("power")
         if val is not None:
             powers.append(float(val))
@@ -300,30 +310,98 @@ def parse_fit_file(fit_bytes: bytes) -> Dict[str, Any]:
         "record_count": len(stance_times) + len(powers),
     }
 
+    # Moyennes calculees depuis les records
     if stance_times:
-        result["ground_contact_time_avg"] = round(
-            sum(stance_times) / len(stance_times), 1
-        )
+        result["ground_contact_time_avg"] = round(sum(stance_times) / len(stance_times), 1)
     if vertical_oscillations:
-        result["vertical_oscillation_avg"] = round(
-            sum(vertical_oscillations) / len(vertical_oscillations), 2
-        )
+        result["vertical_oscillation_avg"] = round(sum(vertical_oscillations) / len(vertical_oscillations), 2)
     if stance_balances:
-        result["stance_time_balance_avg"] = round(
-            sum(stance_balances) / len(stance_balances), 2
-        )
+        result["stance_time_balance_avg"] = round(sum(stance_balances) / len(stance_balances), 2)
+    if stance_time_percents:
+        result["stance_time_percent_avg"] = round(sum(stance_time_percents) / len(stance_time_percents), 2)
+    if step_lengths:
+        result["step_length_avg"] = round(sum(step_lengths) / len(step_lengths), 1)
+    if vertical_ratios:
+        result["vertical_ratio_avg"] = round(sum(vertical_ratios) / len(vertical_ratios), 2)
     if powers:
         result["power_avg"] = round(sum(powers) / len(powers), 1)
 
-    # Training Effect depuis le message session
+    # Metriques session (valeurs Garmin directes)
     for session_msg in fitfile.get_messages("session"):
-        aerobic_raw = session_msg.get_value("total_training_effect")
-        if aerobic_raw is not None:
-            result["aerobic_training_effect"] = round(float(aerobic_raw), 1)
+        # Training Effect
+        v = session_msg.get_value("total_training_effect")
+        if v is not None:
+            result["aerobic_training_effect"] = round(float(v), 1)
+        v = session_msg.get_value("total_anaerobic_training_effect")
+        if v is not None:
+            result["anaerobic_training_effect"] = round(float(v), 1)
 
-        anaerobic_raw = session_msg.get_value("total_anaerobic_training_effect")
-        if anaerobic_raw is not None:
-            result["anaerobic_training_effect"] = round(float(anaerobic_raw), 1)
+        # FC
+        v = session_msg.get_value("avg_heart_rate")
+        if v is not None:
+            result["heart_rate_avg"] = int(v)
+        v = session_msg.get_value("max_heart_rate")
+        if v is not None:
+            result["heart_rate_max"] = int(v)
+
+        # Vitesse
+        v = session_msg.get_value("enhanced_avg_speed")
+        if v is not None:
+            result["speed_avg"] = round(float(v), 3)
+        v = session_msg.get_value("enhanced_max_speed")
+        if v is not None:
+            result["speed_max"] = round(float(v), 3)
+
+        # Puissance session
+        v = session_msg.get_value("avg_power")
+        if v is not None and "power_avg" not in result:
+            result["power_avg"] = round(float(v), 1)
+        v = session_msg.get_value("max_power")
+        if v is not None:
+            result["power_max"] = round(float(v), 1)
+        v = session_msg.get_value("normalized_power")
+        if v is not None:
+            result["normalized_power"] = round(float(v), 1)
+
+        # Cadence
+        v = session_msg.get_value("avg_running_cadence")
+        if v is not None:
+            result["cadence_avg"] = round(float(v), 1)
+        v = session_msg.get_value("max_running_cadence")
+        if v is not None:
+            result["cadence_max"] = round(float(v), 1)
+
+        # Temperature
+        v = session_msg.get_value("avg_temperature")
+        if v is not None:
+            result["temperature_avg"] = round(float(v), 1)
+        v = session_msg.get_value("max_temperature")
+        if v is not None:
+            result["temperature_max"] = round(float(v), 1)
+
+        # Totaux
+        v = session_msg.get_value("total_calories")
+        if v is not None:
+            result["total_calories"] = int(v)
+        v = session_msg.get_value("total_strides")
+        if v is not None:
+            result["total_strides"] = int(v)
+        v = session_msg.get_value("total_ascent")
+        if v is not None:
+            result["total_ascent"] = int(v)
+        v = session_msg.get_value("total_descent")
+        if v is not None:
+            result["total_descent"] = int(v)
+        v = session_msg.get_value("total_distance")
+        if v is not None:
+            result["total_distance"] = round(float(v), 2)
+        v = session_msg.get_value("total_timer_time")
+        if v is not None:
+            result["total_timer_time"] = round(float(v), 3)
+        v = session_msg.get_value("total_elapsed_time")
+        if v is not None:
+            result["total_elapsed_time"] = round(float(v), 3)
+
         break  # Une seule session par activite
 
     return result
@@ -542,8 +620,7 @@ SEMICIRCLE_TO_DEG = 180.0 / (2 ** 31)
 
 def parse_fit_file_streams(fit_bytes: bytes) -> Dict[str, Any]:
     """
-    Parse un fichier FIT et extrait les streams compatibles avec le pipeline
-    de segmentation existant.
+    Parse un fichier FIT et extrait TOUS les streams par seconde.
 
     Format de sortie compatible avec streams_data Strava :
     {
@@ -553,20 +630,34 @@ def parse_fit_file_streams(fit_bytes: bytes) -> Dict[str, Any]:
         "heartrate": {"data": [120, 125, ...]},
         "cadence": {"data": [85, 86, ...]},
         "latlng": {"data": [[lat, lng], ...]},
+        "velocity_smooth": {"data": [1.2, 1.3, ...]},
         "grade_smooth": {"data": [0.0, 1.2, ...]},
+        "power": {"data": [300, 310, ...]},
+        "temperature": {"data": [19, 20, ...]},
+        "stance_time": {"data": [279.0, 280.0, ...]},
+        "vertical_oscillation": {"data": [90.5, 91.0, ...]},
+        "step_length": {"data": [1010, 1020, ...]},
+        "vertical_ratio": {"data": [8.5, 8.6, ...]},
     }
     """
     import fitparse
 
     fitfile = fitparse.FitFile(BytesIO(fit_bytes))
 
-    times: List[float] = []
-    distances: List[float] = []
-    altitudes: List[float] = []
-    heartrates: List[int] = []
-    cadences: List[int] = []
-    latlngs: List[List[float]] = []
-    grades: List[float] = []
+    times: List[Any] = []
+    distances: List[Any] = []
+    altitudes: List[Any] = []
+    heartrates: List[Any] = []
+    cadences: List[Any] = []
+    latlngs: List[Any] = []
+    speeds: List[Any] = []
+    grades: List[Any] = []
+    powers: List[Any] = []
+    temperatures: List[Any] = []
+    stance_times: List[Any] = []
+    vertical_oscillations: List[Any] = []
+    step_lengths: List[Any] = []
+    vertical_ratios: List[Any] = []
 
     start_timestamp = None
 
@@ -593,7 +684,7 @@ def parse_fit_file_streams(fit_bytes: bytes) -> Dict[str, Any]:
         hr = record.get_value("heart_rate")
         heartrates.append(int(hr) if hr is not None else None)
 
-        # Cadence (running = steps/min, FIT peut donner demi-cycles)
+        # Cadence (running = steps/min, FIT donne demi-cycles)
         cad = record.get_value("cadence")
         cadences.append(int(cad) if cad is not None else None)
 
@@ -607,26 +698,56 @@ def parse_fit_file_streams(fit_bytes: bytes) -> Dict[str, Any]:
         else:
             latlngs.append(None)
 
-        # Grade
+        # Vitesse (m/s)
+        spd = record.get_value("enhanced_speed")
+        speeds.append(float(spd) if spd is not None else None)
+
+        # Grade (%)
         grade = record.get_value("grade")
         grades.append(float(grade) if grade is not None else None)
 
-    streams: Dict[str, Any] = {}
+        # Puissance (W)
+        pwr = record.get_value("power")
+        powers.append(int(pwr) if pwr is not None else None)
 
-    if any(t is not None for t in times):
-        streams["time"] = {"data": times}
-    if any(d is not None for d in distances):
-        streams["distance"] = {"data": distances}
-    if any(a is not None for a in altitudes):
-        streams["altitude"] = {"data": altitudes}
-    if any(h is not None for h in heartrates):
-        streams["heartrate"] = {"data": heartrates}
-    if any(c is not None for c in cadences):
-        streams["cadence"] = {"data": cadences}
-    if any(ll is not None for ll in latlngs):
-        streams["latlng"] = {"data": latlngs}
-    if any(g is not None for g in grades):
-        streams["grade_smooth"] = {"data": grades}
+        # Temperature capteur (°C)
+        temp = record.get_value("temperature")
+        temperatures.append(int(temp) if temp is not None else None)
+
+        # Running Dynamics par seconde
+        st = record.get_value("stance_time")
+        stance_times.append(float(st) if st is not None else None)
+
+        vo = record.get_value("vertical_oscillation")
+        vertical_oscillations.append(float(vo) if vo is not None else None)
+
+        sl = record.get_value("step_length")
+        step_lengths.append(float(sl) if sl is not None else None)
+
+        vr = record.get_value("vertical_ratio")
+        vertical_ratios.append(float(vr) if vr is not None else None)
+
+    # Construire le dict streams (n'inclure que les champs avec des donnees)
+    streams: Dict[str, Any] = {}
+    _candidates = [
+        ("time", times),
+        ("distance", distances),
+        ("altitude", altitudes),
+        ("heartrate", heartrates),
+        ("cadence", cadences),
+        ("latlng", latlngs),
+        ("velocity_smooth", speeds),
+        ("grade_smooth", grades),
+        ("power", powers),
+        ("temperature", temperatures),
+        ("stance_time", stance_times),
+        ("vertical_oscillation", vertical_oscillations),
+        ("step_length", step_lengths),
+        ("vertical_ratio", vertical_ratios),
+    ]
+    for key, data in _candidates:
+        if any(v is not None for v in data):
+            streams[key] = {"data": data}
 
     return streams
 
