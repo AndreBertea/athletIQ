@@ -113,14 +113,37 @@ def _fetch_day(client: garth.Client, day: date) -> Optional[Dict[str, Any]]:
         sleep = garth.SleepData.get(day, client=client)
         if sleep and sleep.daily_sleep_dto:
             dto = sleep.daily_sleep_dto
+            # Score global (existant)
             if dto.sleep_scores:
                 data["sleep_score"] = getattr(dto.sleep_scores, "overall", None)
                 if data["sleep_score"] and hasattr(data["sleep_score"], "value"):
                     data["sleep_score"] = data["sleep_score"].value
+            # Duree totale (existant)
             if dto.sleep_time_seconds:
                 data["sleep_duration_min"] = dto.sleep_time_seconds / 60
+            # SpO2 (existant)
             if getattr(dto, "average_sp_o2_value", None):
                 data["spo2"] = dto.average_sp_o2_value
+            # Phases de sommeil
+            if dto.deep_sleep_seconds is not None:
+                data["deep_sleep_seconds"] = dto.deep_sleep_seconds
+            if dto.light_sleep_seconds is not None:
+                data["light_sleep_seconds"] = dto.light_sleep_seconds
+            if dto.rem_sleep_seconds is not None:
+                data["rem_sleep_seconds"] = dto.rem_sleep_seconds
+            if dto.awake_sleep_seconds is not None:
+                data["awake_sleep_seconds"] = dto.awake_sleep_seconds
+            # Heures coucher/reveil
+            try:
+                data["sleep_start_time"] = dto.sleep_start.strftime("%H:%M")
+                data["sleep_end_time"] = dto.sleep_end.strftime("%H:%M")
+            except Exception:
+                pass
+            # Respiration et stress pendant le sommeil
+            if getattr(dto, "average_respiration_value", None) is not None:
+                data["average_respiration"] = dto.average_respiration_value
+            if getattr(dto, "avg_sleep_stress", None) is not None:
+                data["avg_sleep_stress"] = dto.avg_sleep_stress
     except Exception as e:
         logger.debug(f"Sleep {day}: {e}")
 

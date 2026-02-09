@@ -105,6 +105,14 @@ export interface GarminDailyEntry {
   training_readiness: number | null
   sleep_score: number | null
   sleep_duration_min: number | null
+  deep_sleep_seconds: number | null
+  light_sleep_seconds: number | null
+  rem_sleep_seconds: number | null
+  awake_sleep_seconds: number | null
+  sleep_start_time: string | null
+  sleep_end_time: string | null
+  average_respiration: number | null
+  avg_sleep_stress: number | null
   resting_hr: number | null
   stress_score: number | null
   body_battery_max: number | null

@@ -23,6 +23,14 @@ class GarminDaily(SQLModel, table=True):
     hrv_rmssd: Optional[float] = None
     sleep_score: Optional[float] = None
     sleep_duration_min: Optional[float] = None
+    deep_sleep_seconds: Optional[int] = None
+    light_sleep_seconds: Optional[int] = None
+    rem_sleep_seconds: Optional[int] = None
+    awake_sleep_seconds: Optional[int] = None
+    sleep_start_time: Optional[str] = None      # ISO format "HH:MM"
+    sleep_end_time: Optional[str] = None         # ISO format "HH:MM"
+    average_respiration: Optional[float] = None
+    avg_sleep_stress: Optional[float] = None
     resting_hr: Optional[int] = None
     stress_score: Optional[float] = None
     spo2: Optional[float] = None
@@ -46,6 +54,14 @@ class GarminDailyRead(SQLModel):
     hrv_rmssd: Optional[float]
     sleep_score: Optional[float]
     sleep_duration_min: Optional[float]
+    deep_sleep_seconds: Optional[int]
+    light_sleep_seconds: Optional[int]
+    rem_sleep_seconds: Optional[int]
+    awake_sleep_seconds: Optional[int]
+    sleep_start_time: Optional[str]
+    sleep_end_time: Optional[str]
+    average_respiration: Optional[float]
+    avg_sleep_stress: Optional[float]
     resting_hr: Optional[int]
     stress_score: Optional[float]
     spo2: Optional[float]

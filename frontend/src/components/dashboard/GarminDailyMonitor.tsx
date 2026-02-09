@@ -33,6 +33,14 @@ const METRICS: MetricConfig[] = [
   { key: 'resting_hr', label: 'FC repos', color: '#f43f5e' },
 ]
 
+const RANGE_OPTIONS = [
+  { days: 1, label: "Aujourd'hui" },
+  { days: 7, label: '7j' },
+  { days: 30, label: '30j' },
+  { days: 90, label: '3 mois' },
+  { days: 180, label: '6 mois' },
+]
+
 function avg7d(data: GarminDailyEntry[], key: keyof GarminDailyEntry): number | null {
   const last7 = data.slice(-7)
   const values = last7.map(d => d[key]).filter((v): v is number => v !== null && typeof v === 'number')
@@ -57,9 +65,19 @@ function TrendArrow({ current, previous }: { current: number | null; previous: n
 }
 
 export default function GarminDailyMonitor({ data, isLoading, isConnected }: GarminDailyMonitorProps) {
+  const [selectedRange, setSelectedRange] = useState(7)
   const [visibleMetrics, setVisibleMetrics] = useState<Set<string>>(
     new Set(METRICS.map(m => m.key))
   )
+
+  const filteredData = useMemo(() => {
+    if (!data || data.length === 0) return []
+    if (selectedRange === 0) return data
+    const cutoff = new Date()
+    cutoff.setDate(cutoff.getDate() - selectedRange)
+    const cutoffStr = cutoff.toISOString().split('T')[0]
+    return data.filter(d => d.date >= cutoffStr)
+  }, [data, selectedRange])
 
   const toggleMetric = (key: string) => {
     setVisibleMetrics(prev => {
@@ -83,17 +101,17 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
 
   // Mini-cartes récapitulatives
   const summaryCards = useMemo(() => {
-    if (!data || data.length === 0) return null
+    if (!filteredData || filteredData.length === 0) return null
 
-    const hrvAvg = avg7d(data, 'hrv_rmssd')
-    const hrvPrev = avg7dPrev(data, 'hrv_rmssd')
-    const readinessAvg = avg7d(data, 'training_readiness')
-    const sleepAvg = avg7d(data, 'sleep_score')
-    const latestRhr = data[data.length - 1]?.resting_hr
-    const rhrAvg = avg7d(data, 'resting_hr')
-    const latestVo2 = data[data.length - 1]?.vo2max_estimated
-    const latestWeight = data[data.length - 1]?.weight_kg
-    const sleepDurAvg = avg7d(data, 'sleep_duration_min')
+    const hrvAvg = avg7d(filteredData, 'hrv_rmssd')
+    const hrvPrev = avg7dPrev(filteredData, 'hrv_rmssd')
+    const readinessAvg = avg7d(filteredData, 'training_readiness')
+    const sleepAvg = avg7d(filteredData, 'sleep_score')
+    const latestRhr = filteredData[filteredData.length - 1]?.resting_hr
+    const rhrAvg = avg7d(filteredData, 'resting_hr')
+    const latestVo2 = filteredData[filteredData.length - 1]?.vo2max_estimated
+    const latestWeight = filteredData[filteredData.length - 1]?.weight_kg
+    const sleepDurAvg = avg7d(filteredData, 'sleep_duration_min')
 
     const cards: Array<{
       label: string
@@ -184,12 +202,12 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
     }
 
     return cards
-  }, [data])
+  }, [filteredData])
 
   // Badges secondaires (dernière entrée)
   const latestBadges = useMemo(() => {
-    if (!data || data.length === 0) return null
-    const latest = data[data.length - 1]
+    if (!filteredData || filteredData.length === 0) return null
+    const latest = filteredData[filteredData.length - 1]
 
     const trainingStatusColors: Record<string, string> = {
       Productive: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
@@ -209,12 +227,12 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
       bodyBatteryMin: latest.body_battery_min,
       bodyBatteryMax: latest.body_battery_max,
     }
-  }, [data])
+  }, [filteredData])
 
   // Données formatées pour le graphique
   const chartData = useMemo(() => {
-    if (!data || data.length === 0) return []
-    return data.map(entry => ({
+    if (!filteredData || filteredData.length === 0) return []
+    return filteredData.map(entry => ({
       date: entry.date,
       dateFormatted: format(parseISO(entry.date), 'd MMM', { locale: fr }),
       hrv_rmssd: entry.hrv_rmssd,
@@ -224,7 +242,7 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
       body_battery_max: entry.body_battery_max,
       resting_hr: entry.resting_hr,
     }))
-  }, [data])
+  }, [filteredData])
 
   // --- État non connecté ---
   if (!isConnected) {
@@ -264,7 +282,7 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
   }
 
   // --- Pas de données ---
-  if (!data || data.length === 0) {
+  if (!filteredData || filteredData.length === 0) {
     return (
       <div className="card">
         <div className="flex items-center space-x-2 mb-4">
@@ -287,10 +305,27 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
   // --- État connecté avec données ---
   return (
     <div className="card">
-      <div className="flex items-center space-x-2 mb-6">
-        <Watch className="h-5 w-5 text-purple-600" />
-        <h3 className="text-lg font-medium text-gray-900">Monitoring Garmin Daily</h3>
-        <span className="text-xs text-gray-400">{data.length} jours</span>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center space-x-2">
+          <Watch className="h-5 w-5 text-purple-600" />
+          <h3 className="text-lg font-medium text-gray-900">Monitoring Garmin Daily</h3>
+          <span className="text-xs text-gray-400">{filteredData.length} jours</span>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {RANGE_OPTIONS.map(opt => (
+            <button
+              key={opt.days}
+              onClick={() => setSelectedRange(opt.days)}
+              className={`px-2.5 py-1 text-xs rounded-full transition-colors ${
+                selectedRange === opt.days
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Mini-cartes récapitulatives */}
@@ -344,6 +379,114 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
         </div>
       )}
 
+      {/* Sous-section Sommeil */}
+      {filteredData.length > 0 && (() => {
+        const latest = filteredData[filteredData.length - 1]
+        const hasPhases = latest.deep_sleep_seconds !== null || latest.light_sleep_seconds !== null ||
+          latest.rem_sleep_seconds !== null || latest.awake_sleep_seconds !== null
+        const hasSleepData = latest.sleep_score !== null || latest.sleep_duration_min !== null ||
+          latest.sleep_start_time !== null || hasPhases
+
+        if (!hasSleepData) return null
+
+        const phases = [
+          { key: 'deep', label: 'Profond', seconds: latest.deep_sleep_seconds, color: 'bg-indigo-600' },
+          { key: 'light', label: 'Leger', seconds: latest.light_sleep_seconds, color: 'bg-blue-400' },
+          { key: 'rem', label: 'REM', seconds: latest.rem_sleep_seconds, color: 'bg-purple-500' },
+          { key: 'awake', label: 'Eveille', seconds: latest.awake_sleep_seconds, color: 'bg-gray-300' },
+        ]
+        const totalPhaseSeconds = phases.reduce((sum, p) => sum + (p.seconds || 0), 0)
+
+        function formatSeconds(s: number | null): string {
+          if (s === null || s === 0) return '0min'
+          const h = Math.floor(s / 3600)
+          const m = Math.round((s % 3600) / 60)
+          return h > 0 ? `${h}h ${m.toString().padStart(2, '0')}min` : `${m}min`
+        }
+
+        return (
+          <div className="mb-4 p-4 bg-gray-50 rounded-lg border">
+            <div className="flex items-center gap-2 mb-3">
+              <Moon className="h-4 w-4 text-indigo-600" />
+              <h4 className="text-sm font-semibold text-gray-900">Sommeil</h4>
+              <span className="text-xs text-gray-400">Derniere nuit</span>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+              {latest.sleep_start_time && (
+                <div>
+                  <p className="text-xs text-gray-500">Coucher</p>
+                  <p className="text-sm font-medium text-gray-900">{latest.sleep_start_time}</p>
+                </div>
+              )}
+              {latest.sleep_end_time && (
+                <div>
+                  <p className="text-xs text-gray-500">Reveil</p>
+                  <p className="text-sm font-medium text-gray-900">{latest.sleep_end_time}</p>
+                </div>
+              )}
+              {latest.sleep_score !== null && (
+                <div>
+                  <p className="text-xs text-gray-500">Score</p>
+                  <p className="text-sm font-medium text-gray-900">{latest.sleep_score}</p>
+                </div>
+              )}
+              {latest.sleep_duration_min !== null && (
+                <div>
+                  <p className="text-xs text-gray-500">Duree totale</p>
+                  <p className="text-sm font-medium text-gray-900">{formatSleepDuration(latest.sleep_duration_min)}</p>
+                </div>
+              )}
+            </div>
+
+            {hasPhases && totalPhaseSeconds > 0 && (
+              <>
+                <div className="flex h-4 rounded-full overflow-hidden mb-2">
+                  {phases.map(p => {
+                    if (!p.seconds || p.seconds === 0) return null
+                    const pct = (p.seconds / totalPhaseSeconds) * 100
+                    return (
+                      <div
+                        key={p.key}
+                        className={`${p.color} transition-all`}
+                        style={{ width: `${pct}%` }}
+                        title={`${p.label}: ${formatSeconds(p.seconds)}`}
+                      />
+                    )
+                  })}
+                </div>
+                <div className="flex flex-wrap gap-3 text-xs text-gray-600">
+                  {phases.map(p => {
+                    if (!p.seconds || p.seconds === 0) return null
+                    return (
+                      <div key={p.key} className="flex items-center gap-1">
+                        <div className={`w-2.5 h-2.5 rounded-full ${p.color}`} />
+                        <span>{p.label}: {formatSeconds(p.seconds)}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </>
+            )}
+
+            {(latest.average_respiration !== null || latest.avg_sleep_stress !== null) && (
+              <div className="flex gap-2 mt-3">
+                {latest.average_respiration !== null && (
+                  <span className="inline-flex items-center text-xs font-medium px-2.5 py-1 rounded-full bg-cyan-100 text-cyan-700">
+                    Respiration {latest.average_respiration.toFixed(1)} rpm
+                  </span>
+                )}
+                {latest.avg_sleep_stress !== null && (
+                  <span className="inline-flex items-center text-xs font-medium px-2.5 py-1 rounded-full bg-orange-100 text-orange-700">
+                    Stress sommeil {latest.avg_sleep_stress.toFixed(0)}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        )
+      })()}
+
       {/* Toggles des métriques */}
       <div className="flex flex-wrap gap-2 mb-4">
         {METRICS.map((metric) => (
@@ -391,7 +534,7 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
               content={({ active, payload, label }) => {
                 if (!active || !payload || payload.length === 0) return null
                 // Trouver l'entrée originale pour afficher toutes les valeurs
-                const entry = data.find(d =>
+                const entry = filteredData.find(d =>
                   format(parseISO(d.date), 'd MMM', { locale: fr }) === label
                 )
                 if (!entry) return null
@@ -448,6 +591,30 @@ export default function GarminDailyMonitor({ data, isLoading, isConnected }: Gar
                         <div className="flex justify-between gap-4">
                           <span className="text-gray-500">Durée sommeil</span>
                           <span className="font-medium text-indigo-600">{formatSleepDuration(entry.sleep_duration_min)}</span>
+                        </div>
+                      )}
+                      {entry.sleep_start_time && entry.sleep_end_time && (
+                        <div className="flex justify-between gap-4">
+                          <span className="text-gray-500">Sommeil</span>
+                          <span className="font-medium text-indigo-600">{entry.sleep_start_time} - {entry.sleep_end_time}</span>
+                        </div>
+                      )}
+                      {entry.deep_sleep_seconds !== null && (
+                        <div className="flex justify-between gap-4">
+                          <span className="text-gray-500">Profond</span>
+                          <span className="font-medium text-indigo-600">{formatSleepDuration(entry.deep_sleep_seconds / 60)}</span>
+                        </div>
+                      )}
+                      {entry.rem_sleep_seconds !== null && (
+                        <div className="flex justify-between gap-4">
+                          <span className="text-gray-500">REM</span>
+                          <span className="font-medium text-purple-600">{formatSleepDuration(entry.rem_sleep_seconds / 60)}</span>
+                        </div>
+                      )}
+                      {entry.average_respiration !== null && (
+                        <div className="flex justify-between gap-4">
+                          <span className="text-gray-500">Respiration</span>
+                          <span className="font-medium text-cyan-600">{entry.average_respiration.toFixed(1)} rpm</span>
                         </div>
                       )}
                       {entry.body_battery_min !== null && (
