@@ -1,8 +1,4 @@
-import axios from 'axios'
-
-// Utiliser l'URL de l'API configurée via VITE_API_URL ou fallback sur relative
-const VITE_API_URL = (import.meta as any).env?.VITE_API_URL
-const API_BASE_URL = VITE_API_URL ? `${VITE_API_URL}/api/v1` : '/api/v1'
+import { fetchFunctionBlob, invokeFunction, supabase } from './supabaseClient'
 
 interface StravaStatus {
   connected: boolean
@@ -28,105 +24,91 @@ interface User {
 }
 
 class AuthService {
-  private api = axios.create({
-    baseURL: API_BASE_URL,
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    withCredentials: true,
-  })
-
-  constructor() {
-    // Interceptor pour gérer le refresh token automatique
-    this.api.interceptors.response.use(
-      (response) => response,
-      async (error) => {
-        const originalRequest = error.config
-
-        if (
-          error.response?.status === 401 &&
-          !originalRequest._retry &&
-          !originalRequest.url?.includes('/auth/refresh') &&
-          !originalRequest.url?.includes('/auth/login')
-        ) {
-          originalRequest._retry = true
-
-          try {
-            await this.refreshToken()
-            // Retry la requête originale (le cookie est mis à jour automatiquement)
-            return this.api(originalRequest)
-          } catch (refreshError) {
-            // Refresh token invalide, rediriger vers login
-            if (!window.location.pathname.includes('/login') && !window.location.pathname.includes('/signup')) {
-              window.location.href = '/login'
-            }
-          }
-        }
-
-        return Promise.reject(error)
-      }
-    )
-  }
-
   async login(email: string, password: string): Promise<LoginResponse> {
-    const formData = new FormData()
-    formData.append('email', email)
-    formData.append('password', password)
-
-    const response = await this.api.post('/auth/login', formData, {
-      headers: {
-        'Content-Type': undefined, // Supprimer l'en-tête Content-Type pour FormData
-      },
-    })
-    return response.data
-  }
-
-  async signup(email: string, password: string, fullName: string): Promise<LoginResponse> {
-    const response = await this.api.post('/auth/signup', {
-      email,
-      password,
-      full_name: fullName,
-    })
-    return response.data
-  }
-
-  async getCurrentUser(): Promise<User> {
-    const response = await this.api.get('/auth/me')
-    return response.data
-  }
-
-  async refreshToken(): Promise<{ access_token: string }> {
-    const response = await this.api.post('/auth/refresh')
-    return response.data
-  }
-
-  async logout(): Promise<void> {
-    try {
-      await this.api.post('/auth/logout')
-    } catch {
-      // Ignorer les erreurs de logout (ex: réseau)
+    const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
+    if (error) throw error
+    return {
+      access_token: data.session?.access_token ?? '',
+      refresh_token: data.session?.refresh_token ?? '',
+      token_type: 'bearer',
+      expires_in: data.session?.expires_in ?? 0,
     }
   }
 
+  async signup(email: string, password: string, fullName: string): Promise<LoginResponse> {
+    const { data, error } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: { data: { full_name: fullName } },
+    })
+    if (error) throw error
+    if (data.user) {
+      await supabase.from('profiles').upsert({
+        id: data.user.id,
+        email: data.user.email,
+        full_name: fullName,
+        display_name: fullName,
+      })
+    }
+    return {
+      access_token: data.session?.access_token ?? '',
+      refresh_token: data.session?.refresh_token ?? '',
+      token_type: 'bearer',
+      expires_in: data.session?.expires_in ?? 0,
+    }
+  }
+
+  async getCurrentUser(): Promise<User> {
+    const { data, error } = await supabase.auth.getUser()
+    if (error || !data.user) throw error ?? new Error('Session Supabase requise')
+    const { data: profile } = await supabase.from('profiles').select('*').eq('id', data.user.id).maybeSingle()
+    return {
+      id: data.user.id,
+      email: data.user.email ?? profile?.email ?? '',
+      full_name: profile?.full_name ?? data.user.user_metadata?.full_name ?? '',
+      created_at: profile?.created_at ?? data.user.created_at,
+    }
+  }
+
+  async refreshToken(): Promise<{ access_token: string }> {
+    const { data, error } = await supabase.auth.refreshSession()
+    if (error) throw error
+    return { access_token: data.session?.access_token ?? '' }
+  }
+
+  async logout(): Promise<void> {
+    await supabase.auth.signOut()
+  }
+
   async getStravaStatus(): Promise<StravaStatus> {
-    const response = await this.api.get('/auth/strava/status')
-    return response.data
+    const { data, error } = await supabase.rpc('get_external_auth_status', { provider_name: 'strava' })
+    if (error) return { connected: false }
+    const first = Array.isArray(data) ? data[0] : data
+    if (!first) return { connected: false }
+    return {
+      connected: true,
+      athlete_id: first.provider_user_id ? Number(first.provider_user_id) : undefined,
+      scope: first.scopes?.join(','),
+      expires_at: first.expires_at,
+      is_expired: first.is_expired,
+      last_sync: first.last_sync_at,
+    }
   }
 
   async initiateStravaLogin() {
-    const response = await this.api.get('/auth/strava/login')
-    return response.data
+    const result = await invokeFunction<{ url: string }>('strava-oauth-start')
+    return { ...result, authorization_url: result.url }
   }
-
-  // ============ RGPD - SUPPRESSION DES DONNÉES ============
 
   async deleteStravaData(): Promise<{
     message: string
     deleted_activities: number
     strava_auth_deleted: boolean
   }> {
-    const response = await this.api.delete('/data/strava')
-    return response.data
+    const user = await this.getCurrentUser()
+    const { count } = await supabase.from('activities').delete({ count: 'exact' }).eq('user_id', user.id).eq('source', 'strava')
+    await supabase.rpc('disconnect_external_auth', { provider_name: 'strava' })
+    return { message: 'Données Strava supprimées', deleted_activities: count ?? 0, strava_auth_deleted: true }
   }
 
   async deleteAllUserData(): Promise<{
@@ -135,8 +117,11 @@ class AuthService {
     deleted_workout_plans: number
     strava_auth_deleted: boolean
   }> {
-    const response = await this.api.delete('/data/all')
-    return response.data
+    const user = await this.getCurrentUser()
+    const { count } = await supabase.from('activities').delete({ count: 'exact' }).eq('user_id', user.id)
+    await supabase.rpc('disconnect_external_auth', { provider_name: 'strava' })
+    await supabase.rpc('disconnect_external_auth', { provider_name: 'garmin' })
+    return { message: 'Données utilisateur supprimées', deleted_activities: count ?? 0, deleted_workout_plans: 0, strava_auth_deleted: true }
   }
 
   async deleteAccount(): Promise<{
@@ -146,15 +131,12 @@ class AuthService {
     strava_auth_deleted: boolean
     account_deleted: boolean
   }> {
-    const response = await this.api.delete('/account')
-    return response.data
+    await invokeFunction('delete-account', { method: 'DELETE' })
+    return { message: 'Compte supprimé', deleted_activities: 0, deleted_workout_plans: 0, strava_auth_deleted: true, account_deleted: true }
   }
 
   async exportUserData(): Promise<Blob> {
-    const response = await this.api.get('/data/export', {
-      responseType: 'blob'
-    })
-    return response.data
+    return await fetchFunctionBlob('data-export')
   }
 }
 

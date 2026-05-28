@@ -1,7 +1,7 @@
 import React from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { LogOut, Activity, BarChart3, Calendar, Settings } from 'lucide-react'
+import { LogOut, Activity, BarChart3, Calendar, Settings, Target, Radio } from 'lucide-react'
 
 interface LayoutProps {
   children: React.ReactNode
@@ -20,7 +20,9 @@ export default function Layout({ children }: LayoutProps) {
   const navigation = [
     { name: 'Tableau de bord', href: '/', icon: BarChart3 },
     { name: 'Activités', href: '/activites', icon: Activity },
+    { name: 'Live', href: '/live', icon: Radio },
     { name: 'Plans', href: '/plans', icon: Calendar },
+    { name: 'Race Predictor', href: '/race-predictor', icon: Target },
     { name: 'Paramètres', href: '/parametres', icon: Settings },
   ]
 
@@ -31,12 +33,16 @@ export default function Layout({ children }: LayoutProps) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             {/* Logo */}
-            <div className="flex items-center">
-              <div className="h-8 w-8 bg-primary-600 rounded-full flex items-center justify-center">
-                <span className="text-white font-bold">A</span>
-              </div>
-              <span className="ml-2 text-xl font-bold text-gray-900">athletIQ</span>
-            </div>
+            <Link to="/" className="flex items-center gap-2" aria-label="AGON">
+              <img
+                src="/agon-icon.png"
+                alt=""
+                className="block h-10 w-10 object-contain"
+              />
+              <span className="text-xl font-extrabold text-gray-900 tracking-wide">
+                AGON
+              </span>
+            </Link>
 
             {/* Navigation */}
             <nav className="hidden md:flex space-x-8">
@@ -85,4 +91,4 @@ export default function Layout({ children }: LayoutProps) {
       </main>
     </div>
   )
-} 
+}

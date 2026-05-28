@@ -174,7 +174,7 @@ export default function StravaConnect() {
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.download = `athletiq-export-${new Date().toISOString().split('T')[0]}.json`
+      link.download = `agon-export-${new Date().toISOString().split('T')[0]}.json`
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
@@ -257,7 +257,7 @@ export default function StravaConnect() {
       case 'delete-account':
         return {
           title: 'Supprimer mon compte',
-          message: 'Cette action supprimera définitivement votre compte et TOUTES vos données associées. Vous serez déconnecté et ne pourrez plus accéder à AthlétIQ avec ce compte.',
+          message: 'Cette action supprimera définitivement votre compte et TOUTES vos données associées. Vous serez déconnecté et ne pourrez plus accéder à AGON avec ce compte.',
           confirmText: 'Supprimer le compte',
           confirmationPhrase: 'SUPPRIMER MON COMPTE',
           dangerLevel: 'high' as const,
@@ -539,7 +539,7 @@ export default function StravaConnect() {
           <div className="flex items-start">
             <div className="w-2 h-2 bg-primary-500 rounded-full mt-2 mr-3 flex-shrink-0"></div>
             <p>
-              <strong>Sécurité :</strong> Vos tokens d'accès sont chiffrés et stockés de manière sécurisée. AthlétIQ n'accède qu'aux données d'activité en lecture seule
+              <strong>Sécurité :</strong> Vos tokens d'accès sont chiffrés et stockés de manière sécurisée. AGON n'accède qu'aux données d'activité en lecture seule
             </p>
           </div>
         </div>
@@ -730,7 +730,7 @@ export default function StravaConnect() {
         
         <div className="space-y-4">
           <p className="text-sm text-gray-600">
-            Conformément au Règlement Général sur la Protection des Données (RGPD), vous avez le contrôle total sur vos données personnelles stockées dans AthlétIQ.
+            Conformément au Règlement Général sur la Protection des Données (RGPD), vous avez le contrôle total sur vos données personnelles stockées dans AGON.
           </p>
           
           {/* Export des données */}
@@ -891,4 +891,4 @@ export default function StravaConnect() {
       />
     </div>
   )
-} 
+}

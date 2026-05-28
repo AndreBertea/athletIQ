@@ -26,7 +26,7 @@ export default function AccountSection() {
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.download = `athletiq-export-${new Date().toISOString().split('T')[0]}.json`
+      link.download = `agon-export-${new Date().toISOString().split('T')[0]}.json`
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
@@ -144,7 +144,7 @@ export default function AccountSection() {
         return {
           title: 'Supprimer mon compte',
           message:
-            'Cette action supprimera definitivement votre compte et TOUTES vos donnees associees. Vous serez deconnecte et ne pourrez plus acceder a athletIQ avec ce compte.',
+            'Cette action supprimera definitivement votre compte et TOUTES vos donnees associees. Vous serez deconnecte et ne pourrez plus acceder a AGON avec ce compte.',
           confirmText: 'Supprimer le compte',
           confirmationPhrase: 'SUPPRIMER MON COMPTE',
           dangerLevel: 'high' as const,
@@ -212,7 +212,7 @@ export default function AccountSection() {
         <div className="space-y-4">
           <p className="text-sm text-gray-600">
             Conformement au Reglement General sur la Protection des Donnees (RGPD), vous avez le
-            controle total sur vos donnees personnelles stockees dans athletIQ.
+            controle total sur vos donnees personnelles stockees dans AGON.
           </p>
 
           {/* Export */}

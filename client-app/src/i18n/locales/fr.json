@@ -1,0 +1,344 @@
+{
+  "common": {
+    "loading": "Chargement…",
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "ok": "OK",
+    "back": "Retour",
+    "close": "Fermer",
+    "soon": "Bientôt"
+  },
+  "language": {
+    "label": "Langue",
+    "fr": "Français",
+    "en": "English"
+  },
+  "nav": {
+    "today": "Aujourd'hui",
+    "history": "Historique",
+    "profile": "Profil",
+    "ariaLabel": "Navigation principale"
+  },
+  "topBar": {
+    "profileLabel": "Profil",
+    "back": "Retour"
+  },
+  "auth": {
+    "tagline": "Comprends comment tu encaisses pour mieux progresser.",
+    "title": "Readiness",
+    "logoAlt": "Enduraw",
+    "demo": {
+      "viewLabel": "Voir la démo",
+      "footnote": "3 profils pré-remplis — Marie · Thomas · Sophie.",
+      "eyebrow": "Démo",
+      "title": "Choisis un profil",
+      "subtitle": "Trois utilisateurs pré-seedés couvrent les phases visuelles : nouvel arrivant, calibration en cours, score actif.",
+      "phase": {
+        "onboarding": "J0 · onboarding",
+        "calibration": "J6 · calibration",
+        "stable": "J30 · score actif"
+      }
+    },
+    "login": {
+      "submit": "Se connecter",
+      "submitting": "Connexion…",
+      "switchPrompt": "Pas encore de compte ?",
+      "switchAction": "Créer un compte"
+    },
+    "signup": {
+      "submit": "Créer mon compte",
+      "submitting": "Création…",
+      "switchPrompt": "Déjà un compte ?",
+      "switchAction": "Se connecter",
+      "passwordHelper": "8+ caractères, 1 maj, 1 min, 1 chiffre, 1 spécial.",
+      "successToast": "Compte créé. Continuons avec ton profil."
+    },
+    "fields": {
+      "email": "Email",
+      "emailPlaceholder": "ton@email.com",
+      "password": "Mot de passe",
+      "passwordConfirm": "Confirmation",
+      "showPassword": "Afficher le mot de passe",
+      "hidePassword": "Masquer le mot de passe"
+    },
+    "errors": {
+      "emailRequired": "Email requis.",
+      "emailInvalid": "Email invalide.",
+      "passwordRequired": "Mot de passe requis.",
+      "passwordMinLength": "Au moins 8 caractères.",
+      "passwordUppercase": "Au moins une majuscule.",
+      "passwordLowercase": "Au moins une minuscule.",
+      "passwordDigit": "Au moins un chiffre.",
+      "passwordSpecial": "Au moins un caractère spécial.",
+      "passwordMismatch": "Les mots de passe ne correspondent pas.",
+      "loginFailed": "Connexion impossible.",
+      "signupFailed": "Création impossible.",
+      "invalidCredentials": "Email ou mot de passe incorrect.",
+      "userExists": "Un compte existe déjà pour cet email.",
+      "passwordTooShort": "Mot de passe trop court (min 8 caractères).",
+      "confirmEmail": "Confirme ton email pour terminer ta création de compte."
+    }
+  },
+  "onboarding": {
+    "step1": {
+      "headline": "Comprends comment tu encaisses pour mieux progresser.",
+      "subline": "5 questions, 15 secondes, chaque matin. Une lecture honnête de ton état.",
+      "cta": "Commencer"
+    },
+    "step2": {
+      "sportsEyebrow": "Tes sports",
+      "sportsHelper": "Sélectionne tout ce que tu pratiques (au moins un).",
+      "timeEyebrow": "Heure de check-in matinale",
+      "timeRowLabel": "Tous les jours",
+      "timeRowHint": "Réveil + 15 min suggéré",
+      "timeRowEdit": "Modifier",
+      "timeAriaLabel": "Heure de check-in",
+      "cta": "Continuer"
+    },
+    "step3": {
+      "eyebrow": "Prêt ?",
+      "headline": "Voici ton premier check-in",
+      "subline": "5 questions principales + 1 contextuelle si tu veux préciser. Tu auras un retour personnalisé après 14 saisies.",
+      "cta": "C'est parti",
+      "ctaPending": "En cours…"
+    },
+    "progressLabel": "Étape {{current}} sur {{total}}",
+    "errors": {
+      "saveFailed": "Impossible de sauvegarder ton profil",
+      "saveFailedFallback": "Une erreur est survenue."
+    },
+    "sports": {
+      "hiking": "Randonnée",
+      "running": "Course à pied",
+      "cycling": "Vélo",
+      "trail": "Trail",
+      "mtb": "VTT",
+      "ebike": "VAE"
+    }
+  },
+  "checkin": {
+    "title": "Comment tu te sens ce matin ?",
+    "questions": {
+      "wellbeing": "Globalement",
+      "sleep": "Ta nuit",
+      "legs": "Tes jambes",
+      "motivation": "Énergie / motivation"
+    },
+    "ariaLabels": {
+      "wellbeing": "Bien-être global, 1 à 5",
+      "sleep": "Qualité de sommeil, 1 à 5",
+      "legs": "État des jambes, 1 à 5",
+      "motivation": "Motivation, 1 à 5",
+      "scaleFallback": "Note de 1 à 5 pour {{dimension}}",
+      "scaleValue": "{{value}} sur 5 {{emoji}}"
+    },
+    "session": {
+      "eyebrow": "Ta dernière séance non notée",
+      "title": "Séance d'hier",
+      "removeAriaLabel": "Retirer la séance",
+      "durationLabel": "Durée",
+      "rpeLabel": "RPE",
+      "perceptionLabel": "Perception de la séance",
+      "rpeAriaLabel": "Intensité ressentie de ta séance d'hier, 0 à 10",
+      "addCta": "Ajouter ta séance d'hier",
+      "addHint": "Optionnel — ne pèse pas sur ton score."
+    },
+    "rpe": {
+      "anchors": {
+        "rest": "Repos",
+        "veryEasy": "Très facile",
+        "moderate": "Modéré",
+        "hard": "Difficile",
+        "maximal": "Maximal"
+      },
+      "fallbackAriaLabel": "Intensité ressentie de ta dernière séance, 0 à 10",
+      "durationOptional": "Durée (optionnel)",
+      "durationMin": "min",
+      "durationAriaLabel": "Durée de la séance en minutes"
+    },
+    "context": {
+      "ctaEmpty": "Ajouter un contexte (facultatif)",
+      "ctaOne": "1 tag · modifier",
+      "ctaMany": "{{count}} tags · modifier",
+      "title": "Quelque chose d'inhabituel ?",
+      "helperEmpty": "Coche ce qui s'applique aujourd'hui — facultatif. Jusqu'à {{max}} tags.",
+      "helperFull": "Maximum {{max}} tags atteint.",
+      "helperCount": "{{count}}/{{max}} sélectionnés.",
+      "clear": "Tout effacer",
+      "confirm": "Valider",
+      "groupAriaLabel": "Tags contextuels",
+      "closeAriaLabel": "Fermer la sélection de contexte",
+      "tags": {
+        "cold": "Rhume",
+        "travel": "Voyage",
+        "alcohol": "Alcool",
+        "work_stress": "Stress travail",
+        "period": "Règles",
+        "jetlag": "Jet-lag",
+        "low_appetite": "Appétit faible",
+        "injury_doubt": "Douleur",
+        "race_prep": "Course J-3/J-1"
+      }
+    },
+    "submit": {
+      "idle": "Valider mon check-in",
+      "loading": "Enregistrement…",
+      "success": "Check-in enregistré",
+      "ariaLoading": "Enregistrement en cours",
+      "ariaSuccess": "Check-in enregistré"
+    },
+    "successOverlay": {
+      "title": "Saisi !",
+      "subtitle": "On garde ça bien au chaud."
+    },
+    "errors": {
+      "scaleValue": "Valeur attendue entre 1 et 5.",
+      "tagsMax": "Maximum 5 tags.",
+      "invalidValues": "Valeurs invalides.",
+      "submitFailed": "Impossible d'enregistrer ta saisie."
+    }
+  },
+  "home": {
+    "headlines": {
+      "calibration": "Saisi. Bonne séance.",
+      "stableGreen": "Saisi. Tu es dans ta norme.",
+      "stableOrange": "Saisi. Récup légère aujourd'hui.",
+      "stableRed": "Saisi. Pense récup douce."
+    },
+    "calibration": {
+      "eyebrow": "Calibration personnelle",
+      "barAriaLabel": "Progression de la calibration personnelle",
+      "remainingPlural": "Ta lecture personnelle se débloque dans {{count}} saisies.",
+      "remainingOne": "Ta lecture personnelle se débloque dans {{count}} saisie.",
+      "complete": "Calibration complète — ton score est désormais actif.",
+      "todayLabel": "Aujourd'hui",
+      "lectureEyebrow": "Lecture du jour"
+    },
+    "stable": {
+      "vsBaselineEyebrow": "vs ta moy.",
+      "rangeNote": "30 derniers jours",
+      "decompositionEyebrow": "Décomposition",
+      "yesterdayContextEyebrow": "Hier · contexte",
+      "yesterdayContextNote": "(charge contextuelle, hors score)",
+      "zBadge": {
+        "green": "Dans la norme",
+        "orange": "0.5 – 1.5 σ vs baseline",
+        "red": "≥ 1.5 σ vs baseline"
+      },
+      "scoreAriaLabel": "Score readiness {{score}} sur 100"
+    },
+    "insightCard": {
+      "defaultEyebrow": "Insight du jour"
+    },
+    "dimensionStrip": {
+      "ariaLabelFallback": "Décomposition par dimension"
+    },
+    "dimensionLabels": {
+      "wellbeing": "bien-être",
+      "sleep_quality": "sommeil",
+      "legs": "jambes",
+      "motivation": "motivation"
+    },
+    "insights": {
+      "saved": "Saisi.",
+      "stableAllWithin": "Saisi. Tu es dans ta norme.",
+      "stableOneLow": "Saisi. Ton {{dim}} est nettement sous ta moyenne 30 j.",
+      "stableTwoLows": "Saisi. {{a}} et {{b}} sous ta moyenne — récup douce conseillée.",
+      "stableHighSrpe": "Saisi. Sans surprise vu ta séance d'hier ({{srpe}}/10).",
+      "calibrationLowest": "Saisi. Ton {{dim}} est à {{value}}/5 ce matin — on note pour calibrer ta lecture.",
+      "calibrationDefault": "Saisi. On reste descriptif tant que ta baseline n'est pas calibrée."
+    }
+  },
+  "history": {
+    "consistency": "Consistance",
+    "trends": "Tendances",
+    "rangeLabel": "{{count}} derniers jours",
+    "weekly": {
+      "eyebrow": "7 derniers jours",
+      "notEnough": "Pas assez de données pour comparer cette semaine.",
+      "deltaWeek": "{{delta}} vs semaine précédente",
+      "deltaUnavailable": "pas de comparaison disponible",
+      "summary": "{{current}} saisies sur 7 · {{previous}} la semaine précédente",
+      "ariaLabel": "Résumé hebdomadaire"
+    },
+    "streak": {
+      "eyebrow": "Consistance",
+      "dayOne": "jour",
+      "dayMany": "jours",
+      "subtextEmpty": "Reprends quand tu veux.",
+      "subtextEntries": "· {{count}} saisies sur {{window}}{{freezeBit}}",
+      "freezeAuto": " · freeze auto ({{count}})",
+      "freezeAvailable": " · freeze dispo",
+      "freezeAutoOnly": "freeze auto ({{count}})",
+      "freezeAvailableOnly": "freeze dispo"
+    },
+    "dimensions": {
+      "wellbeing": "Bien-être",
+      "sleep_quality": "Sommeil",
+      "legs": "Jambes",
+      "motivation": "Motivation"
+    },
+    "trendCard": {
+      "ariaLabel": "Tendance {{label}}",
+      "delta": "{{value}} vs sem. préc.",
+      "deltaUnavailable": "pas assez de données"
+    },
+    "heatmap": {
+      "noEntry": "{{date}} — pas de saisie",
+      "entry": "{{date}} — saisi",
+      "entryAvg": "{{date}} — moyenne {{avg}}/5"
+    },
+    "empty": "Pas encore d'historique. Commence par un check-in matinal."
+  },
+  "profile": {
+    "version": "Enduraw Readiness · v0.1.0",
+    "sections": {
+      "language": "Langue",
+      "notifications": "Notifications",
+      "display": "Affichage",
+      "displayNote": "exemple non fonctionnel — personnalisation",
+      "integrations": "Intégrations",
+      "account": "Compte"
+    },
+    "rows": {
+      "notifications": {
+        "label": "Notifications",
+        "hint": "Activer les rappels matinaux."
+      },
+      "checkinTime": {
+        "label": "Heure de check-in",
+        "ariaLabel": "Heure de check-in"
+      },
+      "pause": {
+        "label": "Pause 7 jours",
+        "hint": "Mets en pause les rappels et le streak.",
+        "active": "Active",
+        "activate": "Activer"
+      },
+      "scoreVisible": {
+        "label": "Afficher mon score",
+        "hint": "Le score apparaît à partir de J14."
+      },
+      "streakVisible": {
+        "label": "Afficher mon streak",
+        "hint": "Compteur de consistance, freeze automatique."
+      },
+      "signOut": "Se déconnecter"
+    },
+    "integrations": {
+      "soonBadge": "Bientôt",
+      "appleHealth": {
+        "label": "Apple Health",
+        "description": "Sommeil et HRV importés en arrière-plan."
+      },
+      "garmin": {
+        "label": "Garmin Connect",
+        "description": "Charge externe, distance et dénivelé."
+      }
+    },
+    "comingSoon": {
+      "title": "Bientôt disponible",
+      "body": "L'intégration {{service}} arrive en V1.1. En attendant, ta saisie quotidienne capte tout le signal nécessaire."
+    }
+  }
+}

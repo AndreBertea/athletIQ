@@ -3,7 +3,7 @@
 # start_frontend_local.sh - Frontend pour localhost uniquement
 # ================================================
 
-echo "🚀 Démarrage du frontend AthlétIQ (mode localhost)"
+echo "🚀 Démarrage du frontend AGON (mode localhost)"
 echo "   - Accès local uniquement"
 echo "   - Mode développement avec hot reload"
 echo "   - Sécurisé pour le développement local"
@@ -25,4 +25,4 @@ echo "   - Mode: développement"
 echo ""
 
 # Lancer Vite en mode localhost uniquement
-npm run dev -- --port 4000 
+npm run dev -- --port 4000

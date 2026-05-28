@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
-import { authService } from '../services/authService'
+import type { User as SupabaseUser } from '@supabase/supabase-js'
+import { supabase } from '../services/supabaseClient'
 
 interface User {
   id: string
@@ -19,47 +20,77 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
+function mapUser(user: SupabaseUser): User {
+  const fullName = typeof user.user_metadata?.full_name === 'string'
+    ? user.user_metadata.full_name
+    : ''
+  return {
+    id: user.id,
+    email: user.email ?? '',
+    full_name: fullName,
+    created_at: user.created_at,
+  }
+}
+
+async function upsertProfile(user: SupabaseUser, fullName?: string): Promise<void> {
+  await supabase.from('profiles').upsert({
+    id: user.id,
+    email: user.email,
+    full_name: fullName ?? user.user_metadata?.full_name ?? '',
+    display_name: fullName ?? user.user_metadata?.full_name ?? user.email?.split('@')[0] ?? 'Athlète',
+  })
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    initializeAuth()
+    let mounted = true
+    supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return
+      setUser(data.session?.user ? mapUser(data.session.user) : null)
+      setLoading(false)
+    })
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ? mapUser(session.user) : null)
+      setLoading(false)
+    })
+
+    return () => {
+      mounted = false
+      listener.subscription.unsubscribe()
+    }
   }, [])
 
-  const initializeAuth = async () => {
-    try {
-      // Les cookies httpOnly sont envoyés automatiquement par le navigateur
-      const userData = await authService.getCurrentUser()
-      setUser(userData)
-    } catch {
-      // Pas de session valide (pas de cookie ou cookie expiré)
-    } finally {
-      setLoading(false)
-    }
-  }
-
   const login = async (email: string, password: string) => {
-    await authService.login(email, password)
-    // Le backend a posé les cookies httpOnly, on récupère le user
-    const userData = await authService.getCurrentUser()
-    setUser(userData)
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    })
+    if (error) throw error
+    if (data.user) await upsertProfile(data.user)
   }
 
   const signup = async (email: string, password: string, fullName: string) => {
-    await authService.signup(email, password, fullName)
-    // Le backend a posé les cookies httpOnly, on récupère le user
-    const userData = await authService.getCurrentUser()
-    setUser(userData)
+    const { data, error } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: { data: { full_name: fullName } },
+    })
+    if (error) throw error
+    if (data.user) await upsertProfile(data.user, fullName)
   }
 
   const logout = () => {
-    authService.logout()
+    void supabase.auth.signOut()
     setUser(null)
   }
 
   const refreshToken = async () => {
-    await authService.refreshToken()
+    const { error } = await supabase.auth.refreshSession()
+    if (error) throw error
   }
 
   const value = {

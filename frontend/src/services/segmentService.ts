@@ -1,13 +1,4 @@
-import axios from 'axios'
-
-const VITE_API_URL = (import.meta as any).env?.VITE_API_URL
-const API_BASE_URL = VITE_API_URL ? `${VITE_API_URL}/api/v1` : '/api/v1'
-
-const api = axios.create({
-  baseURL: API_BASE_URL,
-  headers: { 'Content-Type': 'application/json' },
-  withCredentials: true,
-})
+import { api } from './supabaseApi'
 
 // --- Types ---
 

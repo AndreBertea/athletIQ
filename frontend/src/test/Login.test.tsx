@@ -50,7 +50,7 @@ describe('Login Component', () => {
   test('renders login form by default', () => {
     renderWithProviders(<Login />)
     
-    expect(screen.getByText('Connexion à AthlétIQ')).toBeInTheDocument()
+    expect(screen.getByText('Connexion à AGON')).toBeInTheDocument()
     expect(screen.getByPlaceholderText('votre@email.com')).toBeInTheDocument()
     expect(screen.getByPlaceholderText('••••••••')).toBeInTheDocument()
     expect(screen.getByText('Se connecter')).toBeInTheDocument()
@@ -157,4 +157,4 @@ describe('Login Component', () => {
       expect(submitButton).toBeDisabled()
     })
   })
-}) 
+})

@@ -105,11 +105,13 @@ export default function Login() {
       <div className="max-w-md w-full space-y-8">
         {/* Header */}
         <div>
-          <div className="mx-auto h-12 w-12 bg-primary-600 rounded-full flex items-center justify-center">
-            <span className="text-white font-bold text-xl">A</span>
-          </div>
+          <img
+            src="/agon-icon.png"
+            alt="AGON"
+            className="mx-auto h-20 w-20 object-contain"
+          />
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            {isSignup ? 'Créer un compte' : 'Connexion à AthlétIQ'}
+            {isSignup ? 'Créer un compte' : 'Connexion à AGON'}
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
             {isSignup ? 'Ou ' : 'Ou '}
