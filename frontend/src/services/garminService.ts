@@ -1,13 +1,4 @@
-import axios from 'axios'
-
-const VITE_API_URL = (import.meta as any).env?.VITE_API_URL
-const API_BASE_URL = VITE_API_URL ? `${VITE_API_URL}/api/v1` : '/api/v1'
-
-const api = axios.create({
-  baseURL: API_BASE_URL,
-  headers: { 'Content-Type': 'application/json' },
-  withCredentials: true,
-})
+import { api } from './supabaseApi'
 
 // --- Types ---
 
@@ -117,7 +108,16 @@ export interface GarminDailyEntry {
   stress_score: number | null
   body_battery_max: number | null
   spo2: number | null
+  total_steps: number | null
+  total_kilocalories: number | null
+  active_kilocalories: number | null
   vo2max_estimated: number | null
+  lactate_threshold_speed_mps: number | null
+  lactate_threshold_hr: number | null
+  race_prediction_5k_seconds: number | null
+  race_prediction_10k_seconds: number | null
+  race_prediction_half_seconds: number | null
+  race_prediction_marathon_seconds: number | null
   weight_kg: number | null
   body_battery_min: number | null
   training_status: string | null
@@ -141,7 +141,11 @@ export const garminService = {
     return res.data
   },
 
-  async syncGarminDaily(daysBack: number = 30): Promise<{ message: string; days_synced: number }> {
+  async syncGarminDaily(daysBack: number = 30): Promise<{
+    message?: string
+    days_synced: number
+    performance_metrics_synced?: boolean
+  }> {
     const res = await api.post(`/sync/garmin?days_back=${daysBack}`)
     return res.data
   },

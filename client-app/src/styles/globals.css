@@ -1,0 +1,172 @@
+/*
+ * Enduraw Readiness — global styles
+ *
+ * Loading order matters:
+ *   1. PDS tokens (CSS custom properties) — imported in main.tsx
+ *      via `import './styles/design-system.css'`. Single source of
+ *      truth for colors / typography / spacing tokens.
+ *   2. Google Fonts (Inter Tight + Space Grotesk) — imported here.
+ *   3. Tailwind layers — base / components / utilities, with the
+ *      PDS tokens already exposed as `var(--token)`.
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter+Tight:ital,wght@0,100..900;1,100..900&family=Space+Grotesk:wght@300..700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    /* Le scroll vit dans le <main> de l'AppShell, pas dans body. iOS
+     * Safari : sans ces règles, sticky / fixed flotte sous le rubber-band. */
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  html {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* Fallback iOS : si dvh est stuck, lvh garantit le full viewport. */
+    height: 100lvh;
+  }
+
+  body {
+    /* iOS Safari : bloque le bounce du body quand on overscrolle.
+     * `position: fixed; inset: 0` force le body à couvrir l'INTÉGRALITÉ
+     * du viewport visible (incluant les safe-areas). On ne fixe PAS
+     * `height: 100dvh` ici — sur iOS Safari ça peut rester coincé sur
+     * une valeur < viewport après une apparition/disparition de
+     * clavier ou de la barre d'adresse, et créer une grosse bande noire
+     * en bas. Le `inset: 0` suffit à dimensionner le body. */
+    position: fixed;
+    inset: 0;
+    width: 100%;
+  }
+
+  #root {
+    /* Garantit que React monte dans un conteneur de même taille que
+     * le body, peu importe les caprices iOS sur dvh/svh/lvh. */
+    height: 100%;
+    width: 100%;
+  }
+
+  /* Native form inputs inherit the dark background instead of UA white. */
+  input,
+  textarea,
+  select,
+  button {
+    @apply bg-transparent text-foreground;
+  }
+
+  /* Focus ring follows the PDS — never remove. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: var(--brand-primary);
+    color: var(--foreground);
+  }
+}
+
+@layer utilities {
+  /* AGON signature radial : aube sur un sentier de montagne.
+   * Sunset orange en haut/bas -> terra red -> deep night. */
+  .bg-signature {
+    background: radial-gradient(
+      120% 60% at 50% 120%,
+      #E89E5A 0%,
+      #A0432E 28%,
+      #2A1A12 52%,
+      #191815 75%
+    );
+  }
+
+  /* Halo discret terra/sunset (form screens : auth, onboarding). */
+  .bg-halo-cyan {
+    background: radial-gradient(
+        120% 60% at 50% 120%,
+        rgba(232, 158, 90, 0.20) 0%,
+        rgba(160, 67, 46, 0.14) 28%,
+        rgba(25, 24, 21, 0) 60%
+      ),
+      var(--background);
+  }
+
+  /* Glassmorphism : carte dark warm (deep night #191815) + blur. */
+  .glass {
+    background: rgba(25, 24, 21, 0.55);
+    backdrop-filter: blur(14px) saturate(150%);
+    -webkit-backdrop-filter: blur(14px) saturate(150%);
+    border: 1px solid var(--border-subtle);
+  }
+
+  /* Bouton glass AGON : verre teinte terra red + glow chaud. */
+  .btn-glass-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    border-radius: var(--radius-md);
+    background: linear-gradient(
+      180deg,
+      rgba(232, 158, 90, 0.85) 0%,
+      rgba(160, 67, 46, 0.92) 100%
+    );
+    border: 1px solid rgba(236, 190, 138, 0.45);
+    backdrop-filter: blur(12px) saturate(160%);
+    -webkit-backdrop-filter: blur(12px) saturate(160%);
+    color: #ffffff;
+    font-weight: var(--fw-semibold);
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.22);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.18) inset,
+      0 8px 24px rgba(160, 67, 46, 0.32);
+    transition: transform var(--duration-fast) var(--ease-out),
+      box-shadow var(--duration-fast) var(--ease-out),
+      background var(--duration-fast) var(--ease-out);
+  }
+  .btn-glass-primary:hover {
+    background: linear-gradient(
+      180deg,
+      rgba(236, 190, 138, 0.9) 0%,
+      rgba(130, 53, 37, 0.95) 100%
+    );
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.22) inset,
+      0 10px 28px rgba(160, 67, 46, 0.42);
+  }
+  .btn-glass-primary:active {
+    transform: translateY(1px);
+  }
+  .btn-glass-primary:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  /* Masque la scrollbar (Webkit + Firefox). Le scroll reste fonctionnel. */
+  .scrollbar-hide {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Safe-area insets (PWA standalone iOS). */
+  .pt-safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  .pb-safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}

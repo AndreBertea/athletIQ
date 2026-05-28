@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <title>AGON mountain summit icon</title>
+  <desc>Minimal asymmetric mountain outline with peak dot for AGON endurance trail running analytics app.</desc>
+  <g fill="none" stroke="#A0432E" stroke-width="52" stroke-linecap="butt" stroke-linejoin="miter">
+    <path d="M165 690 L342 690 L512 300 L655 598 L690 575 L840 690 L575 690 L510 648 L445 690 L165 690 Z"/>
+  </g>
+  <circle cx="512" cy="205" r="42" fill="#A0432E"/>
+</svg>
