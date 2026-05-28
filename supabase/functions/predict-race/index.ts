@@ -18,9 +18,9 @@ async function readGpxFromRoute(
 ): Promise<{ text: string; filename: string; routeId: string }> {
   const { data: route, error } = await serviceClient
     .from("gpx_routes")
-    .select("id,filename,gpx_storage_path")
+    .select("id,filename,gpx_storage_path,is_public,user_id")
     .eq("id", routeId)
-    .eq("user_id", userId)
+    .or(`user_id.eq.${userId},is_public.eq.true`)
     .single();
 
   if (error || !route) throw new Error("Route GPX introuvable.");

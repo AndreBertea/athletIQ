@@ -7,6 +7,7 @@ const DELETE_TABLES = [
   "sync_jobs",
   "race_predictions",
   "gpx_route_settings",
+  "gpx_route_attachments",
   "gpx_routes",
   "reference_tests",
   "athletic_profiles",

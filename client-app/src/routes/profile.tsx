@@ -42,7 +42,6 @@ import {
   IMPORT_PERIOD_OPTIONS,
   formatImportPeriod,
   getGarminImportState,
-  shortImportPeriod,
   startGarminImport,
   useGarminImportJob,
   type GarminImportState,
@@ -450,13 +449,6 @@ function GarminSettings({
   const importRunning = importState.status === 'running';
   const importSucceeded = importState.status === 'success' && importState.daysBack === importDaysBack;
   const importErrored = importState.status === 'error' && importState.daysBack === importDaysBack;
-  const importButtonLabel = importRunning
-    ? 'Import en cours...'
-    : importSucceeded
-      ? 'Import termine'
-      : importErrored
-        ? 'Relancer'
-        : `Importer ${shortImportPeriod(importDaysBack)}`;
   const periodStatus = importState.status === 'running'
     ? importState.progress
     : importState.status === 'success'
@@ -495,21 +487,30 @@ function GarminSettings({
             Garmin Connect
           </p>
           <p className="text-muted-foreground mt-1 text-xs">
-            {connected ? 'Connecte. Les identifiants ne sont pas stockes.' : 'Connexion one-time pour importer les donnees.'}
+            {connected
+              ? 'Historique Garmin migre disponible. La nouvelle sync native est reportee.'
+              : 'Connexion Garmin native reportee dans le MVP Supabase.'}
           </p>
         </div>
         <span className={`rounded-full px-2 py-1 text-[11px] font-semibold ${connected ? 'bg-success-bg text-success-fg' : 'bg-white/5 text-muted-foreground'}`}>
-          {connected ? 'Actif' : 'A connecter'}
+          {connected ? 'Historique' : 'Indisponible'}
         </span>
       </div>
 
       {!connected ? (
         <div className="space-y-2">
+          <div className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2">
+            <p className="text-warning text-xs font-semibold">Garmin Connect non active sur Supabase</p>
+            <p className="text-muted-foreground mt-1 text-[11px] leading-relaxed">
+              Le login email/mot de passe Garmin dependait du backend Python. En MVP Supabase, seules les donnees Garmin deja migrees sont affichees.
+            </p>
+          </div>
           <input
             value={email}
             onChange={(event) => onEmailChange(event.target.value)}
             type="email"
             placeholder="Email Garmin"
+            disabled
             className="w-full rounded-md border border-border-subtle bg-surface-2 px-3 py-2 text-sm"
           />
           <input
@@ -517,14 +518,21 @@ function GarminSettings({
             onChange={(event) => onPasswordChange(event.target.value)}
             type="password"
             placeholder="Mot de passe Garmin"
+            disabled
             className="w-full rounded-md border border-border-subtle bg-surface-2 px-3 py-2 text-sm"
           />
-          <button type="button" onClick={onConnect} disabled={loading || !email || !password} className="btn-glass-primary w-full">
-            Connecter Garmin
+          <button type="button" onClick={onConnect} disabled className="btn-glass-primary w-full opacity-60">
+            Connexion reportee
           </button>
         </div>
       ) : (
         <div className="space-y-3">
+          <div className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2">
+            <p className="text-warning text-xs font-semibold">Sync Garmin native reportee</p>
+            <p className="text-muted-foreground mt-1 text-[11px] leading-relaxed">
+              Les blocs ci-dessous utilisent l'historique migre. Une nouvelle authentification Garmin necessite un worker hors Edge Supabase.
+            </p>
+          </div>
           <div>
             <label htmlFor="mobile-import-days" className="text-muted-foreground mb-1 block text-xs font-semibold">
               Duree d'import
@@ -558,7 +566,7 @@ function GarminSettings({
             <button
               type="button"
               onClick={onImport}
-              disabled={loading}
+              disabled
               className={cn(
                 'rounded-md px-3 py-2 text-sm font-semibold text-white disabled:opacity-50',
                 importSucceeded ? 'bg-success' : importErrored ? 'bg-danger' : 'bg-brand-primary',
@@ -571,7 +579,7 @@ function GarminSettings({
               ) : (
                 <RefreshCw className={`mr-1 inline h-4 w-4 ${importRunning ? 'animate-spin' : ''}`} />
               )}
-              {importButtonLabel}
+              Sync reportee
             </button>
             <button type="button" onClick={onDisconnect} disabled={loading} className="rounded-md border border-border-subtle px-3 py-2 text-sm font-semibold text-muted-foreground disabled:opacity-50">
               Deconnecter

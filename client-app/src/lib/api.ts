@@ -220,6 +220,38 @@ async function getWeatherStatus(): Promise<DbRow> {
   };
 }
 
+function isMissingRelationError(error: unknown): boolean {
+  return typeof error === 'object'
+    && error !== null
+    && 'code' in error
+    && (error as { code?: string }).code === '42P01';
+}
+
+function mapStoredGpxAttachment(row: DbRow): DbRow {
+  return {
+    id: row.id,
+    route_id: row.route_id,
+    name: row.name,
+    filename: row.filename,
+    mime_type: row.mime_type,
+    kind: row.kind,
+    created_at: row.created_at,
+  };
+}
+
+function mapGpxFileAttachment(route: DbRow): DbRow | null {
+  if (!route.gpx_storage_path) return null;
+  return {
+    id: 'gpx-file',
+    route_id: route.id,
+    name: 'GPX',
+    filename: route.filename,
+    mime_type: 'application/gpx+xml',
+    kind: 'gpx',
+    created_at: route.created_at,
+  };
+}
+
 async function get<T = any>(url: string, options: ApiOptions = {}): Promise<ApiResponse<T>> {
   const { path, params } = parseUrl(url, options.params);
   const userId = await currentUserId();
@@ -447,21 +479,57 @@ async function get<T = any>(url: string, options: ApiOptions = {}): Promise<ApiR
   }
 
   if (path === '/gpx-routes') {
-    const { data, error } = await supabase.from('gpx_routes').select('*').eq('user_id', userId).order('created_at', { ascending: false });
+    const { data, error } = await supabase
+      .from('gpx_routes')
+      .select('*')
+      .or(`user_id.eq.${userId},is_public.eq.true`)
+      .order('created_at', { ascending: false });
     if (error) throw error;
-    return response((data ?? []).map((route) => ({ ...route, owned_by_user: true, attachment_count: route.gpx_storage_path ? 1 : 0 })) as T);
+
+    const routeIds = (data ?? []).map((route) => route.id).filter(Boolean);
+    const attachmentCounts = new Map<string, number>();
+    if (routeIds.length > 0) {
+      const { data: attachments, error: attachmentError } = await supabase
+        .from('gpx_route_attachments')
+        .select('route_id')
+        .in('route_id', routeIds);
+      if (attachmentError && !isMissingRelationError(attachmentError)) throw attachmentError;
+      for (const attachment of attachments ?? []) {
+        attachmentCounts.set(attachment.route_id, (attachmentCounts.get(attachment.route_id) ?? 0) + 1);
+      }
+    }
+
+    return response((data ?? []).map((route) => ({
+      ...route,
+      owned_by_user: route.user_id === userId,
+      attachment_count: (route.gpx_storage_path ? 1 : 0) + (attachmentCounts.get(route.id) ?? 0),
+    })) as T);
   }
 
   const gpxRoute = path.match(/^\/gpx-routes\/([^/]+)$/);
   if (gpxRoute) {
-    const { data, error } = await supabase.from('gpx_routes').select('*').eq('user_id', userId).eq('id', gpxRoute[1]).single();
+    const { data, error } = await supabase
+      .from('gpx_routes')
+      .select('*')
+      .eq('id', gpxRoute[1])
+      .or(`user_id.eq.${userId},is_public.eq.true`)
+      .single();
     if (error) throw error;
+    const { data: storedAttachments, error: attachmentError } = await supabase
+      .from('gpx_route_attachments')
+      .select('*')
+      .eq('route_id', data.id)
+      .order('created_at', { ascending: true });
+    if (attachmentError && !isMissingRelationError(attachmentError)) throw attachmentError;
+    const attachments = [
+      mapGpxFileAttachment(data),
+      ...((storedAttachments ?? []).map(mapStoredGpxAttachment)),
+    ].filter(Boolean);
+
     return response({
       ...data,
-      owned_by_user: true,
-      attachments: data.gpx_storage_path
-        ? [{ id: 'gpx-file', route_id: data.id, name: 'GPX', filename: data.filename, mime_type: 'application/gpx+xml', kind: 'gpx', created_at: data.created_at }]
-        : [],
+      owned_by_user: data.user_id === userId,
+      attachments,
     } as T);
   }
 
@@ -482,9 +550,28 @@ async function get<T = any>(url: string, options: ApiOptions = {}): Promise<ApiR
 
   const gpxAttachment = path.match(/^\/gpx-routes\/([^/]+)\/attachments\/([^/]+)$/);
   if (gpxAttachment && options.responseType === 'blob') {
-    const { data: route, error } = await supabase.from('gpx_routes').select('gpx_storage_path').eq('user_id', userId).eq('id', gpxAttachment[1]).single();
+    const { data: route, error } = await supabase
+      .from('gpx_routes')
+      .select('id,gpx_storage_path')
+      .eq('id', gpxAttachment[1])
+      .or(`user_id.eq.${userId},is_public.eq.true`)
+      .single();
     if (error) throw error;
-    const { data: blob, error: downloadError } = await supabase.storage.from('gpx-files').download(route.gpx_storage_path);
+
+    let storagePath = route.gpx_storage_path;
+    if (gpxAttachment[2] !== 'gpx-file') {
+      const { data: attachment, error: attachmentError } = await supabase
+        .from('gpx_route_attachments')
+        .select('storage_path')
+        .eq('route_id', route.id)
+        .eq('id', gpxAttachment[2])
+        .single();
+      if (attachmentError) throw attachmentError;
+      storagePath = attachment.storage_path;
+    }
+
+    if (!storagePath) throw new ApiError('Pièce jointe introuvable.', 404);
+    const { data: blob, error: downloadError } = await supabase.storage.from('gpx-files').download(storagePath);
     if (downloadError || !blob) throw downloadError ?? new ApiError('Fichier GPX introuvable.', 404);
     return response(blob as T);
   }
@@ -689,6 +776,8 @@ async function del<T = any>(url: string): Promise<ApiResponse<T>> {
       supabase.from('training_load').delete().eq('user_id', userId),
       supabase.from('daily_checkins').delete().eq('user_id', userId),
       supabase.from('race_predictions').delete().eq('user_id', userId),
+      supabase.from('gpx_route_attachments').delete().eq('user_id', userId),
+      supabase.from('gpx_routes').delete().eq('user_id', userId),
     ]);
     return response({ deleted: true } as T);
   }

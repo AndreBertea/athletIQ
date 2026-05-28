@@ -123,10 +123,10 @@ backend/=*
 # GPX test files
 *.gpx
 
-# Test output files at root
-test_*.sh
-test_*.html
-test_*.py
+# Test output files at repository root
+/test_*.sh
+/test_*.html
+/test_*.py
 plan.csv
 
 # Shell scripts with potential secrets at root
