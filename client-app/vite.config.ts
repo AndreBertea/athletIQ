@@ -13,6 +13,11 @@ export default defineConfig({
       // Sinon le SW garde l'ancien CSS / JS et les fix CSS (ex. safe-area)
       // ne s'appliquent jamais sans désinstall manuelle de la PWA.
       registerType: 'autoUpdate',
+      // L'enregistrement est fait explicitement dans src/main.tsx pour
+      // forcer registration.update() à l'ouverture de la PWA. L'injection
+      // automatique génère un registerSW.js trop passif pour les itérations
+      // rapides de la bêta mobile.
+      injectRegister: null,
       // On gère manuellement public/manifest.json (statique) plutôt que
       // de laisser le plugin générer un manifest.webmanifest. Évite le
       // double manifest et garde l'index.html en source de vérité.
