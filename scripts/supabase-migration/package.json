@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "migrate": "tsx migrate-to-supabase.ts",
+    "backfill:gpx-sqlite": "tsx backfill-gpx-sqlite.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

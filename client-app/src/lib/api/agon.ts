@@ -401,6 +401,7 @@ export interface RaceReferenceCandidate {
 
 export interface GpxRouteSummary {
   id: string;
+  user_id?: string | null;
   name: string;
   filename: string;
   is_public: boolean;
@@ -423,6 +424,7 @@ export interface GpxAttachmentRead {
 
 export interface GpxRouteDetail {
   id: string;
+  user_id?: string | null;
   name: string;
   filename: string;
   is_public: boolean;

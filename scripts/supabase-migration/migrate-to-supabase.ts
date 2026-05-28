@@ -7,6 +7,9 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 type LegacyRow = Record<string, unknown>;
 type UserMap = Map<string, string>;
+type GpxRouteOwner = { userId: string | null; isPublic: boolean };
+
+const migratedGpxRouteOwners = new Map<string, GpxRouteOwner>();
 
 const env = {
   legacyUrl: mustEnv("DATABASE_URL_LEGACY"),
@@ -52,6 +55,7 @@ async function main(): Promise<void> {
     await migrateSimpleTable("athleticprofile", "athletic_profiles", userMap, mapAthleticProfile);
     await migrateSimpleTable("referencetest", "reference_tests", userMap, mapReferenceTest);
     await migrateSimpleTable("gpxroute", "gpx_routes", userMap, mapGpxRoute);
+    await migrateGpxAttachments(userMap);
     await migrateSimpleTable("gpxrouteusersettings", "gpx_route_settings", userMap, mapGpxRouteSettings);
     await migrateSimpleTable("raceprediction", "race_predictions", userMap, mapRacePrediction);
     await migrateExternalAuth(userMap);
@@ -342,28 +346,101 @@ function mapReferenceTest(row: LegacyRow, userMap: UserMap): LegacyRow | null {
 }
 
 async function mapGpxRoute(row: LegacyRow, userMap: UserMap): Promise<LegacyRow | null> {
-  const userId = mapRowUser(row, userMap);
-  if (!userId) return null;
+  const legacyUserId = stringValue(row.user_id);
+  const userId = legacyUserId ? userMap.get(legacyUserId) ?? null : null;
+  const isPublic = Boolean(row.is_public) || !legacyUserId;
+  if (!userId && !isPublic) return null;
+
   const id = stringValue(row.id) ?? randomUUID();
-  const gpxContent = row.gpx_content ?? row.gpx_text ?? row.content;
-  const gpxStoragePath = await uploadTextIfPresent(
+  const filename = safeStorageName(stringValue(row.filename) ?? "route.gpx");
+  const storagePrefix = userId ?? "public";
+  const gpxContent = row.gpx_data ?? row.gpx_content ?? row.gpx_text ?? row.content;
+  const gpxStoragePath = await uploadBinaryIfPresent(
     "gpx-files",
-    `${userId}/routes/${id}-${stringValue(row.filename) ?? "route.gpx"}`,
+    `${storagePrefix}/routes/${id}-${filename}`,
     gpxContent,
+    "application/gpx+xml",
   );
+
+  migratedGpxRouteOwners.set(id, { userId, isPublic });
+
   return {
     id,
     user_id: userId,
     name: row.name ?? row.filename ?? "Route GPX",
-    filename: row.filename ?? "route.gpx",
-    is_public: row.is_public ?? false,
+    filename,
+    is_public: isPublic,
     distance_km: nullableNumber(row.distance_km),
     elevation_gain_m: nullableNumber(row.elevation_gain_m),
     gpx_storage_path: gpxStoragePath ?? row.gpx_storage_path ?? null,
-    metadata: stripHeavy(row, ["gpx_content", "gpx_text", "content"]),
+    metadata: stripHeavy(row, ["gpx_data", "gpx_content", "gpx_text", "content"]),
     created_at: row.created_at ?? new Date().toISOString(),
     updated_at: row.updated_at ?? new Date().toISOString(),
   };
+}
+
+async function migrateGpxAttachments(userMap: UserMap): Promise<void> {
+  const source = "gpxattachment";
+  const target = "gpx_route_attachments";
+  const rows = await legacySelect(source);
+  initTableReport(target, rows.length);
+  const tableReport = tableReportFor(target);
+
+  for (const row of rows) {
+    try {
+      const mapped = await mapGpxAttachment(row, userMap);
+      if (!mapped) continue;
+      await upsert(target, mapped);
+      tableReport.target += 1;
+    } catch (error) {
+      tableReport.errors += 1;
+      report.errors.push(`${target}:${row.id}: ${message(error)}`);
+    }
+  }
+}
+
+async function mapGpxAttachment(row: LegacyRow, userMap: UserMap): Promise<LegacyRow | null> {
+  const routeId = stringValue(row.route_id);
+  if (!routeId) return null;
+
+  const owner = migratedGpxRouteOwners.get(routeId) ?? await legacyGpxRouteOwner(routeId, userMap);
+  if (!owner?.userId && !owner?.isPublic) return null;
+
+  const id = stringValue(row.id) ?? randomUUID();
+  const filename = safeStorageName(stringValue(row.filename) ?? `${id}.bin`);
+  const mimeType = stringValue(row.mime_type) ?? contentTypeForFile(filename);
+  const storagePrefix = owner.userId ?? "public";
+  const storagePath = await uploadBinaryIfPresent(
+    "gpx-files",
+    `${storagePrefix}/attachments/${routeId}-${id}-${filename}`,
+    row.data ?? row.content,
+    mimeType,
+  );
+  if (!storagePath) return null;
+
+  return {
+    id,
+    route_id: routeId,
+    user_id: owner.userId,
+    name: row.name ?? filename,
+    filename,
+    mime_type: mimeType,
+    kind: row.kind ?? kindForAttachment(filename, mimeType),
+    storage_path: storagePath,
+    created_at: row.created_at ?? new Date().toISOString(),
+  };
+}
+
+async function legacyGpxRouteOwner(routeId: string, userMap: UserMap): Promise<GpxRouteOwner | null> {
+  const result = await legacy.query('select id, user_id, is_public from "gpxroute" where id = $1 limit 1', [routeId]);
+  const route = result.rows[0] as LegacyRow | undefined;
+  if (!route) return null;
+  const legacyUserId = stringValue(route.user_id);
+  const userId = legacyUserId ? userMap.get(legacyUserId) ?? null : null;
+  const isPublic = Boolean(route.is_public) || !legacyUserId;
+  const owner = { userId, isPublic };
+  migratedGpxRouteOwners.set(routeId, owner);
+  return owner;
 }
 
 function mapGpxRouteSettings(row: LegacyRow, userMap: UserMap): LegacyRow | null {
@@ -522,6 +599,40 @@ async function uploadTextIfPresent(
   return path;
 }
 
+async function uploadBinaryIfPresent(
+  bucket: string,
+  path: string,
+  value: unknown,
+  contentType: string,
+): Promise<string | null> {
+  const body = normalizeBinary(value);
+  if (!body) return null;
+
+  const { error } = await supabase.storage.from(bucket).upload(path, body, {
+    contentType,
+    upsert: true,
+  });
+  if (error) throw error;
+  report.storage.files += 1;
+  report.storage.bytes += body.byteLength;
+  return path;
+}
+
+function normalizeBinary(value: unknown): Buffer | null {
+  if (value == null || value === "null") return null;
+  if (Buffer.isBuffer(value)) return value.byteLength > 0 ? value : null;
+  if (value instanceof Uint8Array) {
+    return value.byteLength > 0 ? Buffer.from(value) : null;
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed || trimmed === "null") return null;
+    return Buffer.from(value, "utf8");
+  }
+  const text = JSON.stringify(value);
+  return text ? Buffer.from(text, "utf8") : null;
+}
+
 async function verifyNoOrphans(): Promise<void> {
   const { data, error } = await supabase
     .from("activities")
@@ -592,6 +703,28 @@ function nullableNumber(value: unknown): number | null {
 function stringValue(value: unknown): string | null {
   if (value == null) return null;
   return String(value);
+}
+
+function safeStorageName(name: string): string {
+  return name.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 140) || "file.bin";
+}
+
+function contentTypeForFile(filename: string): string {
+  const lower = filename.toLowerCase();
+  if (lower.endsWith(".pdf")) return "application/pdf";
+  if (lower.endsWith(".gpx")) return "application/gpx+xml";
+  if (lower.endsWith(".png")) return "image/png";
+  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+  if (lower.endsWith(".webp")) return "image/webp";
+  return "application/octet-stream";
+}
+
+function kindForAttachment(filename: string, mimeType: string): string {
+  const lower = filename.toLowerCase();
+  if (mimeType === "application/pdf" || lower.endsWith(".pdf")) return "pdf";
+  if (mimeType.startsWith("image/")) return "image";
+  if (mimeType === "application/gpx+xml" || lower.endsWith(".gpx")) return "gpx";
+  return "other";
 }
 
 function randomPassword(): string {

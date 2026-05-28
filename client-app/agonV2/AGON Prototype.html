@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AGON — Prototype Mobile</title>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <link rel="stylesheet" href="agon/ds.css" />
+</head>
+<body>
+  <div id="root"></div>
+
+  <!-- 1. Mock data (plain JS) -->
+  <script src="agon/mock-data.js"></script>
+
+  <!-- 2. Tweaks panel (standalone) -->
+  <script type="text/babel" data-presets="react" src="agon/tweaks-panel.jsx"></script>
+
+  <!-- 3. All screens + app (single bundle) -->
+  <script type="text/babel" data-presets="react" src="agon/bundle.jsx"></script>
+</body>
+</html>

@@ -1,12 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import * as maptilersdk from '@maptiler/sdk';
-import '@maptiler/sdk/dist/maptiler-sdk.css';
-import { useParams } from 'react-router-dom';
+import { useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import {
   Activity,
   AlertTriangle,
+  ArrowLeft,
   ArrowLeftRight,
   BarChart3,
   Cloud,
@@ -18,6 +17,7 @@ import {
   Heart,
   Map as MapIcon,
   MapPin,
+  MoreHorizontal,
   Mountain,
   MoveVertical,
   RefreshCw,
@@ -29,6 +29,8 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { AppShell } from '@/components/shared/AppShell';
+import RouteMapTiler, { type RouteMapTrack } from '@/components/map/RouteMapTiler';
+import MiniAreaChart from '@/components/shared/MiniAreaChart';
 import {
   agonApi,
   type ActivityStreamsResponse,
@@ -59,7 +61,9 @@ const TABS: Array<{ id: TabId; label: string; Icon: LucideIcon }> = [
 
 export default function ActivityDetailRoute() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabId>('streams');
+  const [expanded, setExpanded] = useState(false);
   const queryClient = useQueryClient();
 
   const activityQuery = useQuery({
@@ -111,140 +115,236 @@ export default function ActivityDetailRoute() {
     retry: false,
   });
 
+  const streamData = useMemo(
+    () => buildStreamData(streamsQuery.data?.streams),
+    [streamsQuery.data?.streams],
+  );
+  const routeTrack = useMemo(
+    () => (activity ? buildRouteTrack(activity, streamsQuery.data?.streams) : null),
+    [activity, streamsQuery.data?.streams],
+  );
+  const peakElevation = useMemo(
+    () => resolvePeakElevation(streamData, activity),
+    [activity, streamData],
+  );
+  const sport = activity ? getSportPresentation(activity.sport_type) : null;
+  const pace = activity ? speedToPace(activity.avg_speed_m_s ?? activity.avg_speed_mps ?? null) : null;
+  const weather = weatherEnrich.data ?? weatherQuery.data;
+
   return (
-    <AppShell topBarProps={{ back: true }}>
-      <div className="mx-auto w-full max-w-md px-4 pt-4 pb-8">
+    <AppShell hideTopBar hideBottomNav disableMainPadding mainClassName="overflow-hidden">
+      <div className="relative h-full overflow-hidden bg-[#0f100c]">
         {activityQuery.isLoading ? (
-          <LoadingBlock label="Chargement de l'activite..." />
+          <FullscreenState label="Chargement de l'activité..." />
         ) : !activity ? (
-          <EmptyBlock icon={AlertTriangle} title="Activite introuvable" />
+          <FullscreenState label="Activité introuvable" icon={AlertTriangle} />
         ) : (
           <>
-            <ActivityHeader activity={activity} />
+            <RouteMapTiler
+              tracks={routeTrack ? [routeTrack] : []}
+              className="absolute inset-0 z-[1] h-full w-full"
+              fallbackLabel="Pas de trace GPS disponible"
+              fitPadding={88}
+            />
+            <div className="pointer-events-none absolute inset-0 z-[2] bg-gradient-to-b from-[#0a0c08]/45 via-[#0a0c08]/5 to-[#0a0c08]/70" />
 
-            <div className="mb-4 grid grid-cols-2 gap-2">
-              <MetricCard
-                icon={Activity}
-                label="Distance"
-                value={formatDistance(activity.distance_m)}
-              />
-              <MetricCard
-                icon={Timer}
-                label="Temps"
-                value={formatDuration(activity.moving_time_s)}
-              />
-              <MetricCard
-                icon={Mountain}
-                label="D+"
-                value={
-                  activity.elev_gain_m != null
-                    ? `${Math.round(activity.elev_gain_m)} m`
-                    : '—'
-                }
-              />
-              <MetricCard
-                icon={Heart}
-                label="FC moy/max"
-                value={formatHeartRate(activity)}
-              />
+            <button
+              type="button"
+              onClick={() => navigate(-1)}
+              className="absolute left-4 top-[max(14px,env(safe-area-inset-top))] z-[8] inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-[#0f100c]/55 px-3 py-2 text-[13px] font-medium text-[#e8dfcf] shadow-lg backdrop-blur-xl"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Retour
+            </button>
+
+            <button
+              type="button"
+              aria-label="Options activité"
+              className="absolute right-5 top-[calc(max(14px,env(safe-area-inset-top))+66px)] z-[6] flex h-9 w-9 items-center justify-center rounded-full text-[#d8cdbc]"
+            >
+              <MoreHorizontal className="h-6 w-6" />
+            </button>
+
+            <div className="absolute left-6 top-[calc(max(14px,env(safe-area-inset-top))+50px)] z-[5]">
+              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.09em] text-[#e8dfcf]/75">
+                Altitude max
+              </p>
+              <p className="font-display text-[42px] font-medium leading-none tracking-tight text-[#f0e8d8]">
+                {peakElevation != null ? Math.round(peakElevation) : '—'}{' '}
+                <span className="text-lg font-normal text-[#f0e8d8]/70">m</span>
+              </p>
+              <p className="mt-2 text-[15px] font-semibold text-brand-primary">
+                ▲ {activity.elev_gain_m != null ? Math.round(activity.elev_gain_m) : 0} m D+
+              </p>
             </div>
 
-            <DataCoverage activity={activity} />
-
-            <div className="mb-4 -mx-4 overflow-x-auto px-4">
-              <div className="flex min-w-max gap-2">
-                {TABS.map(({ id: tabId, label, Icon }) => {
-                  const selected = activeTab === tabId;
-                  return (
-                    <button
-                      key={tabId}
-                      type="button"
-                      onClick={() => setActiveTab(tabId)}
-                      className={cn(
-                        'inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition',
-                        selected
-                          ? 'border-brand-sunset/40 bg-brand-sunset/15 text-brand-cyan'
-                          : 'border-border-subtle bg-card text-muted-foreground',
-                      )}
-                    >
-                      <Icon className="h-3.5 w-3.5" />
-                      {label}
-                    </button>
-                  );
-                })}
+            <section
+              onClick={() => {
+                if (!expanded) setExpanded(true);
+              }}
+              className={cn(
+                'absolute inset-x-0 bottom-0 z-10 flex flex-col overflow-hidden rounded-t-[28px] bg-[#0d100b]/[0.97] shadow-[0_-16px_48px_rgba(0,0,0,0.55)] transition-[height] duration-[380ms] ease-[cubic-bezier(0.34,1.4,0.64,1)]',
+                expanded ? 'h-[82%]' : 'h-[34%]',
+              )}
+            >
+              <div className="flex shrink-0 justify-center pb-1 pt-3">
+                <span className="h-1 w-9 rounded-full bg-[#e8dfcf]/20" />
               </div>
-            </div>
 
-            {activeTab === 'streams' ? (
-              <StreamsPanel
-                data={streamsQuery.data}
-                isLoading={streamsQuery.isLoading}
-                isError={streamsQuery.isError}
-              />
-            ) : null}
+              <div className="flex shrink-0 items-start justify-between gap-3 px-6 pt-1">
+                <div className="min-w-0">
+                  <h1 className="font-display truncate text-base font-bold tracking-tight text-[#f0e8d8]">
+                    {activity.name}
+                  </h1>
+                  <p className="mt-0.5 truncate text-[11px] text-[#e8dfcf]/55">
+                    {formatDateLong(activity.start_date_utc)} · {sport?.label ?? activity.sport_type}
+                    {pace ? ` · ${formatPace(pace)}` : ''}
+                  </p>
+                </div>
+                {expanded ? (
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setExpanded(false);
+                    }}
+                    className="shrink-0 rounded-full bg-[#e8dfcf]/[0.08] px-3 py-1.5 text-[11px] font-medium text-[#e8dfcf]/60"
+                  >
+                    Réduire ↓
+                  </button>
+                ) : null}
+              </div>
 
-            {activeTab === 'segments' ? (
-              <SegmentsPanel
-                data={segmentsQuery.data}
-                isLoading={segmentsQuery.isLoading}
-                isError={segmentsQuery.isError}
-              />
-            ) : null}
+              <div className="grid shrink-0 grid-cols-[1fr_1px_1fr] px-7 pb-3 pt-4">
+                <ActivityHeroMetric label="Distance" value={formatDistance(activity.distance_m)} unit="KM" />
+                <div className="bg-[#e8dfcf]/10" />
+                <ActivityHeroMetric
+                  label="D+"
+                  value={activity.elev_gain_m != null ? String(Math.round(activity.elev_gain_m)) : '—'}
+                  unit="M"
+                  align="right"
+                />
+              </div>
 
-            {activeTab === 'fit' ? (
-              <FitPanel
-                data={fitQuery.data}
-                hasFit={activity.has_fit_metrics === true}
-                isLoading={fitQuery.isLoading}
-                isError={fitQuery.isError}
-                streams={streamsQuery.data}
-              />
-            ) : null}
+              <div className="shrink-0 px-5 pb-3">
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#e8dfcf]/50">
+                  Profil d'altitude
+                </p>
+                <MiniAreaChart
+                  data={streamData.map((point) => point.altitude)}
+                  color="#A0432E"
+                  height={72}
+                  className="bg-white/[0.03]"
+                />
+              </div>
 
-            {activeTab === 'weather' ? (
-              <WeatherPanel
-                data={weatherEnrich.data ?? weatherQuery.data}
-                hasWeather={activity.has_weather === true || Boolean(weatherEnrich.data)}
-                isLoading={weatherQuery.isLoading}
-                isError={weatherQuery.isError}
-                isEnriching={weatherEnrich.isPending}
-                enrichError={weatherEnrich.isError}
-                onEnrich={() => weatherEnrich.mutate()}
-              />
-            ) : null}
+              {expanded ? (
+                <div
+                  className="flex-1 overflow-y-auto px-6 pb-[calc(24px+env(safe-area-inset-bottom))]"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <div className="grid grid-cols-4 gap-2">
+                    <SheetStat label="Temps" value={formatDuration(activity.moving_time_s)} />
+                    <SheetStat label="Allure" value={pace ? formatPace(pace) : '—'} />
+                    <SheetStat
+                      label="FC moy."
+                      value={
+                        activity.avg_heartrate_bpm != null && activity.avg_heartrate_bpm > 0
+                          ? `${Math.round(activity.avg_heartrate_bpm)}`
+                          : '—'
+                      }
+                    />
+                    <SheetStat
+                      label="FC max"
+                      value={
+                        activity.max_heartrate_bpm != null && activity.max_heartrate_bpm > 0
+                          ? `${Math.round(activity.max_heartrate_bpm)}`
+                          : '—'
+                      }
+                    />
+                  </div>
 
-            {activeTab === 'map' ? (
-              <MapPanel activity={activity} streams={streamsQuery.data} />
-            ) : null}
+                  <DataCoverage activity={activity} />
+
+                  <div className="mt-4">
+                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.07em] text-[#e8dfcf]/45">
+                      Données activité
+                    </p>
+                    <div className="scrollbar-hide -mx-1 mb-3 flex gap-1.5 overflow-x-auto px-1">
+                      {TABS.map(({ id: tabId, label, Icon }) => {
+                        const selected = activeTab === tabId;
+                        return (
+                          <button
+                            key={tabId}
+                            type="button"
+                            onClick={() => setActiveTab(tabId)}
+                            className={cn(
+                              'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition',
+                              selected
+                                ? 'border-brand-sunset/40 bg-brand-sunset/15 text-brand-sunset'
+                                : 'border-white/[0.08] bg-white/[0.04] text-[#e8dfcf]/50',
+                            )}
+                          >
+                            <Icon className="h-3.5 w-3.5" />
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div className="activity-detail-panel">
+                      {activeTab === 'streams' ? (
+                        <StreamsPanel
+                          data={streamsQuery.data}
+                          isLoading={streamsQuery.isLoading}
+                          isError={streamsQuery.isError}
+                        />
+                      ) : null}
+
+                      {activeTab === 'segments' ? (
+                        <SegmentsPanel
+                          data={segmentsQuery.data}
+                          isLoading={segmentsQuery.isLoading}
+                          isError={segmentsQuery.isError}
+                        />
+                      ) : null}
+
+                      {activeTab === 'fit' ? (
+                        <FitPanel
+                          data={fitQuery.data}
+                          hasFit={activity.has_fit_metrics === true}
+                          isLoading={fitQuery.isLoading}
+                          isError={fitQuery.isError}
+                          streams={streamsQuery.data}
+                        />
+                      ) : null}
+
+                      {activeTab === 'weather' ? (
+                        <WeatherPanel
+                          data={weather}
+                          hasWeather={activity.has_weather === true || Boolean(weather)}
+                          isLoading={weatherQuery.isLoading}
+                          isError={weatherQuery.isError}
+                          isEnriching={weatherEnrich.isPending}
+                          enrichError={weatherEnrich.isError}
+                          onEnrich={() => weatherEnrich.mutate()}
+                        />
+                      ) : null}
+
+                      {activeTab === 'map' ? (
+                        <MapPanel activity={activity} streams={streamsQuery.data} />
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <ActivityChips activity={activity} weather={weather} fit={fitQuery.data} />
+                </div>
+              ) : null}
+            </section>
           </>
         )}
       </div>
     </AppShell>
-  );
-}
-
-function ActivityHeader({ activity }: { activity: EnrichedActivity }) {
-  const { Icon, label, toneClass } = getSportPresentation(activity.sport_type);
-  const pace = speedToPace(activity.avg_speed_m_s ?? activity.avg_speed_mps ?? null);
-
-  return (
-    <header className="mb-5">
-      <p className="text-eyebrow mb-2">{formatDateLong(activity.start_date_utc)}</p>
-      <div className="flex items-start gap-3">
-        <div className={cn('flex h-12 w-12 shrink-0 items-center justify-center rounded-md border', toneClass)}>
-          <Icon className="h-6 w-6" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <h1 className="text-foreground font-display text-2xl font-bold tracking-tight">
-            {activity.name}
-          </h1>
-          <p className="text-muted-foreground mt-1 text-sm">
-            {label}
-            {pace ? ` · ${formatPace(pace)}` : ''}
-          </p>
-        </div>
-      </div>
-    </header>
   );
 }
 
@@ -266,30 +366,140 @@ function MetricCard({
   );
 }
 
+function FullscreenState({
+  label,
+  icon: Icon,
+}: {
+  label: string;
+  icon?: LucideIcon;
+}) {
+  return (
+    <div className="flex h-full items-center justify-center bg-[#0f100c] px-8 text-center">
+      <div className="rounded-[18px] border border-white/10 bg-[#191815]/80 px-5 py-5 text-[#e8dfcf]/70 shadow-2xl backdrop-blur-xl">
+        {Icon ? <Icon className="mx-auto mb-3 h-7 w-7 text-[#e8dfcf]/55" /> : null}
+        <p className="text-sm font-semibold">{label}</p>
+      </div>
+    </div>
+  );
+}
+
+function ActivityHeroMetric({
+  label,
+  value,
+  unit,
+  align = 'left',
+}: {
+  label: string;
+  value: string;
+  unit: string;
+  align?: 'left' | 'right';
+}) {
+  const normalizedValue = value === '—' ? '—' : value.replace(/\s?(km|m)$/i, '');
+
+  return (
+    <div className={cn('min-w-0', align === 'right' && 'text-right')}>
+      <span className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.07em] text-[#e8dfcf]/55">
+        {label}
+      </span>
+      <strong className="font-display block truncate text-[34px] font-medium leading-none tracking-tight text-[#f0e8d8]">
+        {normalizedValue}{' '}
+        {normalizedValue !== '—' ? (
+          <span className="text-sm font-normal text-[#f0e8d8]/60">{unit}</span>
+        ) : null}
+      </strong>
+    </div>
+  );
+}
+
+function SheetStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-white/[0.08] bg-[#e8dfcf]/[0.06] px-2 py-2.5">
+      <p className="mb-1.5 truncate text-[9px] font-semibold uppercase tracking-[0.05em] text-[#e8dfcf]/45">
+        {label}
+      </p>
+      <p className="font-display truncate text-[13px] font-bold leading-none text-[#f0e8d8]">
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function ActivityChips({
+  activity,
+  weather,
+  fit,
+}: {
+  activity: EnrichedActivity;
+  weather: ActivityWeather | undefined;
+  fit: FitMetrics | undefined;
+}) {
+  const chips = [
+    activity.avg_heartrate_bpm != null && activity.avg_heartrate_bpm > 0
+      ? {
+          label: `${Math.round(activity.avg_heartrate_bpm)} bpm moy.`,
+          Icon: Heart,
+          className: 'border-danger/25 bg-danger/10 text-danger-fg',
+        }
+      : null,
+    weather?.temperature_c != null
+      ? {
+          label: `${weather.temperature_c.toFixed(1)}°C`,
+          Icon: Thermometer,
+          className: 'border-brand-sunset/25 bg-brand-sunset/10 text-brand-sunset',
+        }
+      : null,
+    fit?.aerobic_training_effect != null
+      ? {
+          label: `TE ${fit.aerobic_training_effect.toFixed(1)}`,
+          Icon: Gauge,
+          className: 'border-success/25 bg-success/10 text-success-fg',
+        }
+      : null,
+  ].filter((chip): chip is { label: string; Icon: LucideIcon; className: string } => chip != null);
+
+  if (chips.length === 0) return null;
+
+  return (
+    <div className="mt-4 flex flex-wrap gap-1.5">
+      {chips.map(({ label, Icon, className }) => (
+        <span
+          key={label}
+          className={cn('inline-flex items-center gap-1 rounded-full border px-2.5 py-1.5 text-xs font-medium', className)}
+        >
+          <Icon className="h-3 w-3" />
+          {label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function DataCoverage({ activity }: { activity: EnrichedActivity }) {
   const items = [
     { label: 'Streams', active: activity.has_streams === true, Icon: Activity },
     { label: 'FIT', active: activity.has_fit_metrics === true, Icon: Watch },
-    { label: 'Meteo', active: activity.has_weather === true, Icon: CloudSun },
+    { label: 'Météo', active: activity.has_weather === true, Icon: CloudSun },
     { label: 'Trace', active: hasMapCandidate(activity), Icon: MapIcon },
   ];
 
   return (
-    <section className="border-border-subtle bg-card mb-5 rounded-md border p-3">
-      <p className="text-eyebrow mb-3">Donnees disponibles</p>
-      <div className="grid grid-cols-4 gap-2">
+    <section className="mt-4">
+      <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-[0.07em] text-[#e8dfcf]/45">
+        Données disponibles
+      </p>
+      <div className="grid grid-cols-4 gap-1.5">
         {items.map(({ label, active, Icon }) => (
           <div
             key={label}
             className={cn(
-              'rounded-md border p-2 text-center',
+              'rounded-lg border px-1 py-2 text-center',
               active
-                ? 'border-success/35 bg-success-bg text-success-fg'
-                : 'border-border-subtle bg-surface-2 text-muted-foreground',
+                ? 'border-success/25 bg-success/10 text-success-fg'
+                : 'border-white/[0.08] bg-white/[0.04] text-[#a8a192]/50',
             )}
           >
-            <Icon className="mx-auto mb-1 h-4 w-4" />
-            <p className="text-[11px] font-semibold">{label}</p>
+            <Icon className="mx-auto mb-1 h-3.5 w-3.5" />
+            <p className="text-[9px] font-semibold">{label}</p>
           </div>
         ))}
       </div>
@@ -868,69 +1078,20 @@ function ActivityRouteMap({
   activity: EnrichedActivity;
   streams: ActivityStreamsResponse | undefined;
 }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<maptilersdk.Map | null>(null);
-  const routePoints = useMemo(() => buildRoutePoints(activity, streams?.streams), [activity, streams?.streams]);
-  const apiKey = import.meta.env.VITE_MAPTILER_API_KEY as string | undefined;
+  const track = useMemo(() => buildRouteTrack(activity, streams?.streams), [activity, streams?.streams]);
 
-  useEffect(() => {
-    if (!apiKey || !containerRef.current || routePoints.length === 0) return undefined;
-    const firstPoint = routePoints[0];
-    const lastPoint = routePoints[routePoints.length - 1];
-    if (!firstPoint || !lastPoint) return undefined;
-
-    maptilersdk.config.apiKey = apiKey;
-    const bounds = new maptilersdk.LngLatBounds();
-    routePoints.forEach((point) => bounds.extend(point));
-
-    const map = new maptilersdk.Map({
-      container: containerRef.current,
-      style: maptilersdk.MapStyle.OUTDOOR as unknown as string,
-      center: firstPoint,
-      zoom: 12,
-    });
-    mapRef.current = map;
-
-    map.on('load', () => {
-      map.addSource('activity-route', {
-        type: 'geojson',
-        data: {
-          type: 'Feature',
-          properties: {},
-          geometry: { type: 'LineString', coordinates: routePoints },
-        } as GeoJSON.Feature<GeoJSON.LineString>,
-      });
-      map.addLayer({
-        id: 'activity-route-line',
-        type: 'line',
-        source: 'activity-route',
-        layout: { 'line-cap': 'round', 'line-join': 'round' },
-        paint: {
-          'line-color': '#E89E5A',
-          'line-width': 4,
-          'line-opacity': 0.9,
-        },
-      });
-      new maptilersdk.Marker({ color: '#10B981' }).setLngLat(firstPoint).addTo(map);
-      new maptilersdk.Marker({ color: '#EF4444' }).setLngLat(lastPoint).addTo(map);
-      map.fitBounds(bounds, { padding: 36 });
-    });
-
-    return () => {
-      map.remove();
-      mapRef.current = null;
-    };
-  }, [apiKey, routePoints]);
-
-  if (!apiKey) {
-    return <EmptyBlock icon={AlertTriangle} title="Cle MapTiler manquante" />;
-  }
-
-  if (routePoints.length === 0) {
+  if (!track) {
     return <EmptyBlock icon={MapPin} title="Pas de trace GPS disponible" />;
   }
 
-  return <div ref={containerRef} className="h-72 w-full" />;
+  return (
+    <RouteMapTiler
+      tracks={[track]}
+      className="h-72 w-full"
+      fallbackLabel="Pas de trace GPS disponible"
+      fitPadding={42}
+    />
+  );
 }
 
 function LoadingBlock({ label }: { label: string }) {
@@ -1032,6 +1193,31 @@ function buildRoutePoints(
   return [];
 }
 
+function buildRouteTrack(
+  activity: EnrichedActivity,
+  streams?: ActivityStreamsResponse['streams'],
+): RouteMapTrack | null {
+  const routePoints = buildRoutePoints(activity, streams);
+  if (routePoints.length === 0) return null;
+  return {
+    id: String(activity.activity_id ?? activity.id ?? 'activity'),
+    color: '#A0432E',
+    width: 4,
+    points: routePoints.map(([lng, lat]) => ({ lat, lng })),
+  };
+}
+
+function resolvePeakElevation(
+  streamData: StreamPoint[],
+  activity: EnrichedActivity | undefined,
+): number | null {
+  const altitudeValues = streamData
+    .map((point) => point.altitude)
+    .filter((value): value is number => value != null && Number.isFinite(value));
+  if (altitudeValues.length > 0) return Math.max(...altitudeValues);
+  return activity?.elev_gain_m ?? null;
+}
+
 function decodePolyline(encoded: string): [number, number][] {
   let index = 0;
   let lat = 0;
@@ -1074,15 +1260,6 @@ function decodePolylineValue(encoded: string, startIndex: number): { value: numb
 
 function hasMapCandidate(activity: EnrichedActivity): boolean {
   return Boolean(activity.polyline || activity.summary_polyline || (activity.start_latlng && activity.end_latlng));
-}
-
-function formatHeartRate(activity: EnrichedActivity): string {
-  if (activity.avg_heartrate_bpm == null || activity.avg_heartrate_bpm <= 0) return '—';
-  const max =
-    activity.max_heartrate_bpm != null && activity.max_heartrate_bpm > 0
-      ? `/${Math.round(activity.max_heartrate_bpm)}`
-      : '';
-  return `${Math.round(activity.avg_heartrate_bpm)}${max}`;
 }
 
 function buildFitGroups(data: FitMetrics): Array<{

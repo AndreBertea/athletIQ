@@ -15,6 +15,7 @@ const EXPORT_TABLES = [
   "athletic_profiles",
   "reference_tests",
   "gpx_routes",
+  "gpx_route_attachments",
   "gpx_route_settings",
   "race_predictions",
   "sync_jobs",
