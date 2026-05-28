@@ -425,14 +425,9 @@ async function get<T = any>(url: string, options: ApiOptions = {}): Promise<ApiR
   }
 
   if (path === '/garmin/activities/import-preview') {
-    const rows = await selectActivities({ date_from: daysAgo(asNumber(params.days_back, 30)) });
-    return response({
-      days_back: asNumber(params.days_back, 30),
-      period_started_at: daysAgo(asNumber(params.days_back, 30)),
-      total_activities: rows.length,
-      existing_activities: rows.filter((row) => row.has_garmin).length,
-      missing_activities: 0,
-    } as T);
+    return response(await invokeFunction<T>('garmin-activities-sync', {
+      body: { days_back: asNumber(params.days_back, 30), preview: true },
+    }));
   }
 
   if (path === '/garmin/activities/import-status') {
@@ -634,17 +629,21 @@ async function post<T = any>(url: string, body?: any, options: ApiOptions = {}):
 
   if (path === '/auth/strava/login') return response(await invokeFunction<T>('strava-oauth-start'));
   if (path === '/sync/strava') return response(await invokeFunction<T>('strava-sync', { body: params }));
-  if (path === '/sync/garmin' || path === '/sync/garmin/activities' || path === '/garmin/activities/enrich-fit') {
-    return response({ message: 'Sync Garmin complète reportée sur le MVP Supabase; historique migré disponible.' } as T);
+  if (path === '/sync/garmin') return response(await invokeFunction<T>('garmin-sync', { body: params }));
+  if (path === '/sync/garmin/activities') {
+    return response(await invokeFunction<T>('garmin-activities-sync', { body: params }));
+  }
+  if (path === '/garmin/activities/enrich-fit') {
+    return response(await invokeFunction<T>('garmin-fit-enrich', { body: params }));
   }
 
   const singleFit = path.match(/^\/garmin\/activities\/([^/]+)\/enrich-fit$/);
   if (singleFit) {
-    return response({ status: 'skipped', activity_id: singleFit[1], fit_metrics_stored: false } as T);
+    return response(await invokeFunction<T>('garmin-fit-enrich', { body: { activity_id: singleFit[1] } }));
   }
 
   if (path === '/auth/garmin/login') {
-    throw new ApiError('Connexion Garmin native non disponible dans le MVP Supabase. Reconnexion à traiter après week-end.', 501);
+    return response(await invokeFunction<T>('garmin-login', { body }));
   }
 
   if (path === '/user/me/athletic-profile') {

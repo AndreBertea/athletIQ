@@ -572,8 +572,16 @@ export const agonApi = {
     return data;
   },
 
-  async loginGarmin(email: string, password: string): Promise<{ message?: string }> {
-    const { data } = await api.post<{ message?: string }>('/auth/garmin/login', { email, password });
+  async loginGarmin(
+    email: string,
+    password: string,
+    mfaCode?: string,
+  ): Promise<{ message?: string; needs_mfa?: boolean }> {
+    const { data } = await api.post<{ message?: string; needs_mfa?: boolean }>('/auth/garmin/login', {
+      email,
+      password,
+      mfa_code: mfaCode || undefined,
+    });
     return data;
   },
 
@@ -583,10 +591,29 @@ export const agonApi = {
   },
 
   async syncGarminDaily(daysBack = 365): Promise<Record<string, unknown>> {
-    const { data } = await api.post<Record<string, unknown>>('/sync/garmin', null, {
-      params: { days_back: daysBack },
-    });
-    return data;
+    const chunkSize = 30;
+    let daysSynced = 0;
+    let errors = 0;
+    let totalRequested = 0;
+    let lastJobId: unknown = null;
+
+    for (let offset = 0; offset < daysBack; offset += chunkSize) {
+      const chunkDays = Math.min(chunkSize, daysBack - offset);
+      const { data } = await api.post<Record<string, unknown>>('/sync/garmin', null, {
+        params: { days_back: chunkDays, start_offset_days: offset },
+      });
+      daysSynced += Number(data.days_synced ?? 0);
+      errors += Number(data.errors ?? 0);
+      totalRequested += Number(data.total_requested ?? chunkDays);
+      lastJobId = data.job_id ?? lastJobId;
+    }
+
+    return {
+      days_synced: daysSynced,
+      errors,
+      total_requested: totalRequested,
+      job_id: lastJobId,
+    };
   },
 
   async syncGarminActivities(daysBack = 365): Promise<Record<string, unknown>> {
