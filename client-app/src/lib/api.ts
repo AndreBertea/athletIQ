@@ -366,6 +366,8 @@ async function get<T = any>(url: string, options: ApiOptions = {}): Promise<ApiR
     return response({ activity_id: data.id, streams, streams_data: streams, laps_data: laps ?? [] } as T);
   }
 
+  if (path === '/weather/status') return response(await getWeatherStatus() as T);
+
   const weather = path.match(/^\/weather\/([^/]+)$/);
   if (weather) {
     const { data, error } = await supabase
@@ -377,8 +379,6 @@ async function get<T = any>(url: string, options: ApiOptions = {}): Promise<ApiR
     if (error) throw error;
     return response(data as T);
   }
-
-  if (path === '/weather/status') return response(await getWeatherStatus() as T);
 
   const fit = path.match(/^\/garmin\/activities\/([^/]+)\/fit-metrics$/);
   if (fit) {

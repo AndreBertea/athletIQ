@@ -36,8 +36,28 @@ export async function invokeFunction<T>(
   };
   if (options.body != null) invokeOptions.body = options.body;
   const { data, error } = await supabase.functions.invoke<T>(name, invokeOptions);
-  if (error) throw new Error(error.message);
+  if (error) {
+    const context = (error as { context?: unknown }).context;
+    if (context instanceof Response) {
+      const text = await context.text().catch(() => '');
+      const payload = parseFunctionErrorPayload(text);
+      if (payload) {
+        throw new Error(payload.error ?? payload.message ?? error.message);
+      } else {
+        if (text) throw new Error(text);
+      }
+    }
+    throw new Error(error.message);
+  }
   return data as T;
+}
+
+function parseFunctionErrorPayload(text: string): { error?: string; message?: string; details?: unknown } | null {
+  try {
+    return JSON.parse(text) as { error?: string; message?: string; details?: unknown };
+  } catch {
+    return null;
+  }
 }
 
 export async function fetchFunctionBlob(

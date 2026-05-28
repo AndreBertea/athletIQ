@@ -5,8 +5,7 @@ const DOMAIN = "garmin.com";
 const SSO_BASE = `https://sso.${DOMAIN}/sso`;
 const CONNECT_API_BASE = `https://connectapi.${DOMAIN}`;
 const OAUTH_CONSUMER_URL = "https://thegarth.s3.amazonaws.com/oauth_consumer.json";
-const SSO_USER_AGENT = "GCM-iOS-5.19.1.2";
-const OAUTH_USER_AGENT = "com.garmin.android.apps.connectmobile";
+const GARMIN_USER_AGENT = "com.garmin.android.apps.connectmobile";
 
 interface OAuthConsumer {
   consumer_key: string;
@@ -44,6 +43,16 @@ export interface GarminLoginResult {
   token?: GarminToken;
 }
 
+export class GarminError extends Error {
+  constructor(
+    message: string,
+    public status = 500,
+    public code = "garmin_error",
+  ) {
+    super(message);
+  }
+}
+
 let consumerCache: OAuthConsumer | null = null;
 
 function rfc3986(value: string): string {
@@ -69,13 +78,13 @@ function getTitle(html: string): string | null {
 
 function getCsrf(html: string): string {
   const token = html.match(/name="_csrf"\s+value="(.+?)"/)?.[1];
-  if (!token) throw new Error("Garmin CSRF token introuvable.");
+  if (!token) throw new GarminError("Garmin CSRF token introuvable.", 502, "garmin_sso_unexpected");
   return token;
 }
 
 function getTicket(html: string): string {
   const ticket = html.match(/embed\?ticket=([^"]+)"/)?.[1];
-  if (!ticket) throw new Error("Ticket Garmin introuvable apres login.");
+  if (!ticket) throw new GarminError("Ticket Garmin introuvable apres login.", 502, "garmin_sso_unexpected");
   return ticket;
 }
 
@@ -160,12 +169,18 @@ class GarminSsoClient {
 
   async request(url: string, init: RequestInit = {}): Promise<Response> {
     const headers = new Headers(init.headers);
-    headers.set("User-Agent", SSO_USER_AGENT);
+    headers.set("User-Agent", GARMIN_USER_AGENT);
     if (this.jar.header()) headers.set("Cookie", this.jar.header());
     const response = await fetch(url, { ...init, headers, redirect: "follow" });
     this.jar.ingest(response.headers);
     this.lastUrl = response.url;
-    if (!response.ok) throw new Error(`Garmin SSO HTTP ${response.status}`);
+    if (!response.ok) {
+      throw new GarminError(
+        `Garmin SSO HTTP ${response.status}`,
+        response.status === 401 || response.status === 403 ? 401 : 502,
+        "garmin_sso_http",
+      );
+    }
     return response;
   }
 
@@ -177,7 +192,13 @@ class GarminSsoClient {
 async function fetchConsumer(): Promise<OAuthConsumer> {
   if (consumerCache) return consumerCache;
   const response = await fetch(OAUTH_CONSUMER_URL);
-  if (!response.ok) throw new Error(`Garmin OAuth consumer indisponible: ${response.status}`);
+  if (!response.ok) {
+    throw new GarminError(
+      `Garmin OAuth consumer indisponible: ${response.status}`,
+      502,
+      "garmin_oauth_consumer_unavailable",
+    );
+  }
   consumerCache = await response.json() as OAuthConsumer;
   return consumerCache;
 }
@@ -247,7 +268,7 @@ async function signedOAuthFetch(
   const consumer = await fetchConsumer();
   const headers = new Headers({
     "Authorization": await oauthHeader(method, url, consumer, token, bodyParams),
-    "User-Agent": OAUTH_USER_AGENT,
+    "User-Agent": GARMIN_USER_AGENT,
   });
   let body: URLSearchParams | undefined;
   if (method !== "GET") {
@@ -256,7 +277,11 @@ async function signedOAuthFetch(
   }
   const response = await fetch(url, { method, headers, body });
   if (!response.ok) {
-    throw new Error(`Garmin OAuth HTTP ${response.status}: ${await response.text()}`);
+    throw new GarminError(
+      `Garmin OAuth HTTP ${response.status}: ${await response.text()}`,
+      response.status === 401 || response.status === 403 ? 401 : response.status === 429 ? 429 : 502,
+      "garmin_oauth_http",
+    );
   }
   return response;
 }
@@ -353,7 +378,13 @@ export async function loginGarmin(
     title = getTitle(html);
   }
 
-  if (title !== "Success") throw new Error(`Login Garmin refuse: ${title ?? "titre inconnu"}`);
+  if (title !== "Success") {
+    throw new GarminError(
+      `Login Garmin refuse: ${title ?? "titre inconnu"}`,
+      401,
+      "garmin_login_rejected",
+    );
+  }
   const oauth1 = await getOAuth1(getTicket(html));
   const oauth2 = await exchangeOAuth2(oauth1);
   return { token: { oauth1, oauth2, domain: DOMAIN } };
@@ -386,9 +417,15 @@ export class GarminClient {
   private async request(path: string, init: RequestInit = {}): Promise<Response> {
     const headers = new Headers(init.headers);
     headers.set("Authorization", `${this.token.oauth2.token_type[0].toUpperCase()}${this.token.oauth2.token_type.slice(1)} ${this.token.oauth2.access_token}`);
-    headers.set("User-Agent", SSO_USER_AGENT);
+    headers.set("User-Agent", GARMIN_USER_AGENT);
     const response = await fetch(`${CONNECT_API_BASE}${path}`, { ...init, headers });
-    if (!response.ok) throw new Error(`Garmin Connect API HTTP ${response.status} on ${path}`);
+    if (!response.ok) {
+      throw new GarminError(
+        `Garmin Connect API HTTP ${response.status} on ${path}`,
+        response.status === 401 || response.status === 403 ? 401 : response.status === 429 ? 429 : 502,
+        "garmin_connect_http",
+      );
+    }
     return response;
   }
 }

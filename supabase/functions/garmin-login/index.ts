@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { errorResponse, handleCors, jsonResponse } from "../_shared/cors.ts";
-import { GarminClient, loginGarmin, storeGarminToken } from "../_shared/garmin.ts";
+import { GarminClient, GarminError, loginGarmin, storeGarminToken } from "../_shared/garmin.ts";
 import { requireUser } from "../_shared/supabase.ts";
 
 serve(async (req) => {
@@ -39,6 +39,9 @@ serve(async (req) => {
     });
   } catch (err) {
     if (err instanceof Response) return err;
+    if (err instanceof GarminError) {
+      return errorResponse(err.message, err.status, { code: err.code });
+    }
     return errorResponse(
       err instanceof Error ? err.message : "Connexion Garmin impossible.",
       500,
