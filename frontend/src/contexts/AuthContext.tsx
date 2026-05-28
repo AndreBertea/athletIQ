@@ -32,13 +32,20 @@ function mapUser(user: SupabaseUser): User {
   }
 }
 
-async function upsertProfile(user: SupabaseUser, fullName?: string): Promise<void> {
-  await supabase.from('profiles').upsert({
+async function syncProfileWhenAuthenticated(user: SupabaseUser, fullName?: string): Promise<void> {
+  const { data: sessionData } = await supabase.auth.getSession()
+  if (!sessionData.session) return
+
+  const { error } = await supabase.from('profiles').upsert({
     id: user.id,
     email: user.email,
     full_name: fullName ?? user.user_metadata?.full_name ?? '',
     display_name: fullName ?? user.user_metadata?.full_name ?? user.email?.split('@')[0] ?? 'Athlète',
   })
+
+  if (error) {
+    console.warn('Profile sync skipped:', error.message)
+  }
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -70,7 +77,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       password,
     })
     if (error) throw error
-    if (data.user) await upsertProfile(data.user)
+    if (data.session && data.user) await syncProfileWhenAuthenticated(data.user)
   }
 
   const signup = async (email: string, password: string, fullName: string) => {
@@ -80,7 +87,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       options: { data: { full_name: fullName } },
     })
     if (error) throw error
-    if (data.user) await upsertProfile(data.user, fullName)
+    if (data.session && data.user) await syncProfileWhenAuthenticated(data.user, fullName)
   }
 
   const logout = () => {

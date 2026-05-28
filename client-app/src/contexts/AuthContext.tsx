@@ -52,23 +52,31 @@ function mapUser(user: User): AuthUser {
   };
 }
 
-async function upsertProfile(user: User, fullName?: string): Promise<void> {
+async function syncProfileWhenAuthenticated(user: User, fullName?: string): Promise<void> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (!sessionData.session) return;
+
   const email = user.email ?? '';
   const resolvedFullName = fullName ?? (typeof user.user_metadata?.full_name === 'string'
     ? user.user_metadata.full_name
     : fullNameFromEmail(email));
 
-  await supabase.from('profiles').upsert({
+  const { error } = await supabase.from('profiles').upsert({
     id: user.id,
     email,
     full_name: resolvedFullName,
     display_name: deriveDisplayName(email, resolvedFullName),
   });
+
+  if (error) {
+    console.warn('Profile sync skipped:', error.message);
+  }
 }
 
 function humanReadableAuthError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   if (/invalid login credentials/i.test(message)) return 'Email ou mot de passe incorrect.';
+  if (/email not confirmed/i.test(message)) return 'Email non confirmé. Confirme ton email ou recrée le compte après désactivation de la confirmation email.';
   if (/already registered|already exists|user already/i.test(message)) return 'Un compte existe déjà pour cet email.';
   if (/password/i.test(message)) return 'Mot de passe invalide ou trop court.';
   return message || 'Connexion impossible. Réessaie dans un instant.';
@@ -104,7 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password,
     });
     if (error) throw new Error(humanReadableAuthError(error));
-    if (data.user) await upsertProfile(data.user);
+    if (data.session && data.user) await syncProfileWhenAuthenticated(data.user);
   }, []);
 
   const signUp = useCallback(async (email: string, password: string) => {
@@ -118,7 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
     });
     if (error) throw new Error(humanReadableAuthError(error));
-    if (data.user) await upsertProfile(data.user, fullName);
+    if (data.session && data.user) await syncProfileWhenAuthenticated(data.user, fullName);
   }, []);
 
   const signOut = useCallback(async () => {
