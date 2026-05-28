@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils';
 
 export default function LiveRoute() {
   return (
-    <AppShell topBarProps={{ title: 'Live' }}>
+    <AppShell>
       <LiveContent />
     </AppShell>
   );
@@ -25,6 +25,7 @@ function LiveContent() {
   const [url, setUrl] = useState('');
   const [label, setLabel] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
   const [multiSessionIds, setMultiSessionIds] = useState(readLiveMultiSessionIds);
 
   const { data: sessions = [], isLoading } = useQuery({
@@ -39,6 +40,7 @@ function LiveContent() {
       setUrl('');
       setLabel('');
       setError(null);
+      setFormOpen(false);
       queryClient.invalidateQueries({ queryKey: ['live', 'sessions'] });
     },
     onError: (mutationError: unknown) => {
@@ -83,72 +85,82 @@ function LiveContent() {
 
   return (
     <div className="px-4 pb-6 pt-3.5">
-      <header className="mb-4">
-        <span className="text-eyebrow mb-1 block">Garmin LiveTrack</span>
-        <h1 className="font-display text-[26px] font-extrabold leading-none tracking-tight text-foreground">
-          Live
-        </h1>
-        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-          Suivi en temps réel via LiveTrack Garmin.
-        </p>
+      <header className="mb-4 flex items-end justify-between gap-4">
+        <div>
+          <span className="text-eyebrow mb-1 block">Garmin LiveTrack</span>
+          <h1 className="font-display text-[26px] font-extrabold leading-none tracking-tight text-foreground">
+            Live
+          </h1>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            setFormOpen((open) => !open);
+            setError(null);
+          }}
+          aria-label={formOpen ? 'Fermer le formulaire' : 'Suivre une nouvelle session'}
+          className={cn(
+            'flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition',
+            formOpen
+              ? 'border-border-subtle bg-surface-2 text-foreground'
+              : 'border-transparent bg-brand-primary text-white shadow-[var(--glow-primary)]',
+          )}
+        >
+          <Plus className={cn('h-5 w-5 transition-transform', formOpen && 'rotate-45')} />
+        </button>
       </header>
 
-      <SharedLivePanel
-        sessions={multiSessions}
-        selectedCount={multiSessionIds.length}
-        loading={isLoading && multiSessionIds.length > 0}
-        onRemove={removeMultiSession}
-      />
+      {formOpen ? (
+        <section className="mb-3.5 rounded-md border border-border-subtle bg-card p-3.5">
+          <p className="mb-1 text-sm font-semibold text-foreground">
+            Suivre une session
+          </p>
+          <p className="mb-3 text-xs leading-relaxed text-muted-foreground">
+            Active LiveTrack sur ta Garmin → Paramètres → Sécurité → LiveTrack.
+            Colle l&apos;URL générée ici.
+          </p>
 
-      <section className="mb-4 rounded-md border border-border-subtle bg-card p-3.5">
-        <p className="mb-1 text-sm font-semibold text-foreground">
-          Suivre une nouvelle session
-        </p>
-        <p className="mb-3 text-xs leading-relaxed text-muted-foreground">
-          Active LiveTrack sur ta Garmin (Paramètres → Sécurité → LiveTrack), partage
-          l&apos;URL générée et colle-la ici.
-        </p>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-2">
+            <input
+              className="input font-mono text-xs"
+              type="url"
+              aria-label="URL LiveTrack"
+              placeholder="https://livetrack.garmin.com/session/..."
+              value={url}
+              onChange={(event) => {
+                setUrl(event.target.value);
+                setError(null);
+              }}
+            />
+            <input
+              className="input text-sm"
+              type="text"
+              aria-label="Label optionnel"
+              placeholder="Label (ex. Sortie longue dimanche)"
+              value={label}
+              onChange={(event) => setLabel(event.target.value)}
+            />
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-2">
-          <input
-            className="input font-mono text-xs"
-            type="url"
-            aria-label="URL LiveTrack"
-            placeholder="https://livetrack.garmin.com/session/..."
-            value={url}
-            onChange={(event) => {
-              setUrl(event.target.value);
-              setError(null);
-            }}
-          />
-          <input
-            className="input text-sm"
-            type="text"
-            aria-label="Label optionnel"
-            placeholder="Label optionnel (ex. Sortie longue)"
-            value={label}
-            onChange={(event) => setLabel(event.target.value)}
-          />
+            {error ? (
+              <div className="flex items-start gap-1.5 rounded-md border border-[rgba(239,68,68,0.25)] bg-danger-bg px-2.5 py-2">
+                <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-danger-fg" />
+                <span className="text-xs leading-relaxed text-danger-fg">{error}</span>
+              </div>
+            ) : null}
 
-          {error ? (
-            <div className="flex items-start gap-1.5 rounded-md border border-[rgba(239,68,68,0.25)] bg-danger-bg px-2.5 py-2">
-              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-danger-fg" />
-              <span className="text-xs leading-relaxed text-danger-fg">{error}</span>
-            </div>
-          ) : null}
+            <button
+              type="submit"
+              disabled={createMutation.isPending}
+              className="btn btn--primary mt-1 h-10 rounded-md px-3.5 text-[13px]"
+            >
+              <Plus className="h-4 w-4" />
+              {createMutation.isPending ? 'Création...' : 'Suivre'}
+            </button>
+          </form>
+        </section>
+      ) : null}
 
-          <button
-            type="submit"
-            disabled={createMutation.isPending}
-            className="btn btn--primary mt-1 h-10 self-start rounded-md px-3.5 text-[13px]"
-          >
-            <Plus className="h-4 w-4" />
-            {createMutation.isPending ? 'Création...' : 'Suivre'}
-          </button>
-        </form>
-      </section>
-
-      <SectionHeader label="Mes sessions" />
+      <SectionHeader label={`${sessions.length} session${sessions.length > 1 ? 's' : ''}`} />
 
       {isLoading ? (
         <SessionSkeleton />
@@ -173,6 +185,13 @@ function LiveContent() {
           ))}
         </ul>
       )}
+
+      <SharedLivePanel
+        sessions={multiSessions}
+        selectedCount={multiSessionIds.length}
+        loading={isLoading && multiSessionIds.length > 0}
+        onRemove={removeMultiSession}
+      />
     </div>
   );
 }
@@ -189,7 +208,7 @@ function SharedLivePanel({
   onRemove: (id: string) => void;
 }) {
   return (
-    <section className="mb-4 rounded-md border border-border-subtle bg-card px-3.5 py-3">
+    <section className="mt-5 rounded-md border border-border-subtle bg-card px-3.5 py-3">
       <div className="mb-2.5 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Users className="h-4 w-4 text-brand-cyan" />
@@ -357,7 +376,7 @@ function EmptyState() {
     <div className="rounded-md border border-border-subtle bg-card p-6 text-center">
       <Radio className="mx-auto h-7 w-7 text-muted-foreground" />
       <p className="mt-2 text-[13px] text-muted-foreground">
-        Aucune session pour le moment
+        Aucune session. Appuie sur + pour en ajouter.
       </p>
     </div>
   );

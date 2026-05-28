@@ -166,7 +166,9 @@ export default function LiveChart({ points }: Props) {
 
 function buildChartData(points: LiveTrackpoint[]): ChartPoint[] {
   if (points.length === 0) return []
-  const startTs = points[0].ts
+  const first = points[0]
+  if (!first) return []
+  const startTs = first.ts
   const result: ChartPoint[] = []
   let cumulativeDist = 0
   let prev: LiveTrackpoint | null = null

@@ -1,32 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import {
-  ArrowLeft,
-  Activity as ActivityIcon,
-  Heart,
-  Gauge,
-  Clock,
-  MapPin,
-  Wifi,
-  WifiOff,
-} from 'lucide-react';
-import { liveService } from '@/lib/api/live';
-import type {
-  LiveSession,
-  LiveSessionStatus,
-  LiveTrackpoint,
-  LiveWsMessage,
-} from '@/lib/api/live';
+import { ArrowLeft } from 'lucide-react';
 import LiveSharedMap from '@/components/live/LiveSharedMap';
 import type { AthleteTrack } from '@/components/live/LiveSharedMap';
-import LiveChart from '@/components/live/LiveChart';
-import Avatar, { trackColorForIndex } from '@/components/shared/Avatar';
 import { AppShell } from '@/components/shared/AppShell';
+import { trackColorForIndex } from '@/components/shared/avatar-colors';
+import { liveService } from '@/lib/api/live';
+import type { LiveSession, LiveSessionStatus, LiveTrackpoint, LiveWsMessage } from '@/lib/api/live';
 import {
   LIVE_MULTI_SELECTION_EVENT,
   readLiveMultiSessionIds,
 } from '@/lib/live-multi-selection';
+import { cn } from '@/lib/utils';
 
 interface AthleteState {
   sessionId: string;
@@ -45,18 +31,22 @@ interface MultiSessionEntry {
   email: string;
 }
 
+type SelectedId = 'all' | string;
+
 export default function SharedLiveRoute() {
   return (
-    <AppShell>
-      <div className="px-4 pb-6 pt-4">
-        <SharedLiveContent />
-      </div>
+    <AppShell hideTopBar hideBottomNav disableMainPadding mainClassName="overflow-hidden">
+      <SharedLiveContent />
     </AppShell>
   );
 }
 
 function SharedLiveContent() {
   const [selectedSessionIds, setSelectedSessionIds] = useState(readLiveMultiSessionIds);
+  const [states, setStates] = useState<Record<string, AthleteState>>({});
+  const [selectedId, setSelectedId] = useState<SelectedId>('all');
+  const [expanded, setExpanded] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     const syncSelection = () => setSelectedSessionIds(readLiveMultiSessionIds());
@@ -87,341 +77,439 @@ function SharedLiveContent() {
       }));
   }, [selectedSessionIds, sessionsQuery.data]);
 
-  const [states, setStates] = useState<Record<string, AthleteState>>({});
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [now, setNow] = useState(() => Date.now());
-
-  // Tick uniquement quand au moins une session est encore active
   const hasActive = useMemo(
-    () => Object.values(states).some((s) => s.status === 'active'),
+    () => Object.values(states).some((state) => state.status === 'active'),
     [states],
   );
+
   useEffect(() => {
     if (!hasActive) return;
-    const t = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(t);
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
   }, [hasActive]);
 
-  // Map<sessionId, controller WS>
   const wsControllersRef = useRef<Map<string, { close: () => void }>>(new Map());
 
-  // Sync states + WS subscriptions quand la selection multi change.
   useEffect(() => {
     const entries = selectedEntries;
-    const currentIds = new Set(entries.map((e) => e.session.id));
+    const currentIds = new Set(entries.map((entry) => entry.session.id));
 
-    // 1. Close les WS pour sessions disparues
-    for (const [sid, ctl] of Array.from(wsControllersRef.current.entries())) {
-      if (!currentIds.has(sid)) {
-        ctl.close();
-        wsControllersRef.current.delete(sid);
+    for (const [sessionId, controller] of Array.from(wsControllersRef.current.entries())) {
+      if (!currentIds.has(sessionId)) {
+        controller.close();
+        wsControllersRef.current.delete(sessionId);
         setStates((prev) => {
           const next = { ...prev };
-          delete next[sid];
+          delete next[sessionId];
           return next;
         });
       }
     }
 
-    // 2. Init states + open WS pour nouveaux
     setStates((prev) => {
       const next = { ...prev };
-      entries.forEach((entry, idx) => {
-        const sid = entry.session.id;
-        if (!next[sid]) {
-          next[sid] = {
-            sessionId: sid,
-            athleteId: entry.session.user_id,
-            fullName: entry.fullName,
-            email: entry.email,
-            color: trackColorForIndex(idx),
-            status: entry.session.status,
-            points: [],
-            connected: false,
-          };
-        } else {
-          // Refresh couleur (au cas ou l'index change) + status REST
-          next[sid] = {
-            ...next[sid],
-            color: trackColorForIndex(idx),
-            status: entry.session.status,
-          };
-        }
+      entries.forEach((entry, index) => {
+        const sessionId = entry.session.id;
+        const color = trackColorForIndex(index);
+        const current = next[sessionId];
+        next[sessionId] = current
+          ? { ...current, color, status: entry.session.status }
+          : {
+              sessionId,
+              athleteId: entry.session.user_id,
+              fullName: entry.fullName,
+              email: entry.email,
+              color,
+              status: entry.session.status,
+              points: [],
+              connected: false,
+            };
       });
       return next;
     });
 
-    // Open WS pour ceux qui n'en ont pas
     entries.forEach((entry) => {
-      const sid = entry.session.id;
-      if (wsControllersRef.current.has(sid)) return;
-      const ctl = liveService.followSession(sid, {
+      const sessionId = entry.session.id;
+      if (wsControllersRef.current.has(sessionId)) return;
+      const controller = liveService.followSession(sessionId, {
         onStatusChange: (status) => {
           setStates((prev) => {
-            const s = prev[sid];
-            if (!s) return prev;
-            return { ...prev, [sid]: { ...s, connected: status === 'open' } };
+            const state = prev[sessionId];
+            if (!state) return prev;
+            return { ...prev, [sessionId]: { ...state, connected: status === 'open' } };
           });
         },
         onMessage: (msg: LiveWsMessage) => {
           if (msg.type === 'snapshot') {
             setStates((prev) => {
-              const s = prev[sid];
-              if (!s) return prev;
+              const state = prev[sessionId];
+              if (!state) return prev;
               return {
                 ...prev,
-                [sid]: { ...s, points: msg.points, status: msg.session.status },
+                [sessionId]: { ...state, points: msg.points, status: msg.session.status },
               };
             });
           } else if (msg.type === 'points') {
             setStates((prev) => {
-              const s = prev[sid];
-              if (!s) return prev;
-              const merged = mergePoints(s.points, msg.points);
-              return { ...prev, [sid]: { ...s, points: merged } };
+              const state = prev[sessionId];
+              if (!state) return prev;
+              return {
+                ...prev,
+                [sessionId]: { ...state, points: mergePoints(state.points, msg.points) },
+              };
             });
           } else if (msg.type === 'ended') {
             setStates((prev) => {
-              const s = prev[sid];
-              if (!s) return prev;
-              return { ...prev, [sid]: { ...s, status: msg.status } };
+              const state = prev[sessionId];
+              if (!state) return prev;
+              return { ...prev, [sessionId]: { ...state, status: msg.status } };
             });
           }
         },
       });
-      wsControllersRef.current.set(sid, ctl);
+      wsControllersRef.current.set(sessionId, controller);
     });
   }, [selectedEntries]);
 
-  // Cleanup global au unmount
   useEffect(() => {
     const controllers = wsControllersRef.current;
     return () => {
-      for (const ctl of controllers.values()) ctl.close();
+      for (const controller of controllers.values()) controller.close();
       controllers.clear();
     };
   }, []);
 
   const stateValues = useMemo(() => Object.values(states), [states]);
-
+  const visibleSelectedId: SelectedId =
+    selectedId !== 'all' && !states[selectedId] ? 'all' : selectedId;
   const tracks: AthleteTrack[] = useMemo(
     () =>
-      stateValues.map((s) => ({
-        id: s.sessionId,
-        color: s.color,
-        points: s.points,
+      stateValues.map((state) => ({
+        id: state.sessionId,
+        color: state.color,
+        points: state.points,
       })),
     [stateValues],
   );
 
-  const selected =
-    (selectedId ? states[selectedId] : null) ??
-    stateValues.find((state) => state.status === 'active') ??
-    stateValues[0] ??
-    null;
-  const effectiveSelectedId = selected?.sessionId ?? null;
+  const selectedAthlete = visibleSelectedId === 'all' ? null : states[visibleSelectedId] ?? null;
+  const focusedId = selectedAthlete?.sessionId ?? null;
+  const activeCount = stateValues.filter((state) => state.status === 'active').length;
+  const empty =
+    selectedSessionIds.length === 0 ||
+    (!sessionsQuery.isLoading && selectedSessionIds.length > 0 && stateValues.length === 0);
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <Link
-          to="/live"
-          className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="mr-1 h-4 w-4" />
-          Live
-        </Link>
-        <h1 className="text-xl font-bold text-foreground">Suivi multi-athlètes</h1>
-        <span className="rounded bg-blue-50 px-2 py-1 text-xs text-blue-700">
-          {stateValues.length} session(s)
-        </span>
+    <div className="relative h-full overflow-hidden bg-[#0f100c]">
+      <LiveSharedMap tracks={tracks} focusedId={focusedId} />
+      <div className="pointer-events-none absolute inset-0 z-[2] bg-gradient-to-b from-[#0a0c08]/50 via-[#0a0c08]/5 to-[#0a0c08]/70" />
+
+      <Link
+        to="/live"
+        className="absolute left-4 top-[max(14px,env(safe-area-inset-top))] z-[8] inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-[#0f100c]/55 px-3 py-2 text-[13px] font-medium text-[#e8dfcf] shadow-lg backdrop-blur-xl"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Retour
+      </Link>
+
+      <div className="absolute right-4 top-[max(14px,env(safe-area-inset-top))] z-[8] inline-flex items-center gap-1.5 rounded-full border border-success/35 bg-success/20 px-3 py-2 text-xs font-semibold text-success-soft backdrop-blur-xl">
+        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-success-soft" />
+        {activeCount} actif{activeCount > 1 ? 's' : ''}
       </div>
 
-      {selectedSessionIds.length === 0 ? (
-        <EmptyState />
-      ) : sessionsQuery.isLoading ? (
-        <div className="text-sm text-muted-foreground">Chargement...</div>
-      ) : stateValues.length === 0 ? (
-        <EmptyState />
-      ) : (
-        <div className="space-y-4">
-          {/* Row 1 : sidebar athletes + carte */}
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[260px_1fr]">
-            <aside className="max-h-[60vh] space-y-2 overflow-auto pr-1">
-              {stateValues.map((s) => (
+      <div className="absolute left-6 top-[calc(max(14px,env(safe-area-inset-top))+50px)] z-[5]">
+        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.09em] text-[#e8dfcf]/60">
+          Multi-athlètes
+        </p>
+        <h1 className="font-display text-[22px] font-bold leading-tight tracking-tight text-[#f0e8d8]">
+          Carte partagée
+        </h1>
+      </div>
+
+      <section
+        onClick={() => {
+          if (!expanded) setExpanded(true);
+        }}
+        className={cn(
+          'absolute inset-x-0 bottom-0 z-10 flex flex-col overflow-hidden rounded-t-[28px] bg-[#0d100b]/[0.97] shadow-[0_-16px_48px_rgba(0,0,0,0.55)] transition-[height] duration-[380ms] ease-[cubic-bezier(0.34,1.4,0.64,1)]',
+          expanded ? 'h-[82%]' : 'h-[36%]',
+        )}
+      >
+        <div className="flex shrink-0 justify-center pb-1.5 pt-3">
+          <span className="h-1 w-9 rounded-full bg-[#e8dfcf]/20" />
+        </div>
+
+        {empty ? (
+          <EmptySheet loading={sessionsQuery.isLoading} />
+        ) : (
+          <>
+            <AthleteChips
+              states={stateValues}
+              selectedId={visibleSelectedId}
+              onSelect={setSelectedId}
+            />
+
+            {selectedAthlete ? (
+              <SelectedAthleteSummary state={selectedAthlete} now={now} />
+            ) : (
+              <AllAthletesSummary states={stateValues} now={now} />
+            )}
+
+            <div
+              className="flex-1 overflow-y-auto px-4 pb-[calc(16px+env(safe-area-inset-bottom))]"
+              onClick={(event) => event.stopPropagation()}
+            >
+              {expanded ? (
+                <button
+                  type="button"
+                  onClick={() => setExpanded(false)}
+                  className="mb-2 ml-auto block rounded-full bg-[#e8dfcf]/[0.07] px-3 py-1.5 text-[11px] font-medium text-[#e8dfcf]/55"
+                >
+                  Réduire ↓
+                </button>
+              ) : null}
+
+              {stateValues.map((state) => (
                 <AthleteRow
-                  key={s.sessionId}
-                  state={s}
-                  isSelected={s.sessionId === effectiveSelectedId}
-                  onSelect={() => setSelectedId(s.sessionId)}
+                  key={state.sessionId}
+                  state={state}
+                  selected={visibleSelectedId === state.sessionId}
+                  dimmed={visibleSelectedId !== 'all' && visibleSelectedId !== state.sessionId}
+                  now={now}
+                  onSelect={() => setSelectedId(visibleSelectedId === state.sessionId ? 'all' : state.sessionId)}
                 />
               ))}
-            </aside>
-
-            <div className="overflow-hidden rounded-lg bg-white shadow">
-              <div className="h-[60vh]" style={{ minHeight: 360 }}>
-                <LiveSharedMap tracks={tracks} focusedId={effectiveSelectedId} />
-              </div>
             </div>
-          </div>
-
-          {/* Row 2 : panel détails de l'athlete sélectionné */}
-          {selected ? (
-            <div className="glass rounded-lg">
-              <SelectedHeader state={selected} now={now} />
-              <div className="border-t border-[var(--border-subtle)] px-4 py-3">
-                {selected.points.length === 0 ? (
-                  <div className="py-8 text-center text-sm text-muted-foreground">
-                    En attente du premier point GPS pour {selected.fullName}...
-                  </div>
-                ) : (
-                  <LiveChart points={selected.points} />
-                )}
-              </div>
-            </div>
-          ) : (
-            <div className="rounded-lg bg-white p-6 text-center text-sm text-muted-foreground shadow">
-              Sélectionne un athlète à gauche pour voir ses streams.
-            </div>
-          )}
-        </div>
-      )}
+          </>
+        )}
+      </section>
     </div>
   );
 }
 
-// ---------- Sub-components ----------
-
-function EmptyState() {
+function AthleteChips({
+  states,
+  selectedId,
+  onSelect,
+}: {
+  states: AthleteState[];
+  selectedId: SelectedId;
+  onSelect: (id: SelectedId) => void;
+}) {
   return (
-    <div className="rounded-lg bg-white p-8 text-center shadow">
-      <h2 className="mb-2 text-base font-semibold text-foreground">
-        Aucune session dans la vue multi-athlètes
-      </h2>
-      <p className="mb-4 text-sm text-muted-foreground">
-        Ajoute des sessions depuis la page Live avec le bouton multi-athlètes.
-        <br />
-        <Link to="/live" className="text-[var(--brand-cyan)] underline">
-          Retourner à Live
-        </Link>
-      </p>
+    <div className="scrollbar-hide flex shrink-0 gap-1.5 overflow-x-auto px-5 pb-3">
+      <Chip label="Tous" color="#e8dfcf" active={selectedId === 'all'} onClick={() => onSelect('all')} />
+      {states.map((state) => (
+        <Chip
+          key={state.sessionId}
+          label={firstName(state.fullName)}
+          color={state.color}
+          active={selectedId === state.sessionId}
+          onClick={() => onSelect(state.sessionId)}
+          withDot
+        />
+      ))}
+    </div>
+  );
+}
+
+function Chip({
+  label,
+  color,
+  active,
+  onClick,
+  withDot = false,
+}: {
+  label: string;
+  color: string;
+  active: boolean;
+  onClick: () => void;
+  withDot?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={(event) => {
+        event.stopPropagation();
+        onClick();
+      }}
+      className="flex h-[30px] shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition"
+      style={{
+        borderColor: active ? `${color}66` : 'rgba(232,223,207,0.12)',
+        background: active ? `${color}1A` : 'rgba(232,223,207,0.04)',
+        color: active ? color : 'rgba(232,223,207,0.5)',
+      }}
+    >
+      {withDot ? <span className="h-[7px] w-[7px] rounded-full" style={{ background: color }} /> : null}
+      {label}
+    </button>
+  );
+}
+
+function SelectedAthleteSummary({ state, now }: { state: AthleteState; now: number }) {
+  const metrics = useMemo(
+    () => computeQuickMetrics(state.points, now, state.status === 'active'),
+    [state.points, now, state.status],
+  );
+
+  return (
+    <div className="shrink-0 px-5 pb-3">
+      <div className="mb-2 grid grid-cols-[1fr_1px_1fr]">
+        <HeroValue label="Distance" value={`${metrics.distanceKm.toFixed(2)} km`} color={state.color} />
+        <div className="bg-[#e8dfcf]/10" />
+        <HeroValue label="D+" value={`${Math.round(metrics.elevationGainM)} m`} color={state.color} align="right" />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <SmallValue label="Allure" value={metrics.paceMinPerKm ? formatPace(metrics.paceMinPerKm) : '—'} />
+        <SmallValue label="FC" value={metrics.hr != null ? `${metrics.hr} bpm` : '—'} />
+      </div>
+    </div>
+  );
+}
+
+function AllAthletesSummary({ states, now }: { states: AthleteState[]; now: number }) {
+  const metrics = states.map((state) => computeQuickMetrics(state.points, now, state.status === 'active'));
+  const distanceValues = metrics.map((metric) => metric.distanceKm).filter((value) => value > 0);
+  const hrValues = metrics.map((metric) => metric.hr).filter((value): value is number => value != null);
+  const avgDistance =
+    distanceValues.length > 0
+      ? distanceValues.reduce((sum, value) => sum + value, 0) / distanceValues.length
+      : 0;
+  const avgHr =
+    hrValues.length > 0
+      ? Math.round(hrValues.reduce((sum, value) => sum + value, 0) / hrValues.length)
+      : null;
+
+  return (
+    <div className="grid shrink-0 grid-cols-3 px-5 pb-3 pt-1 text-center">
+      <AllValue label="Actifs" value={String(states.filter((state) => state.status === 'active').length)} />
+      <AllValue label="km moy." value={avgDistance > 0 ? avgDistance.toFixed(1) : '0.0'} />
+      <AllValue label="FC moy." value={avgHr != null ? `${avgHr} bpm` : '—'} />
     </div>
   );
 }
 
 function AthleteRow({
   state,
-  isSelected,
+  selected,
+  dimmed,
+  now,
   onSelect,
 }: {
   state: AthleteState;
-  isSelected: boolean;
+  selected: boolean;
+  dimmed: boolean;
+  now: number;
   onSelect: () => void;
 }) {
-  const active = state.status === 'active';
+  const metrics = useMemo(
+    () => computeQuickMetrics(state.points, now, state.status === 'active'),
+    [state.points, now, state.status],
+  );
+
   return (
     <button
       type="button"
       onClick={onSelect}
-      className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left transition-colors ${
-        isSelected
-          ? 'border-primary-500 bg-primary-50 ring-1 ring-primary-200'
-          : 'border-[var(--border-subtle)] bg-white hover:bg-white/5'
-      }`}
+      className={cn(
+        'mb-1 grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-[10px] border px-3 py-2.5 text-left transition',
+        selected ? 'bg-white/[0.07]' : 'bg-[#e8dfcf]/[0.04]',
+        dimmed && 'opacity-45',
+      )}
+      style={{ borderColor: selected ? `${state.color}66` : 'rgba(232,223,207,0.07)' }}
     >
-      <Avatar name={state.fullName} color={state.color} size={36} />
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-medium text-foreground">
-          {state.fullName}
-        </div>
-        <div className="flex items-center gap-1 truncate text-xs text-muted-foreground">
-          {active ? (
-            <Wifi
-              className={`h-3 w-3 ${
-                state.connected ? 'text-green-600' : 'text-muted-foreground'
-              }`}
-            />
-          ) : (
-            <WifiOff className="h-3 w-3 text-muted-foreground" />
-          )}
-          {active ? (state.connected ? 'En direct' : 'Reconnexion...') : 'Terminée'}
-          <span>·</span>
-          <span>{state.points.length} pts</span>
+      <div className="flex min-w-0 items-center gap-2">
+        <span
+          className={cn('h-2 w-2 shrink-0 rounded-full', state.status === 'active' && 'animate-pulse')}
+          style={{ background: state.color }}
+        />
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold text-[#f0e8d8]">{state.fullName}</p>
+          <p className="truncate text-[11px] text-[#e8dfcf]/45">
+            {state.connected ? 'En direct' : state.status === 'active' ? 'Reconnexion...' : 'Terminée'}
+          </p>
         </div>
       </div>
-      <span className="h-8 w-1.5 rounded-full" style={{ backgroundColor: state.color }} />
+      <div className="flex items-center gap-2 text-xs">
+        <span className="font-bold tabular-nums" style={{ color: state.color }}>
+          {metrics.distanceKm.toFixed(2)} km
+        </span>
+        <span className="tabular-nums text-[#e8dfcf]/55">
+          {metrics.paceMinPerKm ? formatPaceShort(metrics.paceMinPerKm) : '—'}/km
+        </span>
+        <span className="tabular-nums text-danger-fg">
+          {metrics.hr != null ? `${metrics.hr} bpm` : '—'}
+        </span>
+      </div>
     </button>
   );
 }
 
-function SelectedHeader({ state, now }: { state: AthleteState; now: number }) {
-  const m = useMemo(
-    () => computeQuickMetrics(state.points, now, state.status === 'active'),
-    [state.points, now, state.status],
-  );
+function EmptySheet({ loading }: { loading: boolean }) {
   return (
-    <div className="grid grid-cols-1 items-center gap-4 p-4 md:grid-cols-[auto_1fr]">
-      <div className="flex min-w-0 items-center gap-3">
-        <Avatar name={state.fullName} color={state.color} size={44} />
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 truncate font-semibold text-foreground">
-            {state.fullName}
-            {state.status !== 'active' && (
-              <span className="rounded bg-white/5 px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                {state.status}
-              </span>
-            )}
-          </div>
-          <div className="truncate text-xs text-muted-foreground">{state.email}</div>
-        </div>
-      </div>
-
-      <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
-        <MetricCell label="Durée" value={formatDuration(m.durationSec)} Icon={Clock} />
-        <MetricCell
-          label="Distance"
-          value={m.distanceKm.toFixed(2) + ' km'}
-          Icon={MapPin}
-        />
-        <MetricCell
-          label="Allure"
-          value={m.paceMinPerKm ? formatPace(m.paceMinPerKm) : '—'}
-          Icon={ActivityIcon}
-        />
-        <MetricCell
-          label="Vitesse"
-          value={m.speedKmh != null ? m.speedKmh.toFixed(1) + ' km/h' : '—'}
-          Icon={Gauge}
-        />
-        <MetricCell label="FC" value={m.hr != null ? `${m.hr} bpm` : '—'} Icon={Heart} />
-      </ul>
+    <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">
+      <h2 className="font-display text-lg font-bold text-[#f0e8d8]">
+        {loading ? 'Chargement des sessions...' : 'Aucune session multi-athlètes'}
+      </h2>
+      <p className="mt-2 text-sm leading-relaxed text-[#e8dfcf]/55">
+        Ajoute des sessions depuis la page Live avec le bouton multi-athlètes.
+      </p>
+      <Link
+        to="/live"
+        className="mt-4 rounded-full bg-brand-primary px-4 py-2 text-xs font-bold text-white shadow-[var(--glow-primary)]"
+      >
+        Retourner à Live
+      </Link>
     </div>
   );
 }
 
-function MetricCell({
+function HeroValue({
   label,
   value,
-  Icon,
+  color,
+  align = 'left',
 }: {
   label: string;
   value: string;
-  Icon: React.ComponentType<{ className?: string }>;
+  color: string;
+  align?: 'left' | 'right';
 }) {
   return (
-    <li className="flex flex-col rounded bg-white/5 px-3 py-2">
-      <span className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-        <Icon className="h-3 w-3" />
+    <div className={cn('px-2', align === 'right' && 'text-right')}>
+      <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.07em] text-[#e8dfcf]/50">
         {label}
       </span>
-      <span className="mt-0.5 text-sm font-semibold tabular-nums text-foreground">
+      <strong className="font-display block text-[28px] font-medium leading-none tracking-tight" style={{ color }}>
         {value}
-      </span>
-    </li>
+      </strong>
+    </div>
   );
 }
 
-// ---------- Helpers ----------
+function SmallValue({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-white/[0.08] bg-[#e8dfcf]/[0.05] px-3 py-2 text-center">
+      <span className="mb-1 block text-[9px] font-semibold uppercase tracking-[0.07em] text-[#e8dfcf]/45">
+        {label}
+      </span>
+      <strong className="font-display text-lg font-semibold leading-none text-[#f0e8d8]">
+        {value}
+      </strong>
+    </div>
+  );
+}
+
+function AllValue({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="font-display text-[26px] font-semibold leading-none text-[#f0e8d8]">{value}</p>
+      <p className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.05em] text-[#e8dfcf]/45">
+        {label}
+      </p>
+    </div>
+  );
+}
 
 interface QuickMetrics {
   durationSec: number;
@@ -429,6 +517,7 @@ interface QuickMetrics {
   speedKmh: number | null;
   paceMinPerKm: number | null;
   hr: number | null;
+  elevationGainM: number;
 }
 
 function computeQuickMetrics(
@@ -436,49 +525,28 @@ function computeQuickMetrics(
   nowMs: number,
   isActive: boolean,
 ): QuickMetrics {
-  if (points.length === 0) {
-    return emptyQuickMetrics();
-  }
+  if (points.length === 0) return emptyQuickMetrics();
   const first = points[0];
   const last = points[points.length - 1];
   if (!first || !last) return emptyQuickMetrics();
-  // Durée : si session active, on suit le temps réel ; sinon on fige sur le dernier point.
+
   const endMs = isActive ? Math.max(nowMs, last.ts * 1000) : last.ts * 1000;
   const elapsed = Math.max(0, Math.floor((endMs - first.ts * 1000) / 1000));
 
-  // Distance haversine en fallback si pas de distance Garmin
   let distanceM = last.distance ?? null;
-  if (distanceM == null) {
-    distanceM = 0;
-    let prev: LiveTrackpoint | null = null;
-    for (const p of points) {
-      if (
-        prev &&
-        p.lat != null &&
-        p.lng != null &&
-        prev.lat != null &&
-        prev.lng != null
-      ) {
-        const d = haversine(prev.lat, prev.lng, p.lat, p.lng);
-        if (d < 100) distanceM += d;
-      }
-      prev = p;
-    }
-  }
+  if (distanceM == null) distanceM = computeGpsDistance(points);
 
-  const window = points.slice(-10);
-  const speedsMs = window
-    .map((p) => p.speed)
-    .filter((s): s is number => typeof s === 'number');
-  const avg =
-    speedsMs.length > 0 ? speedsMs.reduce((a, b) => a + b, 0) / speedsMs.length : null;
-  const speedKmh = avg != null ? avg * 3.6 : null;
-  const paceMinPerKm = avg && avg > 0.3 ? 1000 / avg / 60 : null;
+  const windowPoints = points.slice(-10);
+  const speedsMs = windowPoints
+    .map((point) => point.speed)
+    .filter((speed): speed is number => typeof speed === 'number');
+  const avgSpeedMs =
+    speedsMs.length > 0 ? speedsMs.reduce((sum, speed) => sum + speed, 0) / speedsMs.length : null;
 
   let hr: number | null = null;
   const cutoff = last.ts - 30;
-  for (let i = points.length - 1; i >= 0; i--) {
-    const point = points[i];
+  for (let index = points.length - 1; index >= 0; index -= 1) {
+    const point = points[index];
     if (!point || point.ts < cutoff) break;
     if (point.hr != null) {
       hr = point.hr;
@@ -489,20 +557,49 @@ function computeQuickMetrics(
   return {
     durationSec: elapsed,
     distanceKm: distanceM / 1000,
-    speedKmh,
-    paceMinPerKm,
+    speedKmh: avgSpeedMs != null ? avgSpeedMs * 3.6 : null,
+    paceMinPerKm: avgSpeedMs != null && avgSpeedMs > 0.3 ? 1000 / avgSpeedMs / 60 : null,
     hr,
+    elevationGainM: computeElevationGain(points),
   };
 }
 
-function mergePoints(
-  prev: LiveTrackpoint[],
-  incoming: LiveTrackpoint[],
-): LiveTrackpoint[] {
+function mergePoints(prev: LiveTrackpoint[], incoming: LiveTrackpoint[]): LiveTrackpoint[] {
   if (incoming.length === 0) return prev;
   const lastTs = prev[prev.length - 1]?.ts ?? -1;
-  const fresh = incoming.filter((p) => p.ts > lastTs).sort((a, b) => a.ts - b.ts);
+  const fresh = incoming.filter((point) => point.ts > lastTs).sort((a, b) => a.ts - b.ts);
   return fresh.length > 0 ? [...prev, ...fresh] : prev;
+}
+
+function computeGpsDistance(points: LiveTrackpoint[]): number {
+  let total = 0;
+  let prev: LiveTrackpoint | null = null;
+  for (const point of points) {
+    if (point.lat == null || point.lng == null) {
+      prev = point;
+      continue;
+    }
+    if (prev?.lat != null && prev.lng != null) {
+      const distance = haversine(prev.lat, prev.lng, point.lat, point.lng);
+      if (distance < 100) total += distance;
+    }
+    prev = point;
+  }
+  return total;
+}
+
+function computeElevationGain(points: LiveTrackpoint[]): number {
+  let gain = 0;
+  let prev: number | null = null;
+  for (const point of points) {
+    if (point.altitude == null) continue;
+    if (prev != null) {
+      const delta = point.altitude - prev;
+      if (delta > 0 && delta < 15) gain += delta;
+    }
+    prev = point.altitude;
+  }
+  return gain;
 }
 
 function emptyQuickMetrics(): QuickMetrics {
@@ -512,35 +609,37 @@ function emptyQuickMetrics(): QuickMetrics {
     speedKmh: null,
     paceMinPerKm: null,
     hr: null,
+    elevationGainM: 0,
   };
 }
 
 function haversine(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6371000;
-  const toRad = (d: number) => (d * Math.PI) / 180;
+  const radius = 6371000;
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
   const dLat = toRad(lat2 - lat1);
   const dLng = toRad(lng2 - lng1);
   const a =
     Math.sin(dLat / 2) ** 2 +
     Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(a));
+  return 2 * radius * Math.asin(Math.sqrt(a));
 }
 
 function formatSessionDate(iso: string): string {
   return new Date(iso).toLocaleDateString('fr-FR');
 }
 
-function formatDuration(sec: number): string {
-  const h = Math.floor(sec / 3600);
-  const m = Math.floor((sec % 3600) / 60);
-  const s = sec % 60;
-  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-  return `${m}:${String(s).padStart(2, '0')}`;
+function firstName(name: string): string {
+  return name.trim().split(/\s+/)[0] ?? name;
 }
 
 function formatPace(minPerKm: number): string {
-  if (!isFinite(minPerKm) || minPerKm <= 0) return '—';
-  const min = Math.floor(minPerKm);
-  const sec = Math.round((minPerKm - min) * 60);
-  return `${min}'${String(sec).padStart(2, '0')}"/km`;
+  if (!Number.isFinite(minPerKm) || minPerKm <= 0) return '—';
+  const totalSec = Math.round(minPerKm * 60);
+  const min = Math.floor(totalSec / 60);
+  const sec = totalSec % 60;
+  return `${min}'${String(sec).padStart(2, '0')}"`;
+}
+
+function formatPaceShort(minPerKm: number): string {
+  return formatPace(minPerKm);
 }
