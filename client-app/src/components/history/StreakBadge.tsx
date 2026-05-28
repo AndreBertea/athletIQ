@@ -41,7 +41,7 @@ export function StreakBadge({
         <span
           className={cn(
             'text-xs font-medium tracking-widest uppercase',
-            onSignature ? 'text-white/70' : 'text-muted-foreground',
+            onSignature ? 'text-foreground/70' : 'text-muted-foreground',
           )}
         >
           {t('history.streak.eyebrow')}
@@ -49,7 +49,7 @@ export function StreakBadge({
         <span
           className={cn(
             'font-display text-xl font-semibold tracking-tight',
-            onSignature ? 'text-white/80' : 'text-foreground',
+            onSignature ? 'text-foreground/80' : 'text-foreground',
           )}
         >
           —
@@ -76,7 +76,7 @@ export function StreakBadge({
         <span
           className={cn(
             'text-xs font-medium tracking-widest uppercase',
-            onSignature ? 'text-white/70' : 'text-muted-foreground',
+            onSignature ? 'text-foreground/70' : 'text-muted-foreground',
           )}
         >
           {t('history.streak.eyebrow')}
@@ -86,7 +86,7 @@ export function StreakBadge({
         <span
           className={cn(
             'font-display text-2xl font-semibold tracking-tight',
-            onSignature ? 'text-white' : 'text-foreground',
+            onSignature ? 'text-foreground' : 'text-foreground',
           )}
         >
           {streak.length} {dayLabel}
@@ -95,7 +95,7 @@ export function StreakBadge({
           <span
             className={cn(
               'text-xs',
-              onSignature ? 'text-white/70' : 'text-muted-foreground',
+              onSignature ? 'text-foreground/70' : 'text-muted-foreground',
             )}
           >
             {subtext}

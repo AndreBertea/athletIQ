@@ -70,7 +70,7 @@ export function ScoreGauge({
           cy={SIZE / 2}
           r={RADIUS}
           fill="none"
-          stroke="rgba(255,255,255,0.08)"
+          stroke="var(--chart-grid)"
           strokeWidth="8"
         />
         <circle

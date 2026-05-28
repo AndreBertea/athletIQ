@@ -133,7 +133,7 @@ export default function ActivityDetailRoute() {
 
   return (
     <AppShell hideTopBar hideBottomNav disableMainPadding mainClassName="overflow-hidden">
-      <div className="relative h-full overflow-hidden bg-[#0f100c]">
+      <div className="relative h-full overflow-hidden bg-background">
         {activityQuery.isLoading ? (
           <FullscreenState label="Chargement de l'activité..." />
         ) : !activity ? (
@@ -146,12 +146,12 @@ export default function ActivityDetailRoute() {
               fallbackLabel="Pas de trace GPS disponible"
               fitPadding={88}
             />
-            <div className="pointer-events-none absolute inset-0 z-[2] bg-gradient-to-b from-[#0a0c08]/45 via-[#0a0c08]/5 to-[#0a0c08]/70" />
+            <div className="pointer-events-none absolute inset-0 z-[2]" style={{ background: 'var(--map-scrim)' }} />
 
             <button
               type="button"
               onClick={() => navigate(-1)}
-              className="absolute left-4 top-[max(14px,env(safe-area-inset-top))] z-[8] inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-[#0f100c]/55 px-3 py-2 text-[13px] font-medium text-[#e8dfcf] shadow-lg backdrop-blur-xl"
+              className="absolute left-4 top-[max(14px,env(safe-area-inset-top))] z-[8] inline-flex items-center gap-1.5 rounded-full border border-[var(--glass-panel-border)] bg-[var(--glass-panel)] px-3 py-2 text-[13px] font-medium text-[var(--glass-panel-fg)] shadow-lg backdrop-blur-xl"
             >
               <ArrowLeft className="h-4 w-4" />
               Retour
@@ -160,18 +160,18 @@ export default function ActivityDetailRoute() {
             <button
               type="button"
               aria-label="Options activité"
-              className="absolute right-5 top-[calc(max(14px,env(safe-area-inset-top))+66px)] z-[6] flex h-9 w-9 items-center justify-center rounded-full text-[#d8cdbc]"
+              className="absolute right-5 top-[calc(max(14px,env(safe-area-inset-top))+66px)] z-[6] flex h-9 w-9 items-center justify-center rounded-full text-[var(--glass-panel-muted)]"
             >
               <MoreHorizontal className="h-6 w-6" />
             </button>
 
             <div className="absolute left-6 top-[calc(max(14px,env(safe-area-inset-top))+50px)] z-[5]">
-              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.09em] text-[#e8dfcf]/75">
+              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.09em] text-[var(--glass-panel-muted)]">
                 Altitude max
               </p>
-              <p className="font-display text-[42px] font-medium leading-none tracking-tight text-[#f0e8d8]">
+              <p className="font-display text-[42px] font-medium leading-none tracking-tight text-[var(--glass-panel-fg)]">
                 {peakElevation != null ? Math.round(peakElevation) : '—'}{' '}
-                <span className="text-lg font-normal text-[#f0e8d8]/70">m</span>
+                <span className="text-lg font-normal text-[var(--glass-panel-muted)]">m</span>
               </p>
               <p className="mt-2 text-[15px] font-semibold text-brand-primary">
                 ▲ {activity.elev_gain_m != null ? Math.round(activity.elev_gain_m) : 0} m D+
@@ -183,20 +183,20 @@ export default function ActivityDetailRoute() {
                 if (!expanded) setExpanded(true);
               }}
               className={cn(
-                'absolute inset-x-0 bottom-0 z-10 flex flex-col overflow-hidden rounded-t-[28px] bg-[#0d100b]/[0.97] shadow-[0_-16px_48px_rgba(0,0,0,0.55)] transition-[height] duration-[380ms] ease-[cubic-bezier(0.34,1.4,0.64,1)]',
+                'absolute inset-x-0 bottom-0 z-10 flex flex-col overflow-hidden rounded-t-[28px] bg-[var(--glass-panel-strong)] shadow-[0_-16px_48px_rgba(0,0,0,0.55)] transition-[height] duration-[380ms] ease-[cubic-bezier(0.34,1.4,0.64,1)]',
                 expanded ? 'h-[82%]' : 'h-[34%]',
               )}
             >
               <div className="flex shrink-0 justify-center pb-1 pt-3">
-                <span className="h-1 w-9 rounded-full bg-[#e8dfcf]/20" />
+                <span className="h-1 w-9 rounded-full bg-[var(--glass-panel-border)]" />
               </div>
 
               <div className="flex shrink-0 items-start justify-between gap-3 px-6 pt-1">
                 <div className="min-w-0">
-                  <h1 className="font-display truncate text-base font-bold tracking-tight text-[#f0e8d8]">
+                  <h1 className="font-display truncate text-base font-bold tracking-tight text-[var(--glass-panel-fg)]">
                     {activity.name}
                   </h1>
-                  <p className="mt-0.5 truncate text-[11px] text-[#e8dfcf]/55">
+                  <p className="mt-0.5 truncate text-[11px] text-[var(--glass-panel-muted)]">
                     {formatDateLong(activity.start_date_utc)} · {sport?.label ?? activity.sport_type}
                     {pace ? ` · ${formatPace(pace)}` : ''}
                   </p>
@@ -208,7 +208,7 @@ export default function ActivityDetailRoute() {
                       event.stopPropagation();
                       setExpanded(false);
                     }}
-                    className="shrink-0 rounded-full bg-[#e8dfcf]/[0.08] px-3 py-1.5 text-[11px] font-medium text-[#e8dfcf]/60"
+                    className="shrink-0 rounded-full bg-[var(--glass-tile)] px-3 py-1.5 text-[11px] font-medium text-[var(--glass-panel-muted)]"
                   >
                     Réduire ↓
                   </button>
@@ -217,7 +217,7 @@ export default function ActivityDetailRoute() {
 
               <div className="grid shrink-0 grid-cols-[1fr_1px_1fr] px-7 pb-3 pt-4">
                 <ActivityHeroMetric label="Distance" value={formatDistance(activity.distance_m)} unit="KM" />
-                <div className="bg-[#e8dfcf]/10" />
+                <div className="bg-[var(--glass-panel-border)]" />
                 <ActivityHeroMetric
                   label="D+"
                   value={activity.elev_gain_m != null ? String(Math.round(activity.elev_gain_m)) : '—'}
@@ -227,14 +227,14 @@ export default function ActivityDetailRoute() {
               </div>
 
               <div className="shrink-0 px-5 pb-3">
-                <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#e8dfcf]/50">
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--glass-panel-muted)]">
                   Profil d'altitude
                 </p>
                 <MiniAreaChart
                   data={streamData.map((point) => point.altitude)}
                   color="#A0432E"
                   height={72}
-                  className="bg-white/[0.03]"
+                  className="bg-[var(--glass-tile)]"
                 />
               </div>
 
@@ -267,7 +267,7 @@ export default function ActivityDetailRoute() {
                   <DataCoverage activity={activity} />
 
                   <div className="mt-4">
-                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.07em] text-[#e8dfcf]/45">
+                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.07em] text-[var(--glass-panel-muted)]">
                       Données activité
                     </p>
                     <div className="scrollbar-hide -mx-1 mb-3 flex gap-1.5 overflow-x-auto px-1">
@@ -282,7 +282,7 @@ export default function ActivityDetailRoute() {
                               'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition',
                               selected
                                 ? 'border-brand-sunset/40 bg-brand-sunset/15 text-brand-sunset'
-                                : 'border-white/[0.08] bg-white/[0.04] text-[#e8dfcf]/50',
+                                : 'border-[var(--glass-panel-border)] bg-[var(--glass-tile)] text-[var(--glass-panel-muted)]',
                             )}
                           >
                             <Icon className="h-3.5 w-3.5" />
@@ -374,9 +374,9 @@ function FullscreenState({
   icon?: LucideIcon;
 }) {
   return (
-    <div className="flex h-full items-center justify-center bg-[#0f100c] px-8 text-center">
-      <div className="rounded-[18px] border border-white/10 bg-[#191815]/80 px-5 py-5 text-[#e8dfcf]/70 shadow-2xl backdrop-blur-xl">
-        {Icon ? <Icon className="mx-auto mb-3 h-7 w-7 text-[#e8dfcf]/55" /> : null}
+    <div className="flex h-full items-center justify-center bg-background px-8 text-center">
+      <div className="rounded-[18px] border border-[var(--glass-panel-border)] bg-[var(--glass-panel-strong)] px-5 py-5 text-[var(--glass-panel-muted)] shadow-2xl backdrop-blur-xl">
+        {Icon ? <Icon className="mx-auto mb-3 h-7 w-7 text-[var(--glass-panel-muted)]" /> : null}
         <p className="text-sm font-semibold">{label}</p>
       </div>
     </div>
@@ -398,13 +398,13 @@ function ActivityHeroMetric({
 
   return (
     <div className={cn('min-w-0', align === 'right' && 'text-right')}>
-      <span className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.07em] text-[#e8dfcf]/55">
+      <span className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.07em] text-[var(--glass-panel-muted)]">
         {label}
       </span>
-      <strong className="font-display block truncate text-[34px] font-medium leading-none tracking-tight text-[#f0e8d8]">
+      <strong className="font-display block truncate text-[34px] font-medium leading-none tracking-tight text-[var(--glass-panel-fg)]">
         {normalizedValue}{' '}
         {normalizedValue !== '—' ? (
-          <span className="text-sm font-normal text-[#f0e8d8]/60">{unit}</span>
+          <span className="text-sm font-normal text-[var(--glass-panel-muted)]">{unit}</span>
         ) : null}
       </strong>
     </div>
@@ -413,11 +413,11 @@ function ActivityHeroMetric({
 
 function SheetStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-white/[0.08] bg-[#e8dfcf]/[0.06] px-2 py-2.5">
-      <p className="mb-1.5 truncate text-[9px] font-semibold uppercase tracking-[0.05em] text-[#e8dfcf]/45">
+    <div className="rounded-lg border border-[var(--glass-panel-border)] bg-[var(--glass-tile)] px-2 py-2.5">
+      <p className="mb-1.5 truncate text-[9px] font-semibold uppercase tracking-[0.05em] text-[var(--glass-panel-muted)]">
         {label}
       </p>
-      <p className="font-display truncate text-[13px] font-bold leading-none text-[#f0e8d8]">
+      <p className="font-display truncate text-[13px] font-bold leading-none text-[var(--glass-panel-fg)]">
         {value}
       </p>
     </div>
@@ -484,7 +484,7 @@ function DataCoverage({ activity }: { activity: EnrichedActivity }) {
 
   return (
     <section className="mt-4">
-      <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-[0.07em] text-[#e8dfcf]/45">
+      <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-[0.07em] text-[var(--glass-panel-muted)]">
         Données disponibles
       </p>
       <div className="grid grid-cols-4 gap-1.5">
@@ -495,7 +495,7 @@ function DataCoverage({ activity }: { activity: EnrichedActivity }) {
               'rounded-lg border px-1 py-2 text-center',
               active
                 ? 'border-success/25 bg-success/10 text-success-fg'
-                : 'border-white/[0.08] bg-white/[0.04] text-[#a8a192]/50',
+                : 'border-[var(--glass-panel-border)] bg-[var(--glass-tile)] text-[var(--glass-panel-muted)]',
             )}
           >
             <Icon className="mx-auto mb-1 h-3.5 w-3.5" />

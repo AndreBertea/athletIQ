@@ -1271,7 +1271,7 @@ function PredictionResult({
             {prediction.engine_version ?? 'engine'}
           </p>
         </div>
-        <span className="rounded-full bg-white/5 px-2 py-1 text-[11px] text-muted-foreground">
+        <span className="rounded-full bg-[var(--chip-bg)] px-2 py-1 text-[11px] text-muted-foreground">
           {prediction.analysis_mode ?? 'mode'}
         </span>
       </div>
@@ -1500,7 +1500,7 @@ function PredictionUncertaintyGauge({
           <div className="h-full rounded-full bg-gradient-to-r from-brand-cyan via-brand-primary to-warning" />
         </div>
         <div
-          className="absolute top-1 h-8 w-px bg-white/45"
+          className="absolute top-1 h-8 w-px bg-[var(--foreground)]"
           style={{ left: `${p50Percent}%` }}
           aria-hidden="true"
         />
@@ -2031,7 +2031,7 @@ function ReferenceCandidateCard({
             {Math.round(candidate.score)} · {candidate.confidence}
           </p>
         </div>
-        <span className="rounded bg-black/20 px-2 py-1 text-[11px] font-semibold text-brand-cyan">
+        <span className="rounded bg-[var(--chip-bg)] px-2 py-1 text-[11px] font-semibold text-brand-cyan">
           {candidate.status}
         </span>
       </div>
@@ -2047,7 +2047,7 @@ function ReferenceCandidateCard({
           {reasonSummary.map((reason) => (
             <span
               key={reason}
-              className="rounded bg-black/20 px-2 py-1 text-[10px] text-muted-foreground"
+              className="rounded bg-[var(--chip-bg)] px-2 py-1 text-[10px] text-muted-foreground"
             >
               {referenceReasonLabel(reason)}
             </span>
@@ -2133,7 +2133,7 @@ function AttachmentsModal({
               <button
                 type="button"
                 onClick={() => onOpen(attachment)}
-                className="bg-surface-2 flex w-full items-center gap-3 rounded-md border border-border-subtle p-3 text-left transition hover:bg-white/5"
+                className="bg-surface-2 flex w-full items-center gap-3 rounded-md border border-border-subtle p-3 text-left transition hover:bg-[var(--hover-overlay)]"
               >
                 <FileText className="h-5 w-5 shrink-0 text-brand-cyan" />
                 <div className="min-w-0 flex-1">

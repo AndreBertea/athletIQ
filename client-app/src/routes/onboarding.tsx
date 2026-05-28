@@ -161,7 +161,7 @@ function ProgressDots({ active, total }: ProgressDotsProps) {
           key={i}
           className={cn(
             'h-2 rounded-full transition-all',
-            i === active ? 'bg-brand-cyan w-6' : 'w-2 bg-white/20',
+            i === active ? 'bg-brand-cyan w-6' : 'w-2 bg-[var(--active-overlay)]',
           )}
         />
       ))}
@@ -283,7 +283,6 @@ function Step2Personalization({
                   'cursor-pointer focus:outline-none',
                   'appearance-none [&::-webkit-calendar-picker-indicator]:hidden',
                 )}
-                style={{ colorScheme: 'dark' }}
               />
             </div>
           </label>
@@ -378,7 +377,7 @@ function Step3FirstCheckin({ onSubmit, isPending }: Step3Props) {
                   className={cn(
                     'border-border-subtle flex h-8 flex-1 items-center justify-center rounded-md border text-[13px]',
                   )}
-                  style={{ background: 'rgba(13,18,37,0.5)' }}
+                  style={{ background: 'var(--surface-2)' }}
                 >
                   {emoji}
                 </span>

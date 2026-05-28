@@ -200,13 +200,13 @@ function SharedLiveContent() {
     (!sessionsQuery.isLoading && selectedSessionIds.length > 0 && stateValues.length === 0);
 
   return (
-    <div className="relative h-full overflow-hidden bg-[#0f100c]">
+    <div className="relative h-full overflow-hidden bg-background">
       <LiveSharedMap tracks={tracks} focusedId={focusedId} />
-      <div className="pointer-events-none absolute inset-0 z-[2] bg-gradient-to-b from-[#0a0c08]/50 via-[#0a0c08]/5 to-[#0a0c08]/70" />
+      <div className="pointer-events-none absolute inset-0 z-[2]" style={{ background: 'var(--map-scrim)' }} />
 
       <Link
         to="/live"
-        className="absolute left-4 top-[max(14px,env(safe-area-inset-top))] z-[8] inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-[#0f100c]/55 px-3 py-2 text-[13px] font-medium text-[#e8dfcf] shadow-lg backdrop-blur-xl"
+        className="absolute left-4 top-[max(14px,env(safe-area-inset-top))] z-[8] inline-flex items-center gap-1.5 rounded-full border border-[var(--glass-panel-border)] bg-[var(--glass-panel)] px-3 py-2 text-[13px] font-medium text-[var(--glass-panel-fg)] shadow-lg backdrop-blur-xl"
       >
         <ArrowLeft className="h-4 w-4" />
         Retour
@@ -218,10 +218,10 @@ function SharedLiveContent() {
       </div>
 
       <div className="absolute left-6 top-[calc(max(14px,env(safe-area-inset-top))+50px)] z-[5]">
-        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.09em] text-[#e8dfcf]/60">
+        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.09em] text-[var(--glass-panel-muted)]">
           Multi-athlètes
         </p>
-        <h1 className="font-display text-[22px] font-bold leading-tight tracking-tight text-[#f0e8d8]">
+        <h1 className="font-display text-[22px] font-bold leading-tight tracking-tight text-[var(--glass-panel-fg)]">
           Carte partagée
         </h1>
       </div>
@@ -231,12 +231,12 @@ function SharedLiveContent() {
           if (!expanded) setExpanded(true);
         }}
         className={cn(
-          'absolute inset-x-0 bottom-0 z-10 flex flex-col overflow-hidden rounded-t-[28px] bg-[#0d100b]/[0.97] shadow-[0_-16px_48px_rgba(0,0,0,0.55)] transition-[height] duration-[380ms] ease-[cubic-bezier(0.34,1.4,0.64,1)]',
+          'absolute inset-x-0 bottom-0 z-10 flex flex-col overflow-hidden rounded-t-[28px] bg-[var(--glass-panel-strong)] shadow-[0_-16px_48px_rgba(0,0,0,0.55)] transition-[height] duration-[380ms] ease-[cubic-bezier(0.34,1.4,0.64,1)]',
           expanded ? 'h-[82%]' : 'h-[36%]',
         )}
       >
         <div className="flex shrink-0 justify-center pb-1.5 pt-3">
-          <span className="h-1 w-9 rounded-full bg-[#e8dfcf]/20" />
+          <span className="h-1 w-9 rounded-full bg-[var(--glass-panel-border)]" />
         </div>
 
         {empty ? (
@@ -263,7 +263,7 @@ function SharedLiveContent() {
                 <button
                   type="button"
                   onClick={() => setExpanded(false)}
-                  className="mb-2 ml-auto block rounded-full bg-[#e8dfcf]/[0.07] px-3 py-1.5 text-[11px] font-medium text-[#e8dfcf]/55"
+                  className="mb-2 ml-auto block rounded-full bg-[var(--glass-tile)] px-3 py-1.5 text-[11px] font-medium text-[var(--glass-panel-muted)]"
                 >
                   Réduire ↓
                 </button>
@@ -298,7 +298,7 @@ function AthleteChips({
 }) {
   return (
     <div className="scrollbar-hide flex shrink-0 gap-1.5 overflow-x-auto px-5 pb-3">
-      <Chip label="Tous" color="#e8dfcf" active={selectedId === 'all'} onClick={() => onSelect('all')} />
+      <Chip label="Tous" color="#A0432E" active={selectedId === 'all'} onClick={() => onSelect('all')} />
       {states.map((state) => (
         <Chip
           key={state.sessionId}
@@ -335,9 +335,9 @@ function Chip({
       }}
       className="flex h-[30px] shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition"
       style={{
-        borderColor: active ? `${color}66` : 'rgba(232,223,207,0.12)',
-        background: active ? `${color}1A` : 'rgba(232,223,207,0.04)',
-        color: active ? color : 'rgba(232,223,207,0.5)',
+        borderColor: active ? `${color}66` : 'var(--glass-panel-border)',
+        background: active ? `${color}1A` : 'var(--glass-tile)',
+        color: active ? color : 'var(--glass-panel-muted)',
       }}
     >
       {withDot ? <span className="h-[7px] w-[7px] rounded-full" style={{ background: color }} /> : null}
@@ -356,7 +356,7 @@ function SelectedAthleteSummary({ state, now }: { state: AthleteState; now: numb
     <div className="shrink-0 px-5 pb-3">
       <div className="mb-2 grid grid-cols-[1fr_1px_1fr]">
         <HeroValue label="Distance" value={`${metrics.distanceKm.toFixed(2)} km`} color={state.color} />
-        <div className="bg-[#e8dfcf]/10" />
+        <div className="bg-[var(--glass-panel-border)]" />
         <HeroValue label="D+" value={`${Math.round(metrics.elevationGainM)} m`} color={state.color} align="right" />
       </div>
       <div className="grid grid-cols-2 gap-2">
@@ -413,10 +413,10 @@ function AthleteRow({
       onClick={onSelect}
       className={cn(
         'mb-1 grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-[10px] border px-3 py-2.5 text-left transition',
-        selected ? 'bg-white/[0.07]' : 'bg-[#e8dfcf]/[0.04]',
+        selected ? 'bg-[var(--active-overlay)]' : 'bg-[var(--glass-tile)]',
         dimmed && 'opacity-45',
       )}
-      style={{ borderColor: selected ? `${state.color}66` : 'rgba(232,223,207,0.07)' }}
+      style={{ borderColor: selected ? `${state.color}66` : 'var(--glass-panel-border)' }}
     >
       <div className="flex min-w-0 items-center gap-2">
         <span
@@ -424,8 +424,8 @@ function AthleteRow({
           style={{ background: state.color }}
         />
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-[#f0e8d8]">{state.fullName}</p>
-          <p className="truncate text-[11px] text-[#e8dfcf]/45">
+          <p className="truncate text-sm font-semibold text-[var(--glass-panel-fg)]">{state.fullName}</p>
+          <p className="truncate text-[11px] text-[var(--glass-panel-muted)]">
             {state.connected ? 'En direct' : state.status === 'active' ? 'Reconnexion...' : 'Terminée'}
           </p>
         </div>
@@ -434,7 +434,7 @@ function AthleteRow({
         <span className="font-bold tabular-nums" style={{ color: state.color }}>
           {metrics.distanceKm.toFixed(2)} km
         </span>
-        <span className="tabular-nums text-[#e8dfcf]/55">
+        <span className="tabular-nums text-[var(--glass-panel-muted)]">
           {metrics.paceMinPerKm ? formatPaceShort(metrics.paceMinPerKm) : '—'}/km
         </span>
         <span className="tabular-nums text-danger-fg">
@@ -448,10 +448,10 @@ function AthleteRow({
 function EmptySheet({ loading }: { loading: boolean }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">
-      <h2 className="font-display text-lg font-bold text-[#f0e8d8]">
+      <h2 className="font-display text-lg font-bold text-[var(--glass-panel-fg)]">
         {loading ? 'Chargement des sessions...' : 'Aucune session multi-athlètes'}
       </h2>
-      <p className="mt-2 text-sm leading-relaxed text-[#e8dfcf]/55">
+      <p className="mt-2 text-sm leading-relaxed text-[var(--glass-panel-muted)]">
         Ajoute des sessions depuis la page Live avec le bouton multi-athlètes.
       </p>
       <Link
@@ -477,7 +477,7 @@ function HeroValue({
 }) {
   return (
     <div className={cn('px-2', align === 'right' && 'text-right')}>
-      <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.07em] text-[#e8dfcf]/50">
+      <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.07em] text-[var(--glass-panel-muted)]">
         {label}
       </span>
       <strong className="font-display block text-[28px] font-medium leading-none tracking-tight" style={{ color }}>
@@ -489,11 +489,11 @@ function HeroValue({
 
 function SmallValue({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-white/[0.08] bg-[#e8dfcf]/[0.05] px-3 py-2 text-center">
-      <span className="mb-1 block text-[9px] font-semibold uppercase tracking-[0.07em] text-[#e8dfcf]/45">
+    <div className="rounded-lg border border-[var(--glass-panel-border)] bg-[var(--glass-tile)] px-3 py-2 text-center">
+      <span className="mb-1 block text-[9px] font-semibold uppercase tracking-[0.07em] text-[var(--glass-panel-muted)]">
         {label}
       </span>
-      <strong className="font-display text-lg font-semibold leading-none text-[#f0e8d8]">
+      <strong className="font-display text-lg font-semibold leading-none text-[var(--glass-panel-fg)]">
         {value}
       </strong>
     </div>
@@ -503,8 +503,8 @@ function SmallValue({ label, value }: { label: string; value: string }) {
 function AllValue({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="font-display text-[26px] font-semibold leading-none text-[#f0e8d8]">{value}</p>
-      <p className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.05em] text-[#e8dfcf]/45">
+      <p className="font-display text-[26px] font-semibold leading-none text-[var(--glass-panel-fg)]">{value}</p>
+      <p className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.05em] text-[var(--glass-panel-muted)]">
         {label}
       </p>
     </div>

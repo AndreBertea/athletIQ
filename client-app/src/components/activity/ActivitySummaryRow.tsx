@@ -52,7 +52,7 @@ export function ActivitySummaryRow({
     <Link
       to={`/activities/${activityId}`}
       className={cn(
-        'group block px-3.5 py-3 transition hover:bg-white/5 active:bg-white/10',
+        'group block px-3.5 py-3 transition hover:bg-[var(--hover-overlay)] active:bg-[var(--active-overlay)]',
         !isLast && 'border-b border-border-subtle',
       )}
     >
@@ -139,7 +139,7 @@ function buildMetricChips(
       key: 'hr',
       Icon: Heart,
       label: `${Math.round(activity.avg_heartrate_bpm)}${max} bpm`,
-      className: 'border-red-400/20 bg-red-400/10 text-red-200',
+      className: 'border-[var(--tone-red-bd)] bg-[var(--tone-red-bg)] text-[var(--tone-red-fg)]',
     });
   }
 
@@ -148,7 +148,7 @@ function buildMetricChips(
       key: 'temperature',
       Icon: Thermometer,
       label: `${weather.temperature_c.toFixed(0)}°C`,
-      className: 'border-amber-400/20 bg-amber-400/10 text-amber-200',
+      className: 'border-[var(--tone-amber-bd)] bg-[var(--tone-amber-bg)] text-[var(--tone-amber-fg)]',
     });
   }
 
@@ -161,7 +161,7 @@ function buildMetricChips(
       key: 'te',
       Icon: Timer,
       label: `TE ${fit.aerobic_training_effect.toFixed(1)}${anaerobic}`,
-      className: 'border-emerald-400/20 bg-emerald-400/10 text-emerald-200',
+      className: 'border-[var(--tone-emerald-bd)] bg-[var(--tone-emerald-bg)] text-[var(--tone-emerald-fg)]',
     });
   }
 

@@ -25,7 +25,8 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { AlertTriangle, CheckCircle, Download, RefreshCw, ShieldCheck, Trash2, Watch } from 'lucide-react';
+import { useTheme } from 'next-themes';
+import { AlertTriangle, CheckCircle, Download, Monitor, Moon, RefreshCw, ShieldCheck, Sun, Trash2, Watch } from 'lucide-react';
 import { AppShell } from '@/components/shared/AppShell';
 import {
   ComingSoonModal,
@@ -42,6 +43,7 @@ import {
   IMPORT_PERIOD_OPTIONS,
   formatImportPeriod,
   getGarminImportState,
+  shortImportPeriod,
   startGarminImport,
   useGarminImportJob,
   type GarminImportState,
@@ -61,6 +63,8 @@ export function ProfileContent() {
   const [garminEmail, setGarminEmail] = useState('');
   const [garminPassword, setGarminPassword] = useState('');
   const [settingsMessage, setSettingsMessage] = useState<string | null>(null);
+  const [garminMfaCode, setGarminMfaCode] = useState('');
+  const [garminNeedsMfa, setGarminNeedsMfa] = useState(false);
   const [importDaysBack, setImportDaysBack] = useState(() => {
     const currentImport = getGarminImportState();
     return currentImport.daysBack ?? DEFAULT_IMPORT_DAYS_BACK;
@@ -99,9 +103,16 @@ export function ProfileContent() {
   });
 
   const garminLogin = useMutation({
-    mutationFn: () => agonApi.loginGarmin(garminEmail, garminPassword),
-    onSuccess: () => {
+    mutationFn: () => agonApi.loginGarmin(garminEmail, garminPassword, garminMfaCode),
+    onSuccess: (result) => {
+      if (result.needs_mfa) {
+        setGarminNeedsMfa(true);
+        setSettingsMessage('Code Garmin MFA requis.');
+        return;
+      }
       setGarminPassword('');
+      setGarminMfaCode('');
+      setGarminNeedsMfa(false);
       setSettingsMessage('Garmin connecte.');
       void queryClient.invalidateQueries({ queryKey: ['agon'] });
     },
@@ -146,7 +157,7 @@ export function ProfileContent() {
           <div
             className={cn(
               'bg-brand-primary flex h-16 w-16 items-center justify-center rounded-full',
-              'text-foreground font-semibold text-2xl',
+              'text-white font-semibold text-2xl',
             )}
           >
             {initial}
@@ -168,6 +179,12 @@ export function ProfileContent() {
             </p>
             <LanguageSwitcher size="md" />
           </div>
+        </Section>
+
+        {/* Section Apparence — sélecteur de thème Sombre / Clair / Système.
+            Persistance via next-themes (clé localStorage `agon-theme`). */}
+        <Section title={t('profile.theme.section')}>
+          <ThemeSelector />
         </Section>
 
         {/* Section Notifications — toggle maître + sous-réglages
@@ -198,12 +215,11 @@ export function ProfileContent() {
                     className={cn(
                       'font-display text-brand-cyan text-base font-semibold tracking-tight',
                       // bg transparent + appearance reset pour ne PAS afficher
-                      // le chrome WebKit (badge "horloge", clear button) ;
-                      // colorScheme dark force le picker iOS en mode sombre.
+                      // le chrome WebKit (badge "horloge", clear button). Le
+                      // picker natif suit `color-scheme` (root/[data-theme]).
                       'cursor-pointer bg-transparent focus:outline-none',
                       'appearance-none [&::-webkit-calendar-picker-indicator]:hidden',
                     )}
-                    style={{ colorScheme: 'dark' }}
                   />
                 }
               />
@@ -218,8 +234,8 @@ export function ProfileContent() {
                     className={cn(
                       'border-border h-8 rounded-full border px-3 text-xs font-semibold transition',
                       paused
-                        ? 'bg-brand-primary text-foreground border-brand-primary'
-                        : 'text-foreground hover:bg-white/5',
+                        ? 'bg-brand-primary text-white border-brand-primary'
+                        : 'text-foreground hover:bg-[var(--hover-overlay)]',
                     )}
                   >
                     {paused
@@ -262,8 +278,11 @@ export function ProfileContent() {
             connected={garminStatus.data?.connected === true}
             email={garminEmail}
             password={garminPassword}
+            mfaCode={garminMfaCode}
+            needsMfa={garminNeedsMfa}
             onEmailChange={setGarminEmail}
             onPasswordChange={setGarminPassword}
+            onMfaCodeChange={setGarminMfaCode}
             onConnect={() => garminLogin.mutate()}
             onDisconnect={() => disconnectGarmin.mutate()}
             onImport={() => void startGarminImport(importDaysBack).catch(() => undefined)}
@@ -288,7 +307,7 @@ export function ProfileContent() {
                   isLast={idx === arr.length - 1}
                   onClick={() => setActiveService(svc)}
                   right={
-                    <span className="rounded-full bg-white/5 px-2 py-1 text-[11px] font-medium text-muted-foreground">
+                    <span className="rounded-full bg-[var(--chip-bg)] px-2 py-1 text-[11px] font-medium text-muted-foreground">
                       {t('profile.integrations.soonBadge')}
                     </span>
                   }
@@ -404,12 +423,59 @@ function Section({ title, note, children }: SectionProps) {
   );
 }
 
+function ThemeSelector() {
+  const { t } = useTranslation();
+  const { theme, setTheme } = useTheme();
+  // App 100% client (Vite SPA, pas de SSR) : next-themes résout `theme`
+  // depuis localStorage dès le premier rendu, donc pas de garde `mounted`.
+  const current = theme ?? 'dark';
+
+  const options = [
+    { value: 'dark', label: t('profile.theme.dark'), Icon: Moon },
+    { value: 'light', label: t('profile.theme.light'), Icon: Sun },
+    { value: 'system', label: t('profile.theme.system'), Icon: Monitor },
+  ] as const;
+
+  return (
+    <div
+      role="radiogroup"
+      aria-label={t('profile.theme.label')}
+      className="grid grid-cols-3 gap-1 p-2"
+    >
+      {options.map(({ value, label, Icon }) => {
+        const active = current === value;
+        return (
+          <button
+            key={value}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            onClick={() => setTheme(value)}
+            className={cn(
+              'flex h-11 flex-col items-center justify-center gap-1 rounded-md text-[11px] font-semibold transition',
+              active
+                ? 'bg-brand-primary text-white shadow-sm'
+                : 'text-muted-foreground hover:bg-[var(--hover-overlay)] hover:text-foreground',
+            )}
+          >
+            <Icon className="h-4 w-4" />
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function GarminSettings({
   connected,
   email,
   password,
+  mfaCode,
+  needsMfa,
   onEmailChange,
   onPasswordChange,
+  onMfaCodeChange,
   onConnect,
   onDisconnect,
   onImport,
@@ -426,8 +492,11 @@ function GarminSettings({
   connected: boolean;
   email: string;
   password: string;
+  mfaCode: string;
+  needsMfa: boolean;
   onEmailChange: (value: string) => void;
   onPasswordChange: (value: string) => void;
+  onMfaCodeChange: (value: string) => void;
   onConnect: () => void;
   onDisconnect: () => void;
   onImport: () => void;
@@ -449,6 +518,13 @@ function GarminSettings({
   const importRunning = importState.status === 'running';
   const importSucceeded = importState.status === 'success' && importState.daysBack === importDaysBack;
   const importErrored = importState.status === 'error' && importState.daysBack === importDaysBack;
+  const importButtonLabel = importRunning
+    ? 'Import en cours...'
+    : importSucceeded
+      ? 'Import termine'
+      : importErrored
+        ? 'Relancer'
+        : `Importer ${shortImportPeriod(importDaysBack)}`;
   const periodStatus = importState.status === 'running'
     ? importState.progress
     : importState.status === 'success'
@@ -487,30 +563,21 @@ function GarminSettings({
             Garmin Connect
           </p>
           <p className="text-muted-foreground mt-1 text-xs">
-            {connected
-              ? 'Historique Garmin migre disponible. La nouvelle sync native est reportee.'
-              : 'Connexion Garmin native reportee dans le MVP Supabase.'}
+            {connected ? 'Connecte. Les identifiants ne sont pas stockes.' : 'Connexion one-time pour importer les donnees.'}
           </p>
         </div>
-        <span className={`rounded-full px-2 py-1 text-[11px] font-semibold ${connected ? 'bg-success-bg text-success-fg' : 'bg-white/5 text-muted-foreground'}`}>
-          {connected ? 'Historique' : 'Indisponible'}
+        <span className={`rounded-full px-2 py-1 text-[11px] font-semibold ${connected ? 'bg-success-bg text-success-fg' : 'bg-[var(--chip-bg)] text-muted-foreground'}`}>
+          {connected ? 'Actif' : 'A connecter'}
         </span>
       </div>
 
       {!connected ? (
         <div className="space-y-2">
-          <div className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2">
-            <p className="text-warning text-xs font-semibold">Garmin Connect non active sur Supabase</p>
-            <p className="text-muted-foreground mt-1 text-[11px] leading-relaxed">
-              Le login email/mot de passe Garmin dependait du backend Python. En MVP Supabase, seules les donnees Garmin deja migrees sont affichees.
-            </p>
-          </div>
           <input
             value={email}
             onChange={(event) => onEmailChange(event.target.value)}
             type="email"
             placeholder="Email Garmin"
-            disabled
             className="w-full rounded-md border border-border-subtle bg-surface-2 px-3 py-2 text-sm"
           />
           <input
@@ -518,21 +585,28 @@ function GarminSettings({
             onChange={(event) => onPasswordChange(event.target.value)}
             type="password"
             placeholder="Mot de passe Garmin"
-            disabled
             className="w-full rounded-md border border-border-subtle bg-surface-2 px-3 py-2 text-sm"
           />
-          <button type="button" onClick={onConnect} disabled className="btn-glass-primary w-full opacity-60">
-            Connexion reportee
+          {needsMfa ? (
+            <input
+              value={mfaCode}
+              onChange={(event) => onMfaCodeChange(event.target.value)}
+              inputMode="numeric"
+              placeholder="Code Garmin MFA"
+              className="w-full rounded-md border border-border-subtle bg-surface-2 px-3 py-2 text-sm"
+            />
+          ) : null}
+          <button
+            type="button"
+            onClick={onConnect}
+            disabled={loading || !email || !password || (needsMfa && !mfaCode)}
+            className="btn-glass-primary w-full"
+          >
+            {needsMfa ? 'Valider le code Garmin' : 'Connecter Garmin'}
           </button>
         </div>
       ) : (
         <div className="space-y-3">
-          <div className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2">
-            <p className="text-warning text-xs font-semibold">Sync Garmin native reportee</p>
-            <p className="text-muted-foreground mt-1 text-[11px] leading-relaxed">
-              Les blocs ci-dessous utilisent l'historique migre. Une nouvelle authentification Garmin necessite un worker hors Edge Supabase.
-            </p>
-          </div>
           <div>
             <label htmlFor="mobile-import-days" className="text-muted-foreground mb-1 block text-xs font-semibold">
               Duree d'import
@@ -566,7 +640,7 @@ function GarminSettings({
             <button
               type="button"
               onClick={onImport}
-              disabled
+              disabled={loading}
               className={cn(
                 'rounded-md px-3 py-2 text-sm font-semibold text-white disabled:opacity-50',
                 importSucceeded ? 'bg-success' : importErrored ? 'bg-danger' : 'bg-brand-primary',
@@ -579,7 +653,7 @@ function GarminSettings({
               ) : (
                 <RefreshCw className={`mr-1 inline h-4 w-4 ${importRunning ? 'animate-spin' : ''}`} />
               )}
-              Sync reportee
+              {importButtonLabel}
             </button>
             <button type="button" onClick={onDisconnect} disabled={loading} className="rounded-md border border-border-subtle px-3 py-2 text-sm font-semibold text-muted-foreground disabled:opacity-50">
               Deconnecter
@@ -712,7 +786,7 @@ function SettingsRow({
   const baseClass = cn(
     'flex w-full items-center gap-3 px-4 py-3 text-left transition',
     !isLast && 'border-border-subtle border-b',
-    onClick && 'hover:bg-white/5 cursor-pointer',
+    onClick && 'hover:bg-[var(--hover-overlay)] cursor-pointer',
   );
 
   const content = (

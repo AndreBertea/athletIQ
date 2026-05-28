@@ -131,14 +131,14 @@ export default function AuthRoute() {
                 ? signupForm.register('email')
                 : loginForm.register('email'))}
               type="email"
-              className="block w-full rounded-md border border-[var(--border-subtle)] bg-[rgba(15,23,42,0.5)] px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-[var(--brand-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--brand-primary)]"
+              className="block w-full rounded-md border border-[var(--border-subtle)] bg-[var(--surface-2)] px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-[var(--brand-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--brand-primary)]"
               placeholder="votre@email.com"
               autoComplete="email"
             />
             {(isSignup
               ? signupForm.formState.errors.email
               : loginForm.formState.errors.email) && (
-              <p className="mt-1 text-xs text-red-400">
+              <p className="mt-1 text-xs text-danger-fg">
                 {(isSignup
                   ? signupForm.formState.errors.email?.message
                   : loginForm.formState.errors.email?.message)}
@@ -155,7 +155,7 @@ export default function AuthRoute() {
                   ? signupForm.register('password')
                   : loginForm.register('password'))}
                 type={showPassword ? 'text' : 'password'}
-                className="block w-full rounded-md border border-[var(--border-subtle)] bg-[rgba(15,23,42,0.5)] px-3 py-2 pr-10 text-foreground placeholder:text-muted-foreground focus:border-[var(--brand-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--brand-primary)]"
+                className="block w-full rounded-md border border-[var(--border-subtle)] bg-[var(--surface-2)] px-3 py-2 pr-10 text-foreground placeholder:text-muted-foreground focus:border-[var(--brand-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--brand-primary)]"
                 placeholder="••••••••"
                 autoComplete={isSignup ? 'new-password' : 'current-password'}
               />
@@ -171,7 +171,7 @@ export default function AuthRoute() {
             {(isSignup
               ? signupForm.formState.errors.password
               : loginForm.formState.errors.password) && (
-              <p className="mt-1 text-xs text-red-400">
+              <p className="mt-1 text-xs text-danger-fg">
                 {(isSignup
                   ? signupForm.formState.errors.password?.message
                   : loginForm.formState.errors.password?.message)}
@@ -186,12 +186,12 @@ export default function AuthRoute() {
               <input
                 {...signupForm.register('confirmPassword')}
                 type="password"
-                className="block w-full rounded-md border border-[var(--border-subtle)] bg-[rgba(15,23,42,0.5)] px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-[var(--brand-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--brand-primary)]"
+                className="block w-full rounded-md border border-[var(--border-subtle)] bg-[var(--surface-2)] px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-[var(--brand-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--brand-primary)]"
                 placeholder="••••••••"
                 autoComplete="new-password"
               />
               {signupForm.formState.errors.confirmPassword && (
-                <p className="mt-1 text-xs text-red-400">
+                <p className="mt-1 text-xs text-danger-fg">
                   {signupForm.formState.errors.confirmPassword.message}
                 </p>
               )}
@@ -200,7 +200,7 @@ export default function AuthRoute() {
 
           {/* Error */}
           {error && (
-            <div className="flex items-start gap-2 rounded-md border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">
+            <div className="flex items-start gap-2 rounded-md border border-danger/40 bg-danger-bg p-3 text-sm text-danger-fg">
               <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
               <span>{error}</span>
             </div>

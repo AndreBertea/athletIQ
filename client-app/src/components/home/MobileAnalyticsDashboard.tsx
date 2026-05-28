@@ -320,7 +320,7 @@ export function MobileAnalyticsDashboard() {
             aria-label={collapsed ? 'Afficher analytics' : 'Masquer analytics'}
             aria-expanded={!collapsed}
             onClick={() => setCollapsed((value) => !value)}
-            className="flex h-7 w-7 items-center justify-center rounded-full border border-border-subtle bg-card text-muted-foreground transition active:bg-white/10"
+            className="flex h-7 w-7 items-center justify-center rounded-full border border-border-subtle bg-card text-muted-foreground transition active:bg-[var(--active-overlay)]"
           >
             <ChevronDown
               className={cn(
@@ -467,7 +467,7 @@ function CompactFilterControl<T extends string | number>({
         aria-expanded={open}
         onClick={onToggle}
         className={cn(
-          'flex h-7 w-full items-center justify-between gap-1 rounded-full border border-border-subtle bg-card px-2 text-left transition active:bg-white/10',
+          'flex h-7 w-full items-center justify-between gap-1 rounded-full border border-border-subtle bg-card px-2 text-left transition active:bg-[var(--active-overlay)]',
           open && 'border-brand-cyan/40 bg-brand-cyan/10 text-brand-cyan',
         )}
       >
@@ -638,11 +638,11 @@ function KpiTile({
     string
   > = {
     brand: 'bg-brand-cyan/10 text-brand-cyan border-brand-cyan/20',
-    blue: 'bg-blue-400/10 text-blue-200 border-blue-400/20',
-    green: 'bg-emerald-400/10 text-emerald-200 border-emerald-400/20',
-    rose: 'bg-rose-400/10 text-rose-200 border-rose-400/20',
-    violet: 'bg-violet-400/10 text-violet-200 border-violet-400/20',
-    amber: 'bg-amber-400/10 text-amber-200 border-amber-400/20',
+    blue: 'border-[var(--tone-blue-bd)] bg-[var(--tone-blue-bg)] text-[var(--tone-blue-fg)]',
+    green: 'border-[var(--tone-emerald-bd)] bg-[var(--tone-emerald-bg)] text-[var(--tone-emerald-fg)]',
+    rose: 'border-[var(--tone-rose-bd)] bg-[var(--tone-rose-bg)] text-[var(--tone-rose-fg)]',
+    violet: 'border-[var(--tone-violet-bd)] bg-[var(--tone-violet-bg)] text-[var(--tone-violet-fg)]',
+    amber: 'border-[var(--tone-amber-bd)] bg-[var(--tone-amber-bg)] text-[var(--tone-amber-fg)]',
   };
 
   return (
@@ -727,7 +727,7 @@ function PerformancePanel({
                 <stop offset="100%" stopColor={metric.color} stopOpacity={0} />
               </linearGradient>
             </defs>
-            <CartesianGrid stroke="rgba(245,239,224,0.08)" vertical={false} />
+            <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
             <XAxis
               dataKey="label"
               tick={chartTickStyle}
@@ -742,7 +742,7 @@ function PerformancePanel({
               tickFormatter={(value: number) => formatAxisValue(selectedMetric, value)}
             />
             <Tooltip
-              cursor={{ stroke: 'rgba(245,239,224,0.18)' }}
+              cursor={{ stroke: 'var(--chart-cursor)' }}
               contentStyle={tooltipStyle}
               labelStyle={tooltipLabelStyle}
               formatter={(value: unknown) =>
@@ -917,7 +917,7 @@ function GarminPanel({
             data={chartData}
             margin={{ top: 12, right: 10, bottom: 0, left: -24 }}
           >
-            <CartesianGrid stroke="rgba(245,239,224,0.08)" vertical={false} />
+            <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
             <XAxis
               dataKey="label"
               tick={chartTickStyle}
@@ -1097,7 +1097,7 @@ function SleepPanel({
             data={trendData}
             margin={{ top: 12, right: 10, bottom: 0, left: -24 }}
           >
-            <CartesianGrid stroke="rgba(245,239,224,0.08)" vertical={false} />
+            <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
             <XAxis
               dataKey="label"
               tick={chartTickStyle}
@@ -1272,7 +1272,7 @@ function TrainingLoadPanel({
           initialDimension={{ width: 1, height: 1 }}
         >
           <LineChart data={points} margin={{ top: 12, right: 10, bottom: 0, left: -24 }}>
-            <CartesianGrid stroke="rgba(245,239,224,0.08)" vertical={false} />
+            <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
             <XAxis
               dataKey="label"
               tick={chartTickStyle}
@@ -1281,7 +1281,7 @@ function TrainingLoadPanel({
               minTickGap={18}
             />
             <YAxis tick={chartTickStyle} tickLine={false} axisLine={false} />
-            <ReferenceLine y={0} stroke="rgba(245,239,224,0.22)" strokeDasharray="4 4" />
+            <ReferenceLine y={0} stroke="var(--chart-ref)" strokeDasharray="4 4" />
             <Tooltip contentStyle={tooltipStyle} labelStyle={tooltipLabelStyle} />
             {series.map((key) => (
               <Line
@@ -1530,7 +1530,7 @@ function ChartFrame({
   return (
     <div className="h-52 min-w-0 rounded-md border border-border-subtle bg-card p-3">
       {loading ? (
-        <div className="h-full animate-pulse rounded-md bg-white/5" />
+        <div className="h-full animate-pulse rounded-md bg-[var(--chip-bg)]" />
       ) : empty ? (
         <div className="flex h-full items-center justify-center text-center text-sm text-muted-foreground">
           Donnees insuffisantes
@@ -1579,10 +1579,10 @@ function InsightTile({
   children: ReactNode;
 }) {
   const toneClasses = {
-    amber: 'border-amber-400/20 bg-amber-400/10 text-amber-200',
-    blue: 'border-blue-400/20 bg-blue-400/10 text-blue-200',
-    green: 'border-emerald-400/20 bg-emerald-400/10 text-emerald-200',
-    violet: 'border-violet-400/20 bg-violet-400/10 text-violet-200',
+    amber: 'border-[var(--tone-amber-bd)] bg-[var(--tone-amber-bg)] text-[var(--tone-amber-fg)]',
+    blue: 'border-[var(--tone-blue-bd)] bg-[var(--tone-blue-bg)] text-[var(--tone-blue-fg)]',
+    green: 'border-[var(--tone-emerald-bd)] bg-[var(--tone-emerald-bg)] text-[var(--tone-emerald-fg)]',
+    violet: 'border-[var(--tone-violet-bd)] bg-[var(--tone-violet-bg)] text-[var(--tone-violet-fg)]',
   };
 
   return (
@@ -1608,9 +1608,9 @@ function InfoPill({
   tone: 'amber' | 'blue' | 'green';
 }) {
   const classes = {
-    amber: 'border-amber-400/20 bg-amber-400/10 text-amber-200',
-    blue: 'border-blue-400/20 bg-blue-400/10 text-blue-200',
-    green: 'border-emerald-400/20 bg-emerald-400/10 text-emerald-200',
+    amber: 'border-[var(--tone-amber-bd)] bg-[var(--tone-amber-bg)] text-[var(--tone-amber-fg)]',
+    blue: 'border-[var(--tone-blue-bd)] bg-[var(--tone-blue-bg)] text-[var(--tone-blue-fg)]',
+    green: 'border-[var(--tone-emerald-bd)] bg-[var(--tone-emerald-bg)] text-[var(--tone-emerald-fg)]',
   };
   return (
     <span
@@ -1669,11 +1669,11 @@ function StatusLine({
   tone: 'green' | 'amber' | 'red' | 'blue' | 'violet';
 }) {
   const colors = {
-    green: 'bg-emerald-400 text-emerald-200',
-    amber: 'bg-amber-400 text-amber-200',
-    red: 'bg-red-400 text-red-200',
-    blue: 'bg-blue-400 text-blue-200',
-    violet: 'bg-violet-400 text-violet-200',
+    green: 'bg-emerald-400 text-[var(--tone-emerald-fg)]',
+    amber: 'bg-amber-400 text-[var(--tone-amber-fg)]',
+    red: 'bg-red-400 text-[var(--tone-red-fg)]',
+    blue: 'bg-blue-400 text-[var(--tone-blue-fg)]',
+    violet: 'bg-violet-400 text-[var(--tone-violet-fg)]',
   };
   return (
     <div className="flex items-center gap-2">
@@ -1977,7 +1977,7 @@ function tsbStatus(tsb: number) {
       label: 'Frais',
       tone: 'green' as const,
       dot: 'bg-emerald-400',
-      textClass: 'text-emerald-200',
+      textClass: 'text-[var(--tone-emerald-fg)]',
       recommendation: 'Fraicheur elevee. Bon moment pour une seance qualite.',
     };
   }
@@ -1986,7 +1986,7 @@ function tsbStatus(tsb: number) {
       label: 'Forme',
       tone: 'green' as const,
       dot: 'bg-emerald-400',
-      textClass: 'text-emerald-200',
+      textClass: 'text-[var(--tone-emerald-fg)]',
       recommendation: 'Forme positive, charge recente bien absorbee.',
     };
   }
@@ -1995,7 +1995,7 @@ function tsbStatus(tsb: number) {
       label: 'Equilibre',
       tone: 'blue' as const,
       dot: 'bg-blue-400',
-      textClass: 'text-blue-200',
+      textClass: 'text-[var(--tone-blue-fg)]',
       recommendation: 'Zone stable. Garde le volume sans forcer inutilement.',
     };
   }
@@ -2004,7 +2004,7 @@ function tsbStatus(tsb: number) {
       label: 'Fatigue',
       tone: 'amber' as const,
       dot: 'bg-amber-400',
-      textClass: 'text-amber-200',
+      textClass: 'text-[var(--tone-amber-fg)]',
       recommendation: 'Fatigue visible. Prevois une journee plus legere.',
     };
   }
@@ -2012,7 +2012,7 @@ function tsbStatus(tsb: number) {
     label: 'Surmenage',
     tone: 'red' as const,
     dot: 'bg-red-400',
-    textClass: 'text-red-200',
+    textClass: 'text-[var(--tone-red-fg)]',
     recommendation: 'Charge trop haute. Repos ou recuperation active conseillee.',
   };
 }

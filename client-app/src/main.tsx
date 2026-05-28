@@ -1,7 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Toaster } from 'sonner';
+import { ThemeProvider } from 'next-themes';
 
 // Loading order matters — see web/src/styles/globals.css header.
 import './styles/design-system.css';
@@ -13,6 +13,7 @@ import './styles/globals.css';
 import './i18n';
 
 import App from './App';
+import { ThemedToaster } from './components/shared/ThemedToaster';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -24,24 +25,27 @@ const queryClient = new QueryClient({
   },
 });
 
+// Clé de persistance du thème — partagée avec le script anti-FOUC dans
+// index.html. Toute modification ici doit y être répercutée.
+const THEME_STORAGE_KEY = 'agon-theme';
+
 const rootEl = document.getElementById('root');
 if (!rootEl) throw new Error('Root element #root missing from index.html');
 
 createRoot(rootEl).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <App />
-      <Toaster
-        position="top-center"
-        theme="dark"
-        toastOptions={{
-          classNames: {
-            toast:
-              'bg-card border border-border-subtle text-foreground font-text',
-            description: 'text-muted-foreground',
-          },
-        }}
-      />
-    </QueryClientProvider>
+    <ThemeProvider
+      attribute="data-theme"
+      defaultTheme="dark"
+      enableSystem
+      themes={['light', 'dark']}
+      storageKey={THEME_STORAGE_KEY}
+      disableTransitionOnChange
+    >
+      <QueryClientProvider client={queryClient}>
+        <App />
+        <ThemedToaster />
+      </QueryClientProvider>
+    </ThemeProvider>
   </StrictMode>,
 );

@@ -401,7 +401,7 @@ function MapFallback({
         />
       </svg>
       <div className="absolute inset-0 bg-gradient-to-b from-[#0a0c08]/45 via-[#0a0c08]/10 to-[#0a0c08]/65" />
-      <div className="absolute inset-x-8 top-1/2 z-10 -translate-y-1/2 rounded-[18px] border border-white/10 bg-[#0f100c]/65 px-4 py-4 text-center text-sm font-semibold text-[#f0e8d8] backdrop-blur-xl">
+      <div className="absolute inset-x-8 top-1/2 z-10 -translate-y-1/2 rounded-[18px] border border-[var(--glass-panel-border)] bg-[var(--glass-panel)] px-4 py-4 text-center text-sm font-semibold text-[var(--glass-panel-fg)] backdrop-blur-xl">
         <div className="mb-2 flex justify-center">{icon}</div>
         {label}
       </div>
