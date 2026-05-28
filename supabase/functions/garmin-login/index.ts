@@ -3,7 +3,8 @@ import { errorResponse, handleCors, jsonResponse } from "../_shared/cors.ts";
 import { GarminClient, GarminError, loginGarmin, storeGarminToken } from "../_shared/garmin.ts";
 import { requireUser } from "../_shared/supabase.ts";
 
-const RATE_LIMIT_COOLDOWN_SECONDS = 20 * 60;
+const RATE_LIMIT_COOLDOWN_SECONDS = 3 * 60 * 60;
+const VALID_TOKEN_GRACE_SECONDS = 10 * 60;
 
 function cooldownMessage(seconds: number): string {
   const minutes = Math.max(1, Math.ceil(seconds / 60));
@@ -47,6 +48,24 @@ async function recentGarminCooldown(
     if (remaining > 0) return remaining;
   }
   return 0;
+}
+
+async function existingGarminConnection(
+  serviceClient: Awaited<ReturnType<typeof requireUser>>["serviceClient"],
+  userId: string,
+): Promise<Record<string, unknown> | null> {
+  const { data, error } = await serviceClient
+    .from("external_auth_tokens")
+    .select("display_name,email,expires_at,last_sync_at")
+    .eq("user_id", userId)
+    .eq("provider", "garmin")
+    .maybeSingle();
+
+  if (error || !data?.expires_at) return null;
+  const expiresAt = Date.parse(String(data.expires_at));
+  if (!Number.isFinite(expiresAt)) return null;
+  if (expiresAt <= Date.now() + VALID_TOKEN_GRACE_SECONDS * 1000) return null;
+  return data as Record<string, unknown>;
 }
 
 async function createLoginJob(
@@ -101,8 +120,23 @@ serve(async (req) => {
     const email = String(body.email ?? "").trim();
     const password = String(body.password ?? "");
     const mfaCode = body.mfa_code ? String(body.mfa_code).trim() : null;
+    const forceReconnect = body.force_reconnect === true;
 
     if (!email || !password) return errorResponse("Email et mot de passe Garmin requis.", 422);
+
+    if (!forceReconnect) {
+      const existing = await existingGarminConnection(serviceClient, user.id);
+      if (existing) {
+        return jsonResponse({
+          connected: true,
+          already_connected: true,
+          message: "Garmin Connect deja connecte.",
+          display_name: existing.display_name ?? null,
+          expires_at: existing.expires_at ?? null,
+          last_sync_at: existing.last_sync_at ?? null,
+        });
+      }
+    }
 
     const cooldownSeconds = await recentGarminCooldown(serviceClient, user.id);
     if (cooldownSeconds > 0) return rateLimitResponse(cooldownSeconds);

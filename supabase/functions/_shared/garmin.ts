@@ -177,7 +177,7 @@ class GarminSsoClient {
     if (!response.ok) {
       throw new GarminError(
         `Garmin SSO HTTP ${response.status}`,
-        response.status === 401 || response.status === 403 ? 401 : 502,
+        response.status === 401 || response.status === 403 ? 401 : response.status === 429 ? 429 : 502,
         "garmin_sso_http",
       );
     }

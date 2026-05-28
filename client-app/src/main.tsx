@@ -16,8 +16,11 @@ import './i18n';
 import App from './App';
 import { ThemedToaster } from './components/shared/ThemedToaster';
 
-registerSW({
+const updateServiceWorker = registerSW({
   immediate: true,
+  onNeedRefresh() {
+    void updateServiceWorker(true);
+  },
   onRegisteredSW(_swUrl, registration) {
     if (!registration) return;
     void registration.update();
