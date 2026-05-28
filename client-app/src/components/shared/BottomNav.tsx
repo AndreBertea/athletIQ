@@ -70,14 +70,12 @@ export function BottomNav() {
         paddingBottom: 'env(safe-area-inset-bottom)',
         // Couleur de base semi-transparente : laisse passer le blur
         // pour voir le contenu défiler dessous (effet verre dépoli).
-        // Auparavant 0.92 (presque opaque) — masquait l'effet glass.
-        // 0.45 garde la lisibilité des icônes sans bloquer le blur.
-        // Glass orange AGON : base dark semi-transparente + halo orange chaud.
-        backgroundColor: 'rgba(13,18,37,0.45)',
-        backgroundImage:
-          'radial-gradient(120% 180% at 50% 100%, rgba(251,146,60,0.22) 0%, rgba(234,88,12,0.18) 28%, rgba(13,18,37,0.10) 60%)',
+        // Tokens adaptatifs : glass orange chaud sur dark, ivoire frosted
+        // avec halo terra discret en clair (cf. --bottomnav-* design-system).
+        backgroundColor: 'var(--bottomnav-bg)',
+        backgroundImage: 'var(--bottomnav-image)',
         WebkitBackdropFilter: 'blur(18px) saturate(160%)',
-        boxShadow: '0 -8px 32px rgba(234,88,12,0.18)',
+        boxShadow: 'var(--bottomnav-shadow)',
       }}
       aria-label={t('nav.ariaLabel')}
     >

@@ -93,7 +93,7 @@ export function HistoryContent() {
     <div>
       {/* Hero */}
       <header className="bg-signature border-border-subtle border-b px-4 py-6">
-        <p className="text-xs font-medium tracking-widest uppercase text-white/70">
+        <p className="text-xs font-medium tracking-widest uppercase text-muted-foreground">
           {t('history.consistency')}
         </p>
         <div className="glass mt-3 rounded-lg p-4">

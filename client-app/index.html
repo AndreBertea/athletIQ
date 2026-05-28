@@ -16,6 +16,29 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.json" />
     <title>AGON</title>
+    <!-- Anti-FOUC : applique data-theme AVANT le premier paint pour éviter
+         un flash sombre→clair au chargement. Doit rester synchrone et
+         utiliser la même clé que next-themes (storageKey="agon-theme").
+         Défaut AGON = sombre ; "system" suit prefers-color-scheme. -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('agon-theme');
+          var resolved =
+            stored === 'light' || stored === 'dark'
+              ? stored
+              : stored === 'system'
+                ? window.matchMedia('(prefers-color-scheme: light)').matches
+                  ? 'light'
+                  : 'dark'
+                : 'dark';
+          document.documentElement.setAttribute('data-theme', resolved);
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta)
+            meta.setAttribute('content', resolved === 'light' ? '#F5EFE0' : '#191815');
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

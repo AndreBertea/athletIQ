@@ -79,6 +79,52 @@
   --chart-7: #6B7A60;   /* moss light */
   --chart-8: #F5EFE0;   /* ivory accent */
 
+  /* --- Adaptive UI tokens (theme-aware) ---
+   * Valeurs DARK ci-dessous (rendu actuel preserve a l'identique).
+   * Surcharges IVOIRE dans le bloc [data-theme="light"] plus bas.
+   * Permettent de remplacer les couleurs hardcodees (overlays blancs,
+   * grilles de graphes, panneaux glass sur carte, chrome nav) par des
+   * variables qui basculent proprement avec le theme. */
+  color-scheme: dark;
+
+  /* Overlays subtils (hover/active/chip) — remplacent les bg-white/X */
+  --hover-overlay:   rgba(245, 239, 224, 0.06);
+  --active-overlay:  rgba(245, 239, 224, 0.10);
+  --chip-bg:         rgba(245, 239, 224, 0.08);
+
+  /* Graphes (Recharts) — grilles / curseurs / lignes de reference */
+  --chart-grid:      rgba(245, 239, 224, 0.08);
+  --chart-cursor:    rgba(245, 239, 224, 0.18);
+  --chart-ref:       rgba(245, 239, 224, 0.22);
+
+  /* Voile (scrim) degrade sur les cartes plein ecran, pour la lisibilite
+   * des controles/panneaux en surimpression. Doux et neutre en clair. */
+  --map-scrim: linear-gradient(180deg, rgba(10, 12, 8, 0.50) 0%, rgba(10, 12, 8, 0.05) 45%, rgba(10, 12, 8, 0.70) 100%);
+
+  /* Panneaux glass en surimpression sur carte (live, activity-detail) */
+  --glass-panel:        rgba(15, 16, 12, 0.55);
+  --glass-panel-strong: rgba(25, 24, 21, 0.80);
+  --glass-panel-border: rgba(255, 255, 255, 0.12);
+  --glass-panel-fg:     #E8DFCF;
+  --glass-panel-muted:  rgba(232, 223, 207, 0.55);
+  --glass-tile:         rgba(232, 223, 207, 0.06);
+
+  /* Chrome navigation (TopBar / BottomNav) */
+  --topbar-bg:        linear-gradient(180deg, rgba(160, 67, 46, 0.20) 0%, rgba(25, 24, 21, 0.55) 100%);
+  --bottomnav-bg:     rgba(13, 18, 37, 0.45);
+  --bottomnav-image:  radial-gradient(120% 180% at 50% 100%, rgba(251, 146, 60, 0.22) 0%, rgba(234, 88, 12, 0.18) 28%, rgba(13, 18, 37, 0.10) 60%);
+  --bottomnav-shadow: 0 -8px 32px rgba(234, 88, 12, 0.18);
+
+  /* Tons pastel des tuiles/pills/badges (KPI, insights, sport-type).
+   * DARK = teintes -200 sur tint 10% (lisibles sur night). Surcharge
+   * LIGHT en teintes -700 saturees (lisibles sur ivoire). fg/bg/bd. */
+  --tone-blue-fg:    #BFDBFE;  --tone-blue-bg:    rgba(96, 165, 250, 0.10);  --tone-blue-bd:    rgba(96, 165, 250, 0.20);
+  --tone-emerald-fg: #A7F3D0;  --tone-emerald-bg: rgba(52, 211, 153, 0.10);  --tone-emerald-bd: rgba(52, 211, 153, 0.20);
+  --tone-amber-fg:   #FDE68A;  --tone-amber-bg:   rgba(251, 191, 36, 0.10);  --tone-amber-bd:   rgba(251, 191, 36, 0.20);
+  --tone-violet-fg:  #DDD6FE;  --tone-violet-bg:  rgba(167, 139, 250, 0.10); --tone-violet-bd:  rgba(167, 139, 250, 0.20);
+  --tone-rose-fg:    #FECDD3;  --tone-rose-bg:    rgba(251, 113, 133, 0.10); --tone-rose-bd:    rgba(251, 113, 133, 0.20);
+  --tone-red-fg:     #FECACA;  --tone-red-bg:     rgba(248, 113, 113, 0.10); --tone-red-bd:     rgba(248, 113, 113, 0.20);
+
   /* --- Typography --- */
   --font-sans:    'Inter Tight', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   --font-display: 'Space Grotesk', 'Inter Tight', sans-serif;
@@ -169,19 +215,99 @@
   --container-2xl: 1536px;
 }
 
-/* Light mode (fallback) */
+/* ============================================================
+ * LIGHT MODE — AGON "Ivoire Chaud"
+ * Surfaces ivoire dominantes, texte night, accents terra/sunset/moss.
+ * Active via data-theme="light" (next-themes) ou .light. C'est la
+ * meme app qu'en dark, re-teintee : on ne surcharge QUE les tokens
+ * dependant du thème, tout le reste (brand terra/moss/sunset, radius,
+ * spacing, fonts) reste partage avec :root.
+ * ============================================================ */
 [data-theme="light"], .light {
-  --background:       #FFFFFF;
-  --surface-1:        #F8FAFC;
-  --surface-2:        #F1F5F9;
-  --surface-3:        #FFFFFF;
-  --card:             #FFFFFF;
-  --popover:          #FFFFFF;
-  --foreground:       #020617;
-  --muted-foreground: #64748B;
-  --inverse:          #FFFFFF;
-  --border:           #E2E8F0;
-  --border-subtle:    rgba(0, 0, 0, 0.06);
+  color-scheme: light;
+
+  /* --- Surfaces (ivoire chaud dominant, jamais blanc pur) --- */
+  --background:        #F5EFE0;   /* ivoire chaud signature AGON */
+  --surface-1:         #EFE7D5;
+  --surface-2:         #ECE2CD;   /* inputs / muted (puits sur carte) */
+  --surface-3:         #E5DAC2;   /* pistes de progression */
+  --card:              #FBF6EC;   /* legerement plus clair → cartes discretes */
+  --popover:           #FBF6EC;
+
+  /* --- Texte --- */
+  --foreground:        #191815;   /* night */
+  --muted-foreground:  #6E6757;   /* stone assombri, lisible sur ivoire */
+  --inverse:           #F5EFE0;
+
+  /* --- Bordures (stone, fines, faible opacite) --- */
+  --border:            #D8CEB9;
+  --border-subtle:     rgba(25, 24, 21, 0.10);
+  --input-border:      #D2C7AF;
+  --ring:              #A0432E;
+
+  /* --- Accent interactif : terra en clair ---
+   * En dark, brand-cyan = sunset (bon contraste sur night). Sur ivoire,
+   * le sunset manque de contraste pour texte/etats actifs → on bascule
+   * l'accent interactif (liens, onglets actifs, pastilles) sur terra red.
+   * brand-sunset reste sunset pour highlights / graphes. */
+  --brand-cyan:        #A0432E;   /* terra */
+  --brand-sky:         #BF5333;   /* terra clair (hover liens) */
+
+  /* --- Semantic (assombri pour lisibilite sur ivoire) --- */
+  --success:           #15803D;
+  --warning:           #B45309;
+  --danger:            #C2410C;
+  --info:              #2563EB;
+  --success-fg:        #15803D;
+  --warning-fg:        #B45309;
+  --danger-fg:         #B91C1C;
+  --success-bg:        rgba(21, 128, 61, 0.12);
+  --warning-bg:        rgba(180, 83, 9, 0.12);
+  --danger-bg:         rgba(220, 38, 38, 0.10);
+  --brand-primary-bg:  rgba(160, 67, 46, 0.10);
+
+  /* --- Data viz : ivoire (chart-8) devient night pour rester visible --- */
+  --chart-8:           #191815;
+
+  /* --- Shadows / glows (plus doux et chauds qu'en dark) --- */
+  --shadow-sm:    0 1px 2px rgba(25, 24, 21, 0.08);
+  --shadow-md:    0 4px 12px rgba(25, 24, 21, 0.10), 0 1px 2px rgba(25, 24, 21, 0.06);
+  --shadow-lg:    0 12px 32px rgba(25, 24, 21, 0.16);
+  --glow-primary: 0 0 0 1px rgba(160, 67, 46, 0.22), 0 8px 24px rgba(160, 67, 46, 0.16);
+  --glow-cyan:    0 0 18px rgba(232, 158, 90, 0.30);
+
+  /* --- Overlays adaptatifs (night a faible opacite sur ivoire) --- */
+  --hover-overlay:   rgba(25, 24, 21, 0.04);
+  --active-overlay:  rgba(25, 24, 21, 0.07);
+  --chip-bg:         rgba(25, 24, 21, 0.05);
+
+  /* --- Graphes --- */
+  --chart-grid:      rgba(25, 24, 21, 0.10);
+  --chart-cursor:    rgba(25, 24, 21, 0.18);
+  --chart-ref:       rgba(25, 24, 21, 0.22);
+
+  /* --- Carte : voile tres doux et panneaux ivoire translucide --- */
+  --map-scrim: linear-gradient(180deg, rgba(25, 24, 21, 0.16) 0%, rgba(25, 24, 21, 0) 42%, rgba(25, 24, 21, 0.22) 100%);
+  --glass-panel:        rgba(245, 239, 224, 0.82);
+  --glass-panel-strong: rgba(245, 239, 224, 0.92);
+  --glass-panel-border: rgba(25, 24, 21, 0.12);
+  --glass-panel-fg:     #191815;
+  --glass-panel-muted:  rgba(25, 24, 21, 0.55);
+  --glass-tile:         rgba(25, 24, 21, 0.05);
+
+  /* --- Chrome navigation → ivoire frosted, accent terra discret --- */
+  --topbar-bg:        linear-gradient(180deg, rgba(160, 67, 46, 0.10) 0%, rgba(245, 239, 224, 0.80) 100%);
+  --bottomnav-bg:     rgba(245, 239, 224, 0.78);
+  --bottomnav-image:  radial-gradient(120% 180% at 50% 100%, rgba(232, 158, 90, 0.14) 0%, rgba(160, 67, 46, 0.08) 30%, rgba(245, 239, 224, 0) 60%);
+  --bottomnav-shadow: 0 -6px 24px rgba(25, 24, 21, 0.08);
+
+  /* Tons pastel → teintes -700 saturees, lisibles sur ivoire */
+  --tone-blue-fg:    #1D4ED8;  --tone-blue-bg:    rgba(37, 99, 235, 0.10);  --tone-blue-bd:    rgba(37, 99, 235, 0.22);
+  --tone-emerald-fg: #047857;  --tone-emerald-bg: rgba(5, 150, 105, 0.10);  --tone-emerald-bd: rgba(5, 150, 105, 0.22);
+  --tone-amber-fg:   #B45309;  --tone-amber-bg:   rgba(180, 83, 9, 0.10);   --tone-amber-bd:   rgba(180, 83, 9, 0.22);
+  --tone-violet-fg:  #6D28D9;  --tone-violet-bg:  rgba(124, 58, 237, 0.10); --tone-violet-bd:  rgba(124, 58, 237, 0.22);
+  --tone-rose-fg:    #BE123C;  --tone-rose-bg:    rgba(190, 18, 60, 0.10);  --tone-rose-bd:    rgba(190, 18, 60, 0.22);
+  --tone-red-fg:     #B91C1C;  --tone-red-bg:     rgba(185, 28, 28, 0.10);  --tone-red-bd:     rgba(185, 28, 28, 0.22);
 }
 
 /* ----- 3. RESET & BASE ----- */
@@ -649,5 +775,5 @@ a:hover { color: var(--brand-sky); }
 /* Scrollbar (subtle, dark-friendly) */
 ::-webkit-scrollbar         { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track   { background: transparent; }
-::-webkit-scrollbar-thumb   { background: rgba(255, 255, 255, 0.1); border-radius: var(--radius-full); }
-::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
+::-webkit-scrollbar-thumb   { background: var(--active-overlay); border-radius: var(--radius-full); }
+::-webkit-scrollbar-thumb:hover { background: var(--chart-cursor); }

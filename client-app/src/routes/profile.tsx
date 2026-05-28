@@ -25,7 +25,8 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { AlertTriangle, CheckCircle, Download, RefreshCw, ShieldCheck, Trash2, Watch } from 'lucide-react';
+import { useTheme } from 'next-themes';
+import { AlertTriangle, CheckCircle, Download, Monitor, Moon, RefreshCw, ShieldCheck, Sun, Trash2, Watch } from 'lucide-react';
 import { AppShell } from '@/components/shared/AppShell';
 import {
   ComingSoonModal,
@@ -156,7 +157,7 @@ export function ProfileContent() {
           <div
             className={cn(
               'bg-brand-primary flex h-16 w-16 items-center justify-center rounded-full',
-              'text-foreground font-semibold text-2xl',
+              'text-white font-semibold text-2xl',
             )}
           >
             {initial}
@@ -178,6 +179,12 @@ export function ProfileContent() {
             </p>
             <LanguageSwitcher size="md" />
           </div>
+        </Section>
+
+        {/* Section Apparence — sélecteur de thème Sombre / Clair / Système.
+            Persistance via next-themes (clé localStorage `agon-theme`). */}
+        <Section title={t('profile.theme.section')}>
+          <ThemeSelector />
         </Section>
 
         {/* Section Notifications — toggle maître + sous-réglages
@@ -208,12 +215,11 @@ export function ProfileContent() {
                     className={cn(
                       'font-display text-brand-cyan text-base font-semibold tracking-tight',
                       // bg transparent + appearance reset pour ne PAS afficher
-                      // le chrome WebKit (badge "horloge", clear button) ;
-                      // colorScheme dark force le picker iOS en mode sombre.
+                      // le chrome WebKit (badge "horloge", clear button). Le
+                      // picker natif suit `color-scheme` (root/[data-theme]).
                       'cursor-pointer bg-transparent focus:outline-none',
                       'appearance-none [&::-webkit-calendar-picker-indicator]:hidden',
                     )}
-                    style={{ colorScheme: 'dark' }}
                   />
                 }
               />
@@ -228,8 +234,8 @@ export function ProfileContent() {
                     className={cn(
                       'border-border h-8 rounded-full border px-3 text-xs font-semibold transition',
                       paused
-                        ? 'bg-brand-primary text-foreground border-brand-primary'
-                        : 'text-foreground hover:bg-white/5',
+                        ? 'bg-brand-primary text-white border-brand-primary'
+                        : 'text-foreground hover:bg-[var(--hover-overlay)]',
                     )}
                   >
                     {paused
@@ -301,7 +307,7 @@ export function ProfileContent() {
                   isLast={idx === arr.length - 1}
                   onClick={() => setActiveService(svc)}
                   right={
-                    <span className="rounded-full bg-white/5 px-2 py-1 text-[11px] font-medium text-muted-foreground">
+                    <span className="rounded-full bg-[var(--chip-bg)] px-2 py-1 text-[11px] font-medium text-muted-foreground">
                       {t('profile.integrations.soonBadge')}
                     </span>
                   }
@@ -417,6 +423,50 @@ function Section({ title, note, children }: SectionProps) {
   );
 }
 
+function ThemeSelector() {
+  const { t } = useTranslation();
+  const { theme, setTheme } = useTheme();
+  // App 100% client (Vite SPA, pas de SSR) : next-themes résout `theme`
+  // depuis localStorage dès le premier rendu, donc pas de garde `mounted`.
+  const current = theme ?? 'dark';
+
+  const options = [
+    { value: 'dark', label: t('profile.theme.dark'), Icon: Moon },
+    { value: 'light', label: t('profile.theme.light'), Icon: Sun },
+    { value: 'system', label: t('profile.theme.system'), Icon: Monitor },
+  ] as const;
+
+  return (
+    <div
+      role="radiogroup"
+      aria-label={t('profile.theme.label')}
+      className="grid grid-cols-3 gap-1 p-2"
+    >
+      {options.map(({ value, label, Icon }) => {
+        const active = current === value;
+        return (
+          <button
+            key={value}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            onClick={() => setTheme(value)}
+            className={cn(
+              'flex h-11 flex-col items-center justify-center gap-1 rounded-md text-[11px] font-semibold transition',
+              active
+                ? 'bg-brand-primary text-white shadow-sm'
+                : 'text-muted-foreground hover:bg-[var(--hover-overlay)] hover:text-foreground',
+            )}
+          >
+            <Icon className="h-4 w-4" />
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function GarminSettings({
   connected,
   email,
@@ -516,7 +566,7 @@ function GarminSettings({
             {connected ? 'Connecte. Les identifiants ne sont pas stockes.' : 'Connexion one-time pour importer les donnees.'}
           </p>
         </div>
-        <span className={`rounded-full px-2 py-1 text-[11px] font-semibold ${connected ? 'bg-success-bg text-success-fg' : 'bg-white/5 text-muted-foreground'}`}>
+        <span className={`rounded-full px-2 py-1 text-[11px] font-semibold ${connected ? 'bg-success-bg text-success-fg' : 'bg-[var(--chip-bg)] text-muted-foreground'}`}>
           {connected ? 'Actif' : 'A connecter'}
         </span>
       </div>
@@ -736,7 +786,7 @@ function SettingsRow({
   const baseClass = cn(
     'flex w-full items-center gap-3 px-4 py-3 text-left transition',
     !isLast && 'border-border-subtle border-b',
-    onClick && 'hover:bg-white/5 cursor-pointer',
+    onClick && 'hover:bg-[var(--hover-overlay)] cursor-pointer',
   );
 
   const content = (

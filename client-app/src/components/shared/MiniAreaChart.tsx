@@ -18,7 +18,7 @@ export default function MiniAreaChart({
   const points = data.filter((value): value is number => Number.isFinite(value));
 
   if (points.length < 2) {
-    return <div className={cn('rounded-[10px] bg-white/[0.04]', className)} style={{ height }} />;
+    return <div className={cn('rounded-[10px] bg-[var(--glass-tile)]', className)} style={{ height }} />;
   }
 
   const width = 320;

@@ -62,13 +62,13 @@ function LiveSessionContent({ sessionId }: { sessionId: string }) {
   const status = ended || (session != null && session.status !== 'active') ? 'closed' : conn;
 
   return (
-    <div className="relative h-full overflow-hidden bg-[#0f100c]">
+    <div className="relative h-full overflow-hidden bg-background">
       <LiveMap points={points} />
-      <div className="pointer-events-none absolute inset-0 z-[2] bg-gradient-to-b from-[#0a0c08]/50 via-[#0a0c08]/5 to-[#0a0c08]/70" />
+      <div className="pointer-events-none absolute inset-0 z-[2]" style={{ background: 'var(--map-scrim)' }} />
 
       <Link
         to="/live"
-        className="absolute left-4 top-[max(14px,env(safe-area-inset-top))] z-[8] inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-[#0f100c]/55 px-3 py-2 text-[13px] font-medium text-[#e8dfcf] shadow-lg backdrop-blur-xl"
+        className="absolute left-4 top-[max(14px,env(safe-area-inset-top))] z-[8] inline-flex items-center gap-1.5 rounded-full border border-[var(--glass-panel-border)] bg-[var(--glass-panel)] px-3 py-2 text-[13px] font-medium text-[var(--glass-panel-fg)] shadow-lg backdrop-blur-xl"
       >
         <ArrowLeft className="h-4 w-4" />
         Retour
@@ -77,10 +77,10 @@ function LiveSessionContent({ sessionId }: { sessionId: string }) {
       <ConnectionBadge state={status} />
 
       <div className="absolute left-6 top-[calc(max(14px,env(safe-area-inset-top))+50px)] z-[5] max-w-[270px]">
-        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.09em] text-[#e8dfcf]/60">
+        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.09em] text-[var(--glass-panel-muted)]">
           Session live
         </p>
-        <h1 className="font-display text-[22px] font-bold leading-tight tracking-tight text-[#f0e8d8]">
+        <h1 className="font-display text-[22px] font-bold leading-tight tracking-tight text-[var(--glass-panel-fg)]">
           {session?.label || 'Session live'}
         </h1>
       </div>
@@ -90,23 +90,23 @@ function LiveSessionContent({ sessionId }: { sessionId: string }) {
           if (!expanded) setExpanded(true);
         }}
         className={cn(
-          'absolute inset-x-0 bottom-0 z-10 flex flex-col overflow-hidden rounded-t-[28px] bg-[#0d100b]/[0.97] shadow-[0_-16px_48px_rgba(0,0,0,0.55)] transition-[height] duration-[380ms] ease-[cubic-bezier(0.34,1.4,0.64,1)]',
+          'absolute inset-x-0 bottom-0 z-10 flex flex-col overflow-hidden rounded-t-[28px] bg-[var(--glass-panel-strong)] shadow-[0_-16px_48px_rgba(0,0,0,0.55)] transition-[height] duration-[380ms] ease-[cubic-bezier(0.34,1.4,0.64,1)]',
           expanded ? 'h-[80%]' : 'h-[34%]',
         )}
       >
         <div className="flex shrink-0 justify-center pb-1 pt-3">
-          <span className="h-1 w-9 rounded-full bg-[#e8dfcf]/20" />
+          <span className="h-1 w-9 rounded-full bg-[var(--glass-panel-border)]" />
         </div>
 
         <div className="grid shrink-0 grid-cols-[1fr_1px_1fr] px-7 pb-2.5 pt-3.5">
           <HeroMetric label="Durée" value={formatDuration(metrics.durationSec)} />
-          <div className="bg-[#e8dfcf]/10" />
+          <div className="bg-[var(--glass-panel-border)]" />
           <HeroMetric label="Distance" value={`${metrics.distanceKm.toFixed(2)} km`} align="right" />
         </div>
 
         <div className="shrink-0 px-5 pb-2">
           <div className="mb-1.5 flex items-center justify-between">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.07em] text-[#e8dfcf]/45">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.07em] text-[var(--glass-panel-muted)]">
               FC en temps réel
             </p>
             {metrics.hr != null ? (
@@ -119,7 +119,7 @@ function LiveSessionContent({ sessionId }: { sessionId: string }) {
             data={hrSeries}
             color="#FCA5A5"
             height={56}
-            className="bg-white/[0.03]"
+            className="bg-[var(--glass-tile)]"
           />
         </div>
 
@@ -131,7 +131,7 @@ function LiveSessionContent({ sessionId }: { sessionId: string }) {
             <button
               type="button"
               onClick={() => setExpanded(false)}
-              className="mb-3 ml-auto block rounded-full bg-[#e8dfcf]/[0.07] px-3 py-1.5 text-[11px] font-medium text-[#e8dfcf]/55"
+              className="mb-3 ml-auto block rounded-full bg-[var(--glass-tile)] px-3 py-1.5 text-[11px] font-medium text-[var(--glass-panel-muted)]"
             >
               Réduire ↓
             </button>
@@ -144,17 +144,17 @@ function LiveSessionContent({ sessionId }: { sessionId: string }) {
 
             {metrics.splits.length > 0 ? (
               <div className="mt-4">
-                <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.07em] text-[#e8dfcf]/45">
+                <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.07em] text-[var(--glass-panel-muted)]">
                   Splits
                 </p>
                 <div className="flex flex-col gap-1">
                   {metrics.splits.map((split) => (
                     <div
                       key={split.km}
-                      className="grid grid-cols-[1fr_auto_auto] items-center gap-3 rounded-md bg-[#e8dfcf]/[0.04] px-3 py-2 text-[13px]"
+                      className="grid grid-cols-[1fr_auto_auto] items-center gap-3 rounded-md bg-[var(--glass-tile)] px-3 py-2 text-[13px]"
                     >
-                      <span className="text-[#e8dfcf]/70">km {split.km}</span>
-                      <span className="font-semibold tabular-nums text-[#f0e8d8]">
+                      <span className="text-[var(--glass-panel-muted)]">km {split.km}</span>
+                      <span className="font-semibold tabular-nums text-[var(--glass-panel-fg)]">
                         {formatPace(split.paceMinPerKm)}
                       </span>
                       {split.avgHr != null ? (
@@ -167,7 +167,7 @@ function LiveSessionContent({ sessionId }: { sessionId: string }) {
                 </div>
               </div>
             ) : (
-              <div className="mt-4 rounded-[10px] border border-white/[0.07] bg-white/[0.04] px-3 py-4 text-center text-xs text-[#e8dfcf]/55">
+              <div className="mt-4 rounded-[10px] border border-[var(--glass-panel-border)] bg-[var(--glass-tile)] px-3 py-4 text-center text-xs text-[var(--glass-panel-muted)]">
                 Les splits apparaîtront après le premier kilomètre.
               </div>
             )}
@@ -190,7 +190,7 @@ function ConnectionBadge({ state }: { state: ConnState }) {
         'absolute right-4 top-[max(14px,env(safe-area-inset-top))] z-[8] inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-xs font-semibold backdrop-blur-xl',
         active
           ? 'border-success/35 bg-success/20 text-success-soft'
-          : 'border-white/10 bg-[#191815]/60 text-[#a8a192]/70',
+          : 'border-[var(--glass-panel-border)] bg-[var(--glass-panel)] text-[var(--glass-panel-muted)]',
       )}
     >
       <Icon className="h-3.5 w-3.5" />
@@ -211,10 +211,10 @@ function HeroMetric({
 }) {
   return (
     <div className={cn('min-w-0', align === 'right' && 'text-right')}>
-      <span className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.07em] text-[#e8dfcf]/50">
+      <span className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.07em] text-[var(--glass-panel-muted)]">
         {label}
       </span>
-      <strong className="font-display block truncate text-[30px] font-medium leading-none tracking-tight text-[#f0e8d8]">
+      <strong className="font-display block truncate text-[30px] font-medium leading-none tracking-tight text-[var(--glass-panel-fg)]">
         {value}
       </strong>
     </div>
@@ -223,11 +223,11 @@ function HeroMetric({
 
 function SheetMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-white/[0.08] bg-[#e8dfcf]/[0.06] px-2 py-2.5 text-center">
-      <p className="mb-1.5 text-[9px] font-semibold uppercase tracking-[0.05em] text-[#e8dfcf]/45">
+    <div className="rounded-lg border border-[var(--glass-panel-border)] bg-[var(--glass-tile)] px-2 py-2.5 text-center">
+      <p className="mb-1.5 text-[9px] font-semibold uppercase tracking-[0.05em] text-[var(--glass-panel-muted)]">
         {label}
       </p>
-      <p className="font-display text-[15px] font-bold leading-none text-[#f0e8d8]">
+      <p className="font-display text-[15px] font-bold leading-none text-[var(--glass-panel-fg)]">
         {value}
       </p>
     </div>

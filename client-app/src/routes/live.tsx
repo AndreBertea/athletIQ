@@ -142,7 +142,7 @@ function LiveContent() {
             />
 
             {error ? (
-              <div className="flex items-start gap-1.5 rounded-md border border-[rgba(239,68,68,0.25)] bg-danger-bg px-2.5 py-2">
+              <div className="flex items-start gap-1.5 rounded-md border border-danger/40 bg-danger-bg px-2.5 py-2">
                 <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-danger-fg" />
                 <span className="text-xs leading-relaxed text-danger-fg">{error}</span>
               </div>

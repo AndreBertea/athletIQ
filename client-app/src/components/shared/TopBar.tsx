@@ -63,9 +63,8 @@ export function TopBar({
       style={{
         paddingTop: `max(${TOPBAR_INSET_FALLBACK}px, env(safe-area-inset-top))`,
         minHeight: `calc(${TOPBAR_TOUCH_HEIGHT}px + max(${TOPBAR_INSET_FALLBACK}px, env(safe-area-inset-top)))`,
-        // Gradient terra red AGON sur deep night
-        background:
-          'linear-gradient(180deg, rgba(160,67,46,0.20) 0%, rgba(25,24,21,0.55) 100%)',
+        // Gradient AGON adaptatif (terra→night en dark, terra→ivoire en clair).
+        background: 'var(--topbar-bg)',
         WebkitBackdropFilter: 'blur(18px) saturate(160%)',
       }}
     >
@@ -95,7 +94,7 @@ export function TopBar({
               key={i}
               className={cn(
                 'h-2 rounded-full transition-all',
-                i === dotsActive ? 'w-6 bg-brand-cyan' : 'w-2 bg-white/20',
+                i === dotsActive ? 'w-6 bg-brand-cyan' : 'w-2 bg-[var(--active-overlay)]',
               )}
             />
           ))}
@@ -141,7 +140,7 @@ function BackButton({ onBack }: BackButtonProps) {
       type="button"
       onClick={onBack}
       aria-label="Retour"
-      className="flex h-9 w-9 items-center justify-center rounded-full bg-white/5 text-foreground transition hover:bg-white/10"
+      className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--hover-overlay)] text-foreground transition hover:bg-[var(--active-overlay)]"
     >
       <svg
         width="20"

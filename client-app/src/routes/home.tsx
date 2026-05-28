@@ -114,7 +114,7 @@ function CheckinStatusCard({
   return (
     <Link
       to="/checkin"
-      className="flex items-center justify-between rounded-md border border-border-subtle bg-card px-3.5 py-3 transition active:bg-white/10"
+      className="flex items-center justify-between rounded-md border border-border-subtle bg-card px-3.5 py-3 transition active:bg-[var(--active-overlay)]"
     >
       <div>
         <p className="text-[13px] font-semibold leading-tight text-foreground">
@@ -124,7 +124,7 @@ function CheckinStatusCard({
           60 sec · 4 questions sur ton état du jour
         </p>
       </div>
-      <span className="rounded-full bg-brand-primary px-3 py-1 text-[11px] font-semibold text-foreground">
+      <span className="rounded-full bg-brand-primary px-3 py-1 text-[11px] font-semibold text-white">
         Ouvrir
       </span>
     </Link>
@@ -294,7 +294,7 @@ function CompactScoreGauge({ score, color }: { score: number; color: ZColor }) {
           cy="40"
           r={radius}
           fill="none"
-          stroke="rgba(245,239,224,0.08)"
+          stroke="var(--chart-grid)"
           strokeWidth="7"
         />
         <circle
