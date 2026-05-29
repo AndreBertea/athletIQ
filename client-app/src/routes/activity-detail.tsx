@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type TouchEvent as ReactTouchEvent } from 'react';
+import { useMemo, useRef, useState, type ReactNode, type TouchEvent as ReactTouchEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
@@ -262,27 +262,10 @@ export default function ActivityDetailRoute() {
                   className="flex-1 overflow-y-auto px-6 pb-[calc(24px+env(safe-area-inset-bottom))]"
                   onClick={(event) => event.stopPropagation()}
                 >
-                  {/* Altimétrie en grand (remplace la petite version repliée) */}
-                  <div className="mb-4 mt-1">
-                    <div className="mb-2 flex items-baseline justify-between">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--glass-panel-muted)]">
-                        Profil d'altitude
-                      </p>
-                      {altitudeStats ? (
-                        <p className="text-[10px] tabular-nums text-[var(--glass-panel-muted)]">
-                          {altitudeStats.min}–{altitudeStats.max} m
-                          {activity.elev_gain_m != null
-                            ? ` · D+ ${Math.round(activity.elev_gain_m)} m`
-                            : ''}
-                        </p>
-                      ) : null}
-                    </div>
-                    <MiniAreaChart
-                      data={altitudeSeries}
-                      color="#9C49F5"
-                      height={184}
-                      className="bg-[var(--glass-tile)]"
-                    />
+                  {/* Pile de graphiques swipeable (altitude → allure → FC),
+                      épinglée en haut du contenu déplié. */}
+                  <div className="sticky top-0 z-10 -mx-6 mb-3 bg-[var(--glass-panel-strong)] px-6 pb-3 pt-1">
+                    <StreamStack streamData={streamData} />
                   </div>
 
                   <div className="grid grid-cols-4 gap-2">
@@ -554,6 +537,102 @@ function DataCoverage({ activity }: { activity: EnrichedActivity }) {
   );
 }
 
+type StackCard = {
+  key: string;
+  title: string;
+  unit: string;
+  color: string;
+  dataKey: keyof StreamPoint;
+};
+
+/**
+ * Pile de graphiques empilés et swipeables : altitude (défaut) → allure → FC.
+ * Swipe horizontal ou tap sur les dots pour défiler. L'indicateur (dots) est
+ * affiché à côté du titre du graphique courant. Remplace les graphiques
+ * séparés du panneau Streams.
+ */
+function StreamStack({ streamData }: { streamData: StreamPoint[] }) {
+  const cards = useMemo<StackCard[]>(() => {
+    const out: StackCard[] = [];
+    if (streamData.some((point) => point.altitude != null))
+      out.push({ key: 'altitude', title: "Profil d'altitude", unit: 'm', color: '#9C49F5', dataKey: 'altitude' });
+    if (streamData.some((point) => point.pace != null))
+      out.push({ key: 'pace', title: 'Allure', unit: 'min/km', color: 'var(--success)', dataKey: 'pace' });
+    if (streamData.some((point) => point.heartrate != null))
+      out.push({ key: 'heartrate', title: 'Fréquence cardiaque', unit: 'bpm', color: 'var(--danger)', dataKey: 'heartrate' });
+    return out;
+  }, [streamData]);
+
+  const [index, setIndex] = useState(0);
+  const touchX = useRef<number | null>(null);
+
+  if (cards.length === 0) return null;
+
+  const safeIndex = Math.min(index, cards.length - 1);
+  const active = cards[safeIndex]!;
+  const go = (next: number) => setIndex(((next % cards.length) + cards.length) % cards.length);
+
+  const onTouchStart = (event: ReactTouchEvent) => {
+    touchX.current = event.touches[0]?.clientX ?? null;
+  };
+  const onTouchEnd = (event: ReactTouchEvent) => {
+    const start = touchX.current;
+    touchX.current = null;
+    if (start == null) return;
+    const deltaX = (event.changedTouches[0]?.clientX ?? start) - start;
+    if (deltaX < -40) go(safeIndex + 1);
+    else if (deltaX > 40) go(safeIndex - 1);
+  };
+
+  const dots = (
+    <span className="flex items-center gap-1" role="tablist" aria-label="Graphiques">
+      {cards.map((card, i) => (
+        <button
+          key={card.key}
+          type="button"
+          role="tab"
+          aria-selected={i === safeIndex}
+          aria-label={card.title}
+          onClick={() => go(i)}
+          className={cn(
+            'h-1.5 rounded-full transition-all',
+            i === safeIndex ? 'w-4 bg-brand-primary' : 'w-1.5 bg-[var(--active-overlay)]',
+          )}
+        />
+      ))}
+    </span>
+  );
+
+  return (
+    <div className="relative select-none" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+      {/* Couches empilées derrière (effet pile) */}
+      {cards.length > 1 ? (
+        <div
+          aria-hidden="true"
+          className="border-border-subtle bg-card absolute inset-x-2 -bottom-1.5 top-2 rounded-md border opacity-50"
+        />
+      ) : null}
+      {cards.length > 2 ? (
+        <div
+          aria-hidden="true"
+          className="border-border-subtle bg-card absolute inset-x-4 -bottom-3 top-3.5 rounded-md border opacity-30"
+        />
+      ) : null}
+
+      <div className="relative z-10">
+        <StreamChart
+          title={active.title}
+          data={streamData}
+          dataKey={active.dataKey}
+          unit={active.unit}
+          color={active.color}
+          indicator={dots}
+        />
+      </div>
+    </div>
+  );
+}
+
 function StreamsPanel({
   data,
   isLoading,
@@ -565,9 +644,6 @@ function StreamsPanel({
 }) {
   const streamData = useMemo(() => buildStreamData(data?.streams), [data?.streams]);
   const pointCount = streamData.length;
-  const hasAltitude = streamData.some((point) => point.altitude != null);
-  const hasHr = streamData.some((point) => point.heartrate != null);
-  const hasPace = streamData.some((point) => point.pace != null);
 
   if (isLoading) return <LoadingBlock label="Chargement des streams..." />;
   if (isError || !data?.streams) {
@@ -583,40 +659,9 @@ function StreamsPanel({
         <MetricCard icon={Activity} label="Points" value={String(pointCount)} />
         <MetricCard icon={Gauge} label="Distance axe" value={`${streamData[pointCount - 1]?.km.toFixed(1) ?? '—'} km`} />
       </div>
-
-      {hasAltitude ? (
-        <StreamChart
-          title="Altitude"
-          data={streamData}
-          dataKey="altitude"
-          unit="m"
-          color="var(--brand-sunset)"
-        />
-      ) : null}
-
-      {hasHr ? (
-        <StreamChart
-          title="Frequence cardiaque"
-          data={streamData}
-          dataKey="heartrate"
-          unit="bpm"
-          color="var(--danger)"
-        />
-      ) : null}
-
-      {hasPace ? (
-        <StreamChart
-          title="Allure"
-          data={streamData}
-          dataKey="pace"
-          unit="min/km"
-          color="var(--success)"
-        />
-      ) : null}
-
-      {!hasAltitude && !hasHr && !hasPace ? (
-        <EmptyBlock icon={Activity} title="Streams présents, graphiques à compléter" />
-      ) : null}
+      <p className="text-muted-foreground text-[11px]">
+        Altitude, allure et FC sont regroupés dans la pile de graphiques en haut.
+      </p>
     </section>
   );
 }
@@ -627,12 +672,14 @@ function StreamChart({
   dataKey,
   unit,
   color,
+  indicator,
 }: {
   title: string;
   data: StreamPoint[];
   dataKey: keyof StreamPoint;
   unit: string;
   color: string;
+  indicator?: ReactNode;
 }) {
   const values = data
     .map((point) => point[dataKey])
@@ -650,7 +697,10 @@ function StreamChart({
   return (
     <section className="border-border-subtle bg-card rounded-md border p-4">
       <div className="mb-3 flex items-baseline justify-between gap-2">
-        <p className="text-eyebrow">{title}</p>
+        <div className="flex items-center gap-2">
+          <p className="text-eyebrow">{title}</p>
+          {indicator}
+        </div>
         {stats ? (
           <span className="text-muted-foreground text-[10px] tabular-nums">
             min {fmt(stats.min)} · moy {fmt(stats.avg)} · max {fmt(stats.max)} {unit}
