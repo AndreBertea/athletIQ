@@ -116,6 +116,10 @@ export default function RouteMapTiler({
         center: firstCenter,
         zoom: 13,
         attributionControl: false,
+        // On masque les boutons de zoom/boussole, on garde uniquement le
+        // bouton de géolocalisation personnelle.
+        navigationControl: false,
+        geolocateControl: true,
       });
 
       mapRef.current = map;

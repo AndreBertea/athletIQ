@@ -16,7 +16,6 @@ import {
   Gauge,
   Heart,
   Map as MapIcon,
-  MoreHorizontal,
   Mountain,
   MoveVertical,
   RefreshCw,
@@ -156,14 +155,6 @@ export default function ActivityDetailRoute() {
             >
               <ArrowLeft className="h-4 w-4" />
               Retour
-            </button>
-
-            <button
-              type="button"
-              aria-label="Options activité"
-              className="absolute right-5 top-[calc(max(14px,env(safe-area-inset-top))+66px)] z-[6] flex h-9 w-9 items-center justify-center rounded-full text-[var(--glass-panel-muted)]"
-            >
-              <MoreHorizontal className="h-6 w-6" />
             </button>
 
             <div className="absolute left-6 top-[calc(max(14px,env(safe-area-inset-top))+50px)] z-[5]">
