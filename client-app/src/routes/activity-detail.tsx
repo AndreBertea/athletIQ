@@ -58,16 +58,26 @@ const TABS: Array<{ id: TabId; label: string; Icon: LucideIcon }> = [
   { id: 'map', label: 'Carte', Icon: MapIcon },
 ];
 
+// 3 hauteurs du sheet, du plus petit (carte maximisée) au plus grand (déplié).
+type SheetMode = 'maxi' | 'standard' | 'expanded';
+const SHEET_ORDER: SheetMode[] = ['maxi', 'standard', 'expanded'];
+
 export default function ActivityDetailRoute() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabId>('streams');
-  const [expanded, setExpanded] = useState(false);
+  const [sheetMode, setSheetMode] = useState<SheetMode>('standard');
   const queryClient = useQueryClient();
 
-  // Geste vertical sur la poignée du sheet : on swipe vers le haut pour
-  // déplier, vers le bas pour replier. Pas de bouton dédié (geste suffisant).
+  // Geste vertical sur la poignée : swipe haut = mode suivant (vers déplié),
+  // swipe bas = mode précédent (vers carte maximisée). Tap = standard ↔ déplié.
   const sheetTouchStartY = useRef<number | null>(null);
+  const cycleSheet = (dir: 1 | -1) =>
+    setSheetMode((mode) => {
+      const i = SHEET_ORDER.indexOf(mode);
+      const next = Math.min(SHEET_ORDER.length - 1, Math.max(0, i + dir));
+      return SHEET_ORDER[next] ?? mode;
+    });
   const onSheetTouchStart = (event: ReactTouchEvent) => {
     sheetTouchStartY.current = event.touches[0]?.clientY ?? null;
   };
@@ -76,8 +86,8 @@ export default function ActivityDetailRoute() {
     sheetTouchStartY.current = null;
     if (startY == null) return;
     const deltaY = (event.changedTouches[0]?.clientY ?? startY) - startY;
-    if (deltaY < -40) setExpanded(true);
-    else if (deltaY > 40) setExpanded(false);
+    if (deltaY < -40) cycleSheet(1);
+    else if (deltaY > 40) cycleSheet(-1);
   };
 
   const activityQuery = useQuery({
@@ -148,6 +158,9 @@ export default function ActivityDetailRoute() {
   );
   const sport = activity ? getSportPresentation(activity.sport_type) : null;
   const pace = activity ? speedToPace(activity.avg_speed_m_s ?? activity.avg_speed_mps ?? null) : null;
+  const startTime = activity
+    ? new Date(activity.start_date_utc).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+    : '';
   const weather = weatherEnrich.data ?? weatherQuery.data;
 
   return (
@@ -183,23 +196,27 @@ export default function ActivityDetailRoute() {
                 {formatDistance(activity.distance_m).replace(/\s?km$/i, '')}{' '}
                 <span className="text-lg font-normal text-[var(--glass-panel-muted)]">km</span>
               </p>
-              <p className="mt-2 text-[15px] font-semibold text-[var(--glass-panel-muted)]">
+              <p className="mt-1 font-display text-xl font-semibold tracking-tight text-[var(--spark)] drop-shadow-[0_2px_12px_rgba(156,73,245,0.45)]">
                 {formatDuration(activity.moving_time_s)}
               </p>
             </div>
 
             <section
               className={cn(
-                'absolute inset-x-0 bottom-0 z-10 flex flex-col overflow-hidden rounded-t-[28px] bg-[var(--glass-panel-strong)] shadow-[0_-16px_48px_rgba(0,0,0,0.55)] transition-[height] duration-[380ms] ease-[cubic-bezier(0.34,1.4,0.64,1)]',
-                expanded ? 'h-[82%]' : 'h-[34%]',
+                'absolute inset-x-0 bottom-0 z-10 flex flex-col overflow-hidden rounded-t-[28px] bg-[var(--glass-panel)] shadow-[0_-16px_48px_rgba(0,0,0,0.55)] backdrop-blur-2xl transition-[height] duration-[380ms] ease-[cubic-bezier(0.34,1.4,0.64,1)]',
+                sheetMode === 'expanded'
+                  ? 'h-[82%]'
+                  : sheetMode === 'standard'
+                    ? 'h-[34%]'
+                    : 'h-[18%]',
               )}
             >
-              {/* Poignée + en-tête = zone de geste : swipe haut/bas pour
-                  déplier/replier. Tap sur la poignée = toggle (fallback). */}
+              {/* Poignée + en-tête = zone de geste : swipe haut/bas pour changer
+                  de mode (maxi ↔ standard ↔ déplié). Tap = standard ↔ déplié. */}
               <div
                 onTouchStart={onSheetTouchStart}
                 onTouchEnd={onSheetTouchEnd}
-                onClick={() => setExpanded((value) => !value)}
+                onClick={() => setSheetMode((m) => (m === 'standard' ? 'expanded' : 'standard'))}
                 className="shrink-0 cursor-grab touch-none active:cursor-grabbing"
               >
                 <div className="flex justify-center pb-1 pt-3">
@@ -212,31 +229,35 @@ export default function ActivityDetailRoute() {
                       {activity.name}
                     </h1>
                     <p className="mt-0.5 truncate text-[11px] text-[var(--glass-panel-muted)]">
-                      {formatDateLong(activity.start_date_utc)} · {sport?.label ?? activity.sport_type}
-                      {pace ? ` · ${formatPace(pace)}` : ''}
+                      {sheetMode === 'maxi'
+                        ? `${formatDateLong(activity.start_date_utc)} · ${startTime}${pace ? ` · ${formatPace(pace)}` : ''}`
+                        : `${formatDateLong(activity.start_date_utc)} · ${sport?.label ?? activity.sport_type}${pace ? ` · ${formatPace(pace)}` : ''}`}
                     </p>
                   </div>
                 </div>
               </div>
 
-              <div className="grid shrink-0 grid-cols-[1fr_1px_1fr] px-7 pb-3 pt-4">
-                <ActivityHeroMetric
-                  label="Rythme moyen"
-                  value={pace ? formatPace(pace).replace('/km', '') : '—'}
-                  unit="/KM"
-                />
-                <div className="bg-[var(--glass-panel-border)]" />
-                <ActivityHeroMetric
-                  label="D+"
-                  value={activity.elev_gain_m != null ? String(Math.round(activity.elev_gain_m)) : '—'}
-                  unit="M"
-                  align="right"
-                />
-              </div>
+              {/* Métriques héro masquées en mode maxi (carte maximisée). */}
+              {sheetMode !== 'maxi' ? (
+                <div className="grid shrink-0 grid-cols-[1fr_1px_1fr] px-7 pb-3 pt-4">
+                  <ActivityHeroMetric
+                    label="Rythme moyen"
+                    value={pace ? formatPace(pace).replace('/km', '') : '—'}
+                    unit="/KM"
+                  />
+                  <div className="bg-[var(--glass-panel-border)]" />
+                  <ActivityHeroMetric
+                    label="D+"
+                    value={activity.elev_gain_m != null ? String(Math.round(activity.elev_gain_m)) : '—'}
+                    unit="M"
+                    align="right"
+                  />
+                </div>
+              ) : null}
 
-              {/* Petite altimétrie — visible uniquement quand le sheet est replié.
-                  Dépliée, elle laisse place à la grande version ci-dessous. */}
-              {!expanded ? (
+              {/* Petite altimétrie — uniquement en mode standard.
+                  Dépliée, elle laisse place à la pile de graphiques ci-dessous. */}
+              {sheetMode === 'standard' ? (
                 <div className="shrink-0 px-5 pb-3">
                   <div className="mb-2 flex items-baseline justify-between">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--glass-panel-muted)]">
@@ -257,14 +278,14 @@ export default function ActivityDetailRoute() {
                 </div>
               ) : null}
 
-              {expanded ? (
+              {sheetMode === 'expanded' ? (
                 <div
                   className="flex-1 overflow-y-auto px-6 pb-[calc(24px+env(safe-area-inset-bottom))]"
                   onClick={(event) => event.stopPropagation()}
                 >
                   {/* Pile de graphiques swipeable (altitude → allure → FC),
                       épinglée en haut du contenu déplié. */}
-                  <div className="sticky top-0 z-10 -mx-6 mb-3 bg-[var(--glass-panel-strong)] px-6 pb-3 pt-1">
+                  <div className="sticky top-0 z-10 -mx-6 mb-3 bg-[var(--glass-panel)] px-6 pb-3 pt-1 backdrop-blur-xl">
                     <StreamStack streamData={streamData} />
                   </div>
 
@@ -609,13 +630,13 @@ function StreamStack({ streamData }: { streamData: StreamPoint[] }) {
       {cards.length > 1 ? (
         <div
           aria-hidden="true"
-          className="border-border-subtle bg-card absolute inset-x-2 -bottom-1.5 top-2 rounded-md border opacity-50"
+          className="border-border-subtle bg-card absolute inset-x-2 -bottom-1.5 top-2 rounded-md border opacity-60"
         />
       ) : null}
       {cards.length > 2 ? (
         <div
           aria-hidden="true"
-          className="border-border-subtle bg-card absolute inset-x-4 -bottom-3 top-3.5 rounded-md border opacity-30"
+          className="border-border-subtle bg-card absolute inset-x-4 -bottom-3 top-3.5 rounded-md border opacity-40"
         />
       ) : null}
 
