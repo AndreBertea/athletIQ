@@ -169,6 +169,22 @@ class LiveService {
     let closed = false
     handlers.onStatusChange?.('connecting')
 
+    const emitSnapshot = () => {
+      this.getSession(id)
+        .then((detail) => {
+          if (closed) return
+          const { points, ...session } = detail
+          handlers.onMessage({ type: 'snapshot', session, points })
+        })
+        .catch(() => {
+          if (!closed) handlers.onStatusChange?.('reconnecting')
+        })
+    }
+
+    // Charge l'etat initial sans attendre l'abonnement Realtime. Sinon une
+    // session existante peut afficher une carte vide quand Realtime tarde.
+    emitSnapshot()
+
     const channel = supabase
       .channel(`live:${id}`)
       .on(
@@ -192,15 +208,9 @@ class LiveService {
         if (closed) return
         if (status === 'SUBSCRIBED') {
           handlers.onStatusChange?.('open')
-          // Snapshot initial une fois abonne (les points arrives entre-temps
-          // seront inclus dans le snapshot, le caller remplace son etat).
-          this.getSession(id)
-            .then((detail) => {
-              if (closed) return
-              const { points, ...session } = detail
-              handlers.onMessage({ type: 'snapshot', session, points })
-            })
-            .catch(() => {/* ignore : les points temps reel continueront */})
+          // Re-snapshot une fois abonne : les points arrives entre-temps sont
+          // inclus et le caller remplace son etat sans doublons.
+          emitSnapshot()
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
           handlers.onStatusChange?.('reconnecting')
         } else if (status === 'CLOSED') {
