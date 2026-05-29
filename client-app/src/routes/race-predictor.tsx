@@ -1830,7 +1830,16 @@ function PacingBriefingVisual({
             Profil altimetrique
           </span>
           <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
-            <span className="h-1.5 w-1.5 rounded-full bg-brand-sunset" />
+            <span className="inline-flex -space-x-0.5">
+              <span
+                className="h-1.5 w-1.5 rounded-full"
+                style={{ background: 'var(--warning)' }}
+              />
+              <span
+                className="h-1.5 w-1.5 rounded-full"
+                style={{ background: 'var(--info)' }}
+              />
+            </span>
             Ravito
           </span>
         </div>
@@ -2003,6 +2012,23 @@ function pacingDotColor(service: CoursePacingPoint['service']): string {
   }
 }
 
+function pacingGraphMarkerColor(service: CoursePacingPoint['service']): string {
+  switch (service) {
+    case 'hot_food':
+      return 'var(--brand-sunset)';
+    case 'food':
+      return 'var(--warning)';
+    case 'drink':
+      return 'var(--info)';
+    case 'finish':
+      return 'var(--success-fg)';
+    case 'start':
+      return 'var(--success-fg)';
+    default:
+      return 'var(--muted-foreground)';
+  }
+}
+
 function ElevationProfileChart({
   prediction,
   rows,
@@ -2067,8 +2093,8 @@ function ElevationProfileChart({
     >
       <defs>
         <linearGradient id="pacing-elevation-fill" x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%" stopColor="var(--brand-sunset)" stopOpacity="0.34" />
-          <stop offset="100%" stopColor="var(--brand-sunset)" stopOpacity="0.02" />
+          <stop offset="0%" stopColor="var(--spark)" stopOpacity="0.34" />
+          <stop offset="100%" stopColor="var(--spark)" stopOpacity="0.02" />
         </linearGradient>
       </defs>
 
@@ -2083,7 +2109,7 @@ function ElevationProfileChart({
       <polyline
         points={linePts}
         fill="none"
-        stroke="var(--brand-sunset)"
+        stroke="var(--spark)"
         strokeWidth="1.8"
         strokeLinejoin="round"
         strokeLinecap="round"
@@ -2124,6 +2150,7 @@ function ElevationProfileChart({
       {ravitos.map((row) => {
         const px = xForKm(row.km);
         const py = yForAlt(altAt(row.km));
+        const color = pacingGraphMarkerColor(row.service);
         return (
           <g key={`ravito-${row.name}-${row.km}`}>
             <line
@@ -2131,7 +2158,7 @@ function ElevationProfileChart({
               x2={px}
               y1={py}
               y2={H - botAxis}
-              stroke="var(--brand-sunset)"
+              stroke={color}
               strokeWidth="1"
               strokeDasharray="2 2"
               opacity="0.45"
@@ -2140,14 +2167,14 @@ function ElevationProfileChart({
               cx={px}
               cy={py}
               r="3.5"
-              fill="var(--brand-sunset)"
+              fill={color}
               stroke="var(--card)"
               strokeWidth="1.5"
             />
             <text
               x={px + 3}
               y={py - 6}
-              fill="var(--brand-sunset)"
+              fill={color}
               fontSize="8"
               fontWeight="700"
               textAnchor="start"
