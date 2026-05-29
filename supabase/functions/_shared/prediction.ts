@@ -91,34 +91,35 @@ export function assertGpxSize(sizeBytes: number): void {
 }
 
 export function parseGpx(gpxText: string): GpxPoint[] {
-  const doc = new DOMParser().parseFromString(gpxText, "application/xml");
-  if (doc.querySelector("parsererror")) {
-    throw new Error("GPX invalide ou illisible.");
+  // Le runtime Edge (Deno) n'expose pas DOMParser : on parse le GPX par regex.
+  // GPX reste un XML regulier ; on extrait chaque trkpt/rtept, auto-fermant ou paire.
+  const points: GpxPoint[] = [];
+  const pointRe = /<(trkpt|rtept)\b([^>]*?)(?:\/>|>([\s\S]*?)<\/\1\s*>)/gi;
+  let match: RegExpExecArray | null;
+  while ((match = pointRe.exec(gpxText)) !== null) {
+    const attrs = match[2] ?? "";
+    const body = match[3] ?? "";
+    const lat = Number(attrs.match(/\blat\s*=\s*["']([^"']+)["']/i)?.[1]);
+    const lon = Number(attrs.match(/\blon\s*=\s*["']([^"']+)["']/i)?.[1]);
+    const eleText = body.match(/<ele[^>]*>([^<]+)<\/ele\s*>/i)?.[1];
+    const time = body.match(/<time[^>]*>([^<]+)<\/time\s*>/i)?.[1];
+    points.push({
+      lat,
+      lon,
+      ele: eleText == null ? 0 : Number(eleText),
+      time: time ?? undefined,
+    });
   }
 
-  const nodes = Array.from(doc.querySelectorAll("trkpt, rtept"));
-  const points = nodes
-    .map((node) => {
-      const lat = Number(node.getAttribute("lat"));
-      const lon = Number(node.getAttribute("lon"));
-      const eleText = node.querySelector("ele")?.textContent;
-      const time = node.querySelector("time")?.textContent ?? undefined;
-      return {
-        lat,
-        lon,
-        ele: eleText == null ? 0 : Number(eleText),
-        time,
-      };
-    })
-    .filter((point) =>
-      Number.isFinite(point.lat) &&
-      Number.isFinite(point.lon) &&
-      Math.abs(point.lat) <= 90 &&
-      Math.abs(point.lon) <= 180
-    );
+  const valid = points.filter((point) =>
+    Number.isFinite(point.lat) &&
+    Number.isFinite(point.lon) &&
+    Math.abs(point.lat) <= 90 &&
+    Math.abs(point.lon) <= 180
+  );
 
-  if (points.length < 2) throw new Error("Le GPX doit contenir au moins 2 points.");
-  return downsample(points, MAX_POINTS);
+  if (valid.length < 2) throw new Error("Le GPX doit contenir au moins 2 points.");
+  return downsample(valid, MAX_POINTS);
 }
 
 export async function buildRacePrediction(
