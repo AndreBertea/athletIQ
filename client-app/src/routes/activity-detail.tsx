@@ -155,7 +155,7 @@ export default function ActivityDetailRoute() {
 
             <div className="absolute left-6 top-[calc(max(14px,env(safe-area-inset-top))+50px)] z-[5]">
               <p className="font-display text-[42px] font-medium leading-none tracking-tight text-[var(--glass-panel-fg)]">
-                {formatDistance(activity.distance_m)}{' '}
+                {formatDistance(activity.distance_m).replace(/\s?km$/i, '')}{' '}
                 <span className="text-lg font-normal text-[var(--glass-panel-muted)]">km</span>
               </p>
               <p className="mt-2 text-[15px] font-semibold text-[var(--glass-panel-muted)]">
