@@ -46,6 +46,7 @@ import {
   speedToPace,
 } from '@/lib/activity-format';
 import { cn } from '@/lib/utils';
+import { actionColor } from '@/lib/accent';
 
 type TabId = 'streams' | 'segments' | 'fit' | 'weather' | 'map';
 
@@ -132,6 +133,15 @@ export default function ActivityDetailRoute() {
     () => buildStreamData(streamsQuery.data?.streams),
     [streamsQuery.data?.streams],
   );
+  const altitudeSeries = useMemo(
+    () => streamData.map((point) => point.altitude),
+    [streamData],
+  );
+  const altitudeStats = useMemo(() => {
+    const vals = altitudeSeries.filter((v): v is number => Number.isFinite(v));
+    if (!vals.length) return null;
+    return { min: Math.round(Math.min(...vals)), max: Math.round(Math.max(...vals)) };
+  }, [altitudeSeries]);
   const routeTrack = useMemo(
     () => (activity ? buildRouteTrack(activity, streamsQuery.data?.streams) : null),
     [activity, streamsQuery.data?.streams],
@@ -224,23 +234,57 @@ export default function ActivityDetailRoute() {
                 />
               </div>
 
-              <div className="shrink-0 px-5 pb-3">
-                <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--glass-panel-muted)]">
-                  Profil d'altitude
-                </p>
-                <MiniAreaChart
-                  data={streamData.map((point) => point.altitude)}
-                  color="#9C49F5"
-                  height={72}
-                  className="bg-[var(--glass-tile)]"
-                />
-              </div>
+              {/* Petite altimétrie — visible uniquement quand le sheet est replié.
+                  Dépliée, elle laisse place à la grande version ci-dessous. */}
+              {!expanded ? (
+                <div className="shrink-0 px-5 pb-3">
+                  <div className="mb-2 flex items-baseline justify-between">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--glass-panel-muted)]">
+                      Profil d'altitude
+                    </p>
+                    {altitudeStats ? (
+                      <p className="text-[10px] tabular-nums text-[var(--glass-panel-muted)]">
+                        {altitudeStats.min}–{altitudeStats.max} m
+                      </p>
+                    ) : null}
+                  </div>
+                  <MiniAreaChart
+                    data={altitudeSeries}
+                    color="#9C49F5"
+                    height={72}
+                    className="bg-[var(--glass-tile)]"
+                  />
+                </div>
+              ) : null}
 
               {expanded ? (
                 <div
                   className="flex-1 overflow-y-auto px-6 pb-[calc(24px+env(safe-area-inset-bottom))]"
                   onClick={(event) => event.stopPropagation()}
                 >
+                  {/* Altimétrie en grand (remplace la petite version repliée) */}
+                  <div className="mb-4 mt-1">
+                    <div className="mb-2 flex items-baseline justify-between">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--glass-panel-muted)]">
+                        Profil d'altitude
+                      </p>
+                      {altitudeStats ? (
+                        <p className="text-[10px] tabular-nums text-[var(--glass-panel-muted)]">
+                          {altitudeStats.min}–{altitudeStats.max} m
+                          {activity.elev_gain_m != null
+                            ? ` · D+ ${Math.round(activity.elev_gain_m)} m`
+                            : ''}
+                        </p>
+                      ) : null}
+                    </div>
+                    <MiniAreaChart
+                      data={altitudeSeries}
+                      color="#9C49F5"
+                      height={184}
+                      className="bg-[var(--glass-tile)]"
+                    />
+                  </div>
+
                   <div className="grid grid-cols-4 gap-2">
                     <SheetStat label="Temps" value={formatDuration(activity.moving_time_s)} />
                     <SheetStat label="Allure" value={pace ? formatPace(pace) : '—'} />
@@ -590,11 +634,30 @@ function StreamChart({
   unit: string;
   color: string;
 }) {
+  const values = data
+    .map((point) => point[dataKey])
+    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+  const stats = values.length
+    ? {
+        min: Math.min(...values),
+        max: Math.max(...values),
+        avg: values.reduce((sum, value) => sum + value, 0) / values.length,
+      }
+    : null;
+  const fmt = (value: number) =>
+    unit === 'min/km' ? formatPace(value) : Math.round(value).toLocaleString('fr-FR');
+
   return (
     <section className="border-border-subtle bg-card rounded-md border p-4">
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex items-baseline justify-between gap-2">
         <p className="text-eyebrow">{title}</p>
-        <span className="text-muted-foreground text-[11px]">{unit}</span>
+        {stats ? (
+          <span className="text-muted-foreground text-[10px] tabular-nums">
+            min {fmt(stats.min)} · moy {fmt(stats.avg)} · max {fmt(stats.max)} {unit}
+          </span>
+        ) : (
+          <span className="text-muted-foreground text-[11px]">{unit}</span>
+        )}
       </div>
       <div className="h-40">
         <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1} initialDimension={{ width: 1, height: 1 }}>
@@ -1225,7 +1288,8 @@ function buildRouteTrack(
   if (routePoints.length === 0) return null;
   return {
     id: String(activity.activity_id ?? activity.id ?? 'activity'),
-    color: '#9C49F5',
+    // Trace = couleur d'action (orange foncé braise), comme les CTA.
+    color: actionColor(),
     width: 4,
     points: routePoints.map(([lng, lat]) => ({ lat, lng })),
   };
