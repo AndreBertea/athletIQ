@@ -33,6 +33,11 @@ import { LanguageSwitcher } from '@/i18n/LanguageSwitcher';
 import { agonApi } from '@/lib/api/agon';
 import { ACCENT_META, ACCENTS, getAccent, setAccent, type Accent } from '@/lib/accent';
 import {
+  getMapThemePref,
+  setMapThemePref,
+  type MapThemePref,
+} from '@/lib/map-theme';
+import {
   DEFAULT_IMPORT_DAYS_BACK,
   IMPORT_PERIOD_OPTIONS,
   formatImportPeriod,
@@ -181,6 +186,8 @@ export function ProfileContent() {
           <ThemeSelector />
           <div className="border-t border-border-subtle" />
           <AccentSelector />
+          <div className="border-t border-border-subtle" />
+          <MapThemeSelector />
         </Section>
 
         {/* Section Notifications — toggle maître + sous-réglages
@@ -408,6 +415,52 @@ function ThemeSelector() {
           </button>
         );
       })}
+    </div>
+  );
+}
+
+function MapThemeSelector() {
+  const [pref, setPref] = useState<MapThemePref>(() => getMapThemePref());
+
+  const choose = (value: MapThemePref) => {
+    setMapThemePref(value);
+    setPref(value);
+  };
+
+  const options = [
+    { value: 'light', label: 'Clair', Icon: Sun },
+    { value: 'dark', label: 'Sombre', Icon: Moon },
+    { value: 'system', label: 'Système', Icon: Monitor },
+  ] as const;
+
+  return (
+    <div className="p-2">
+      <p className="mb-1.5 px-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+        Couleur de la carte
+      </p>
+      <div role="radiogroup" aria-label="Couleur de la carte" className="grid grid-cols-3 gap-1">
+        {options.map(({ value, label, Icon }) => {
+          const active = pref === value;
+          return (
+            <button
+              key={value}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              onClick={() => choose(value)}
+              className={cn(
+                'flex h-11 flex-col items-center justify-center gap-1 rounded-md text-[11px] font-semibold transition',
+                active
+                  ? 'bg-brand-primary text-white shadow-sm'
+                  : 'text-muted-foreground hover:bg-[var(--hover-overlay)] hover:text-foreground',
+              )}
+            >
+              <Icon className="h-4 w-4" />
+              {label}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

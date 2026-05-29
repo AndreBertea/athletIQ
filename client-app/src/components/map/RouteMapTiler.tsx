@@ -1,8 +1,15 @@
 import { useEffect, useMemo, useRef, type MutableRefObject, type ReactNode } from 'react';
 import * as maptilersdk from '@maptiler/sdk';
 import '@maptiler/sdk/dist/maptiler-sdk.css';
+import { useTheme } from 'next-themes';
 import { AlertTriangle, Loader2, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import {
+  MAP_STYLE_DARK,
+  MAP_STYLE_LIGHT,
+  resolveMapDark,
+  useMapThemePref,
+} from '@/lib/map-theme';
 
 export interface RouteMapPoint {
   lat: number;
@@ -61,6 +68,14 @@ export default function RouteMapTiler({
 
   const apiKey = import.meta.env.VITE_MAPTILER_API_KEY as string | undefined;
 
+  // Thème de la carte : préférence utilisateur résolue contre le thème app.
+  const mapThemePref = useMapThemePref();
+  const { resolvedTheme } = useTheme();
+  const styleId = resolveMapDark(mapThemePref, resolvedTheme)
+    ? MAP_STYLE_DARK
+    : MAP_STYLE_LIGHT;
+  const styleIdRef = useRef(styleId);
+
   const normalizedTracks = useMemo<NormalizedTrack[]>(
     () =>
       tracks
@@ -112,7 +127,7 @@ export default function RouteMapTiler({
     if (!mapRef.current) {
       const map = new maptilersdk.Map({
         container: containerRef.current,
-        style: maptilersdk.MapStyle.OUTDOOR as unknown as string,
+        style: styleIdRef.current,
         center: firstCenter,
         zoom: 13,
         attributionControl: false,
@@ -136,6 +151,23 @@ export default function RouteMapTiler({
     applyTracks(map, normalizedTracks, installedRef.current, markersRef.current, showEndpointMarkers);
     positionMap(map, normalizedTracks, focusedTrackId, followLastPoint, fitPadding, fittedRef);
   }, [apiKey, normalizedTracks, focusedTrackId, followLastPoint, showEndpointMarkers, fitPadding]);
+
+  // Bascule clair/sombre à chaud : setStyle recharge le fond et efface
+  // sources/couches → on réinstalle la trace une fois le nouveau style prêt.
+  useEffect(() => {
+    if (styleIdRef.current === styleId) return;
+    styleIdRef.current = styleId;
+    const map = mapRef.current;
+    if (!map || !loadedRef.current) return;
+
+    map.setStyle(styleId);
+    installedRef.current.clear();
+    markersRef.current.forEach((marker) => marker.remove());
+    markersRef.current.clear();
+    map.once('styledata', () => {
+      applyTracks(map, normalizedTracks, installedRef.current, markersRef.current, showEndpointMarkers);
+    });
+  }, [styleId, normalizedTracks, showEndpointMarkers]);
 
   if (!apiKey) {
     return (
