@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState, type TouchEvent as ReactTouchEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
@@ -63,6 +63,21 @@ export default function ActivityDetailRoute() {
   const [activeTab, setActiveTab] = useState<TabId>('streams');
   const [expanded, setExpanded] = useState(false);
   const queryClient = useQueryClient();
+
+  // Geste vertical sur la poignée du sheet : on swipe vers le haut pour
+  // déplier, vers le bas pour replier. Pas de bouton dédié (geste suffisant).
+  const sheetTouchStartY = useRef<number | null>(null);
+  const onSheetTouchStart = (event: ReactTouchEvent) => {
+    sheetTouchStartY.current = event.touches[0]?.clientY ?? null;
+  };
+  const onSheetTouchEnd = (event: ReactTouchEvent) => {
+    const startY = sheetTouchStartY.current;
+    sheetTouchStartY.current = null;
+    if (startY == null) return;
+    const deltaY = (event.changedTouches[0]?.clientY ?? startY) - startY;
+    if (deltaY < -40) setExpanded(true);
+    else if (deltaY > 40) setExpanded(false);
+  };
 
   const activityQuery = useQuery({
     queryKey: ['agon', 'activity', id],
@@ -154,7 +169,7 @@ export default function ActivityDetailRoute() {
             </button>
 
             <div className="absolute left-6 top-[calc(max(14px,env(safe-area-inset-top))+50px)] z-[5]">
-              <p className="font-display text-[42px] font-medium leading-none tracking-tight text-[var(--glass-panel-fg)]">
+              <p className="font-display text-[42px] font-medium leading-none tracking-tight text-[var(--spark)] drop-shadow-[0_2px_12px_rgba(156,73,245,0.45)]">
                 {formatDistance(activity.distance_m).replace(/\s?km$/i, '')}{' '}
                 <span className="text-lg font-normal text-[var(--glass-panel-muted)]">km</span>
               </p>
@@ -164,40 +179,34 @@ export default function ActivityDetailRoute() {
             </div>
 
             <section
-              onClick={() => {
-                if (!expanded) setExpanded(true);
-              }}
               className={cn(
                 'absolute inset-x-0 bottom-0 z-10 flex flex-col overflow-hidden rounded-t-[28px] bg-[var(--glass-panel-strong)] shadow-[0_-16px_48px_rgba(0,0,0,0.55)] transition-[height] duration-[380ms] ease-[cubic-bezier(0.34,1.4,0.64,1)]',
                 expanded ? 'h-[82%]' : 'h-[34%]',
               )}
             >
-              <div className="flex shrink-0 justify-center pb-1 pt-3">
-                <span className="h-1 w-9 rounded-full bg-[var(--glass-panel-border)]" />
-              </div>
-
-              <div className="flex shrink-0 items-start justify-between gap-3 px-6 pt-1">
-                <div className="min-w-0">
-                  <h1 className="font-display truncate text-base font-bold tracking-tight text-[var(--glass-panel-fg)]">
-                    {activity.name}
-                  </h1>
-                  <p className="mt-0.5 truncate text-[11px] text-[var(--glass-panel-muted)]">
-                    {formatDateLong(activity.start_date_utc)} · {sport?.label ?? activity.sport_type}
-                    {pace ? ` · ${formatPace(pace)}` : ''}
-                  </p>
+              {/* Poignée + en-tête = zone de geste : swipe haut/bas pour
+                  déplier/replier. Tap sur la poignée = toggle (fallback). */}
+              <div
+                onTouchStart={onSheetTouchStart}
+                onTouchEnd={onSheetTouchEnd}
+                onClick={() => setExpanded((value) => !value)}
+                className="shrink-0 cursor-grab touch-none active:cursor-grabbing"
+              >
+                <div className="flex justify-center pb-1 pt-3">
+                  <span className="h-1 w-9 rounded-full bg-[var(--glass-panel-border)]" />
                 </div>
-                {expanded ? (
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      setExpanded(false);
-                    }}
-                    className="shrink-0 rounded-full bg-[var(--glass-tile)] px-3 py-1.5 text-[11px] font-medium text-[var(--glass-panel-muted)]"
-                  >
-                    Réduire ↓
-                  </button>
-                ) : null}
+
+                <div className="flex items-start justify-between gap-3 px-6 pt-1">
+                  <div className="min-w-0">
+                    <h1 className="font-display truncate text-base font-bold tracking-tight text-[var(--glass-panel-fg)]">
+                      {activity.name}
+                    </h1>
+                    <p className="mt-0.5 truncate text-[11px] text-[var(--glass-panel-muted)]">
+                      {formatDateLong(activity.start_date_utc)} · {sport?.label ?? activity.sport_type}
+                      {pace ? ` · ${formatPace(pace)}` : ''}
+                    </p>
+                  </div>
+                </div>
               </div>
 
               <div className="grid shrink-0 grid-cols-[1fr_1px_1fr] px-7 pb-3 pt-4">
@@ -395,7 +404,7 @@ function ActivityHeroMetric({
       <span className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.07em] text-[var(--glass-panel-muted)]">
         {label}
       </span>
-      <strong className="font-display block truncate text-[34px] font-medium leading-none tracking-tight text-[var(--glass-panel-fg)]">
+      <strong className="font-display block truncate text-[34px] font-medium leading-none tracking-tight text-[var(--spark)]">
         {normalizedValue}{' '}
         {normalizedValue !== '—' ? (
           <span className="text-sm font-normal text-[var(--glass-panel-muted)]">{unit}</span>
