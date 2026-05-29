@@ -16,7 +16,6 @@ import {
   Gauge,
   Heart,
   Map as MapIcon,
-  MapPin,
   MoreHorizontal,
   Mountain,
   MoveVertical,
@@ -145,6 +144,8 @@ export default function ActivityDetailRoute() {
               className="absolute inset-0 z-[1] h-full w-full"
               fallbackLabel="Pas de trace GPS disponible"
               fitPadding={88}
+              loading={streamsQuery.isLoading || streamsQuery.isFetching}
+              onRefresh={() => void streamsQuery.refetch()}
             />
             <div className="pointer-events-none absolute inset-0 z-[2]" style={{ background: 'var(--map-scrim)' }} />
 
@@ -332,7 +333,12 @@ export default function ActivityDetailRoute() {
                       ) : null}
 
                       {activeTab === 'map' ? (
-                        <MapPanel activity={activity} streams={streamsQuery.data} />
+                        <MapPanel
+                          activity={activity}
+                          streams={streamsQuery.data}
+                          isLoading={streamsQuery.isLoading || streamsQuery.isFetching}
+                          onRefresh={() => void streamsQuery.refetch()}
+                        />
                       ) : null}
                     </div>
                   </div>
@@ -1054,9 +1060,13 @@ function WeatherTimelineChart({ data }: { data: WeatherTimelinePoint[] }) {
 function MapPanel({
   activity,
   streams,
+  isLoading = false,
+  onRefresh,
 }: {
   activity: EnrichedActivity;
   streams: ActivityStreamsResponse | undefined;
+  isLoading?: boolean;
+  onRefresh?: () => void;
 }) {
   return (
     <section className="border-border-subtle bg-card overflow-hidden rounded-md border">
@@ -1066,7 +1076,12 @@ function MapPanel({
           Trace GPS issue des streams ou de la polyline resume.
         </p>
       </div>
-      <ActivityRouteMap activity={activity} streams={streams} />
+      <ActivityRouteMap
+        activity={activity}
+        streams={streams}
+        isLoading={isLoading}
+        onRefresh={onRefresh}
+      />
     </section>
   );
 }
@@ -1074,22 +1089,26 @@ function MapPanel({
 function ActivityRouteMap({
   activity,
   streams,
+  isLoading = false,
+  onRefresh,
 }: {
   activity: EnrichedActivity;
   streams: ActivityStreamsResponse | undefined;
+  isLoading?: boolean;
+  onRefresh?: () => void;
 }) {
   const track = useMemo(() => buildRouteTrack(activity, streams?.streams), [activity, streams?.streams]);
 
-  if (!track) {
-    return <EmptyBlock icon={MapPin} title="Pas de trace GPS disponible" />;
-  }
-
+  // On délègue à RouteMapTiler la gestion des états vide / chargement /
+  // erreur (spinner pendant le fetch, bouton Réactualiser sinon).
   return (
     <RouteMapTiler
-      tracks={[track]}
+      tracks={track ? [track] : []}
       className="h-72 w-full"
       fallbackLabel="Pas de trace GPS disponible"
       fitPadding={42}
+      loading={isLoading}
+      onRefresh={onRefresh}
     />
   );
 }

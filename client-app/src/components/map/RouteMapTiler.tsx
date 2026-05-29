@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, type MutableRefObject, type ReactNode } from 'react';
 import * as maptilersdk from '@maptiler/sdk';
 import '@maptiler/sdk/dist/maptiler-sdk.css';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Loader2, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export interface RouteMapPoint {
@@ -25,6 +25,10 @@ interface RouteMapTilerProps {
   className?: string;
   fallbackLabel?: string;
   fitPadding?: number;
+  /** true tant que la trace GPS est en cours de chargement (streams). */
+  loading?: boolean;
+  /** Si fourni, affiche un bouton « Réactualiser » sur l'état vide/erreur. */
+  onRefresh?: () => void;
 }
 
 interface NormalizedTrack {
@@ -45,6 +49,8 @@ export default function RouteMapTiler({
   className,
   fallbackLabel = 'En attente du premier point GPS...',
   fitPadding = 72,
+  loading = false,
+  onRefresh,
 }: RouteMapTilerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maptilersdk.Map | null>(null);
@@ -138,7 +144,29 @@ export default function RouteMapTiler({
   }
 
   if (normalizedTracks.length === 0) {
-    return <MapFallback className={className} label={fallbackLabel} />;
+    // Pendant le téléchargement des streams, on affiche un état de
+    // chargement honnête plutôt que « Pas de trace GPS » (qui laisse croire
+    // à une absence de données alors que la trace arrive).
+    if (loading) {
+      return (
+        <MapFallback
+          className={className}
+          icon={<Loader2 className="h-5 w-5 animate-spin text-[var(--glass-panel-fg)]" />}
+          label="Chargement de la trace GPS…"
+        />
+      );
+    }
+    return (
+      <MapFallback
+        className={className}
+        label={fallbackLabel}
+        action={
+          onRefresh
+            ? { label: 'Réactualiser', onClick: onRefresh }
+            : undefined
+        }
+      />
+    );
   }
 
   return <div ref={containerRef} className={cn('h-full w-full', className)} />;
@@ -360,10 +388,12 @@ function MapFallback({
   className,
   label,
   icon,
+  action,
 }: {
   className?: string | undefined;
   label: string;
   icon?: ReactNode | undefined;
+  action?: { label: string; onClick: () => void } | undefined;
 }) {
   return (
     <div className={cn('relative h-full w-full overflow-hidden bg-[#c2ae88]', className)}>
@@ -404,6 +434,16 @@ function MapFallback({
       <div className="absolute inset-x-8 top-1/2 z-10 -translate-y-1/2 rounded-[18px] border border-[var(--glass-panel-border)] bg-[var(--glass-panel)] px-4 py-4 text-center text-sm font-semibold text-[var(--glass-panel-fg)] backdrop-blur-xl">
         <div className="mb-2 flex justify-center">{icon}</div>
         {label}
+        {action ? (
+          <button
+            type="button"
+            onClick={action.onClick}
+            className="mx-auto mt-3 flex items-center gap-1.5 rounded-full bg-brand-primary px-4 py-1.5 text-[12px] font-semibold text-white transition active:opacity-90"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            {action.label}
+          </button>
+        ) : null}
       </div>
     </div>
   );
