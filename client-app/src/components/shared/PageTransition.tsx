@@ -41,9 +41,7 @@ const EDGE_WIDTH = 28;
 const SWIPE_DISTANCE = 64;
 
 function tabIndex(pathname: string): number {
-  return TAB_ORDER.findIndex(
-    (p) => pathname === p || pathname.startsWith(`${p}/`),
-  );
+  return TAB_ORDER.findIndex((p) => pathname === p);
 }
 
 const variants: Variants = {
@@ -88,9 +86,9 @@ function TransitionFallback() {
 }
 
 /**
- * Clé de transition : les 3 onglets partagent la clé 'tabs' (le pager
- * interne gère leur swipe latéral, sans transition pleine page). Les pages
- * poussées (détail, profil…) ont leur pathname → slide push/pop iOS.
+ * Clé de transition : les 3 onglets racine partagent la clé 'tabs' (le pager
+ * interne gère leur swipe latéral, sans transition pleine page). Les sous-pages
+ * poussées, ex. /live/:id, gardent leur pathname pour forcer le montage route.
  */
 function transitionKey(pathname: string): string {
   return tabIndex(pathname) >= 0 ? 'tabs' : pathname;
