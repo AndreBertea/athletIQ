@@ -46,19 +46,6 @@ function tabIndex(pathname: string): number {
   );
 }
 
-/** Remonte les ancêtres : un conteneur scrollable horizontalement capte le geste. */
-function hasHorizontalScrollAncestor(target: EventTarget | null): boolean {
-  let node = target as HTMLElement | null;
-  while (node && node !== document.body) {
-    if (node.scrollWidth > node.clientWidth + 4) {
-      const overflowX = getComputedStyle(node).overflowX;
-      if (overflowX === 'auto' || overflowX === 'scroll') return true;
-    }
-    node = node.parentElement;
-  }
-  return false;
-}
-
 const variants: Variants = {
   initial: (enterFromRight: boolean) => ({
     x: enterFromRight ? '100%' : '-100%',
@@ -100,27 +87,25 @@ function TransitionFallback() {
   return <div className="bg-signature h-full w-full" />;
 }
 
+/**
+ * Clé de transition : les 3 onglets partagent la clé 'tabs' (le pager
+ * interne gère leur swipe latéral, sans transition pleine page). Les pages
+ * poussées (détail, profil…) ont leur pathname → slide push/pop iOS.
+ */
+function transitionKey(pathname: string): string {
+  return tabIndex(pathname) >= 0 ? 'tabs' : pathname;
+}
+
 export function PageTransition() {
   const location = useLocation();
   const navigate = useNavigate();
   const navType = useNavigationType();
   const outlet = useOutlet();
-  const prevPath = useRef(location.pathname);
 
-  const from = prevPath.current;
-  const to = location.pathname;
-  const fromTab = tabIndex(from);
-  const toTab = tabIndex(to);
-
-  let enterFromRight = true;
-  if (fromTab >= 0 && toTab >= 0 && fromTab !== toTab) {
-    enterFromRight = toTab > fromTab; // swipe/tap latéral entre onglets
-  } else if (navType === 'POP') {
-    enterFromRight = false; // retour (back / edge-swipe)
-  } else {
-    enterFromRight = true; // push (entrée dans une sous-page)
-  }
-  prevPath.current = to;
+  const key = transitionKey(location.pathname);
+  // Le sens n'importe qu'entre groupes (onglets ↔ page poussée) : POP =
+  // retour (entrée par la gauche), sinon push (entrée par la droite).
+  const enterFromRight = navType !== 'POP';
 
   const touch = useRef<{ x: number; y: number; edge: boolean } | null>(null);
 
@@ -134,25 +119,17 @@ export function PageTransition() {
     const start = touch.current;
     touch.current = null;
     if (!start) return;
+    // Sur un onglet, le swipe latéral est géré par le pager interne. Ici on
+    // ne traite que l'edge-swipe « retour » des pages poussées.
+    if (tabIndex(location.pathname) >= 0) return;
+    if (!start.edge) return;
     const t = event.changedTouches[0];
     if (!t) return;
     const dx = t.clientX - start.x;
     const dy = t.clientY - start.y;
-    if (Math.abs(dx) < SWIPE_DISTANCE) return;
+    if (dx < SWIPE_DISTANCE) return;
     if (Math.abs(dx) < Math.abs(dy) * 1.4) return; // pas assez horizontal
-    if (hasHorizontalScrollAncestor(event.target)) return; // laisse scroller
-
-    const current = tabIndex(location.pathname);
-    if (dx > 0) {
-      // Swipe vers la droite : onglet précédent, ou retour si page poussée.
-      if (current > 0) navigate(TAB_ORDER[current - 1]);
-      else if (current < 0 && start.edge) navigate(-1);
-    } else {
-      // Swipe vers la gauche : onglet suivant.
-      if (current >= 0 && current < TAB_ORDER.length - 1) {
-        navigate(TAB_ORDER[current + 1]);
-      }
-    }
+    navigate(-1);
   };
 
   return (
@@ -162,7 +139,7 @@ export function PageTransition() {
       onTouchEnd={onTouchEnd}
     >
       <AnimatePresence custom={enterFromRight} initial={false}>
-        <FrozenPage key={location.pathname} enterFromRight={enterFromRight}>
+        <FrozenPage key={key} enterFromRight={enterFromRight}>
           {outlet}
         </FrozenPage>
       </AnimatePresence>

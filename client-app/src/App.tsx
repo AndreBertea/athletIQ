@@ -44,21 +44,19 @@ import { useProfile } from '@/hooks/useProfile';
 import { supabase } from '@/lib/supabase';
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
 import { PageTransition } from '@/components/shared/PageTransition';
+import { TabsLayout } from '@/components/shared/TabsLayout';
 import AuthRoute from '@/routes/auth';
 import OnboardingRoute from '@/routes/onboarding';
 import CheckinRoute from '@/routes/checkin';
-import HomeRoute from '@/routes/home';
 import ProfileRoute from '@/routes/profile';
 import ActivitiesRoute from '@/routes/activities';
 import ActivityDetailRoute from '@/routes/activity-detail';
 
-// Live tracking : composants créés au fil du MVP. Le code-splitting via
-// React.lazy permet d'isoler le bundle Live (carto / WebSocket) du reste
-// de l'app — non chargé tant que l'utilisateur ne visite pas /live*.
-const Live = React.lazy(() => import('./routes/live'));
+// Onglets principaux (Home / Live / Predictor) montés ensemble dans un
+// pager partagé (TabsLayout) → swipe latéral du contenu, chrome fixe, tout
+// chargé. Les sous-pages Live restent lazy (cartes / WebSocket lourds).
 const LiveShared = React.lazy(() => import('./routes/live-shared'));
 const LiveSession = React.lazy(() => import('./routes/live-session'));
-const RacePredictor = React.lazy(() => import('./routes/race-predictor'));
 
 export default function App() {
   return (
@@ -78,14 +76,18 @@ export default function App() {
                     path="/checkin-done"
                     element={<Navigate to="/home" replace />}
                   />
-                  <Route path="/home" element={<HomeRoute />} />
+                  {/* Onglets principaux : un seul shell (TopBar/BottomNav
+                      fixes) + pager horizontal du contenu, les 3 montés. */}
+                  <Route element={<TabsLayout />}>
+                    <Route path="/home" element={null} />
+                    <Route path="/live" element={null} />
+                    <Route path="/race-predictor" element={null} />
+                  </Route>
                   <Route path="/activities" element={<ActivitiesRoute />} />
                   <Route path="/activities/:id" element={<ActivityDetailRoute />} />
                   <Route path="/profile" element={<ProfileRoute />} />
                   <Route path="/settings" element={<Navigate to="/profile" replace />} />
-                  <Route path="/race-predictor" element={<RacePredictor />} />
-                  {/* Live tracking — 3 routes lazy-loadées. */}
-                  <Route path="/live" element={<Live />} />
+                  {/* Sous-pages Live (cartes / WebSocket) — pages poussées. */}
                   <Route path="/live/shared" element={<LiveShared />} />
                   <Route path="/live/:id" element={<LiveSession />} />
                 </Route>

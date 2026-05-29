@@ -55,8 +55,8 @@ import { AppShell } from './AppShell';
 import { TOPBAR_TOUCH_HEIGHT, TOPBAR_INSET_FALLBACK } from './TopBar';
 import { useAuth } from '@/contexts/AuthContext';
 import { HomeContent } from '@/routes/home';
-import { HistoryContent } from '@/routes/history';
-import { ProfileContent } from '@/routes/profile';
+import { LiveContent } from '@/routes/live';
+import { PredictorContent } from '@/routes/race-predictor';
 
 const BOTTOMNAV_TOUCH_HEIGHT = 56;
 
@@ -69,8 +69,8 @@ const PANEL_PADDING_BOTTOM = `calc(${BOTTOMNAV_TOUCH_HEIGHT}px + env(safe-area-i
 
 const TABS = [
   { path: '/home' },
-  { path: '/history' },
-  { path: '/profile' },
+  { path: '/live' },
+  { path: '/race-predictor' },
 ] as const;
 
 type TabPath = (typeof TABS)[number]['path'];
@@ -203,11 +203,11 @@ export function TabsLayout() {
         <Panel path="/home">
           <HomeContent />
         </Panel>
-        <Panel path="/history">
-          <HistoryContent />
+        <Panel path="/live">
+          <LiveContent />
         </Panel>
-        <Panel path="/profile">
-          <ProfileContent />
+        <Panel path="/race-predictor">
+          <PredictorContent />
         </Panel>
       </div>
     </AppShell>

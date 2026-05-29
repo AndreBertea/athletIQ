@@ -20,7 +20,7 @@ export default function LiveRoute() {
   );
 }
 
-function LiveContent() {
+export function LiveContent() {
   const queryClient = useQueryClient();
   const [url, setUrl] = useState('');
   const [label, setLabel] = useState('');

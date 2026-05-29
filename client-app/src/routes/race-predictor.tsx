@@ -9,6 +9,7 @@ import {
   CloudSun,
   FileText,
   FileUp,
+  Flag,
   Gauge,
   Info,
   Layers3,
@@ -18,6 +19,8 @@ import {
   Plus,
   Save,
   SlidersHorizontal,
+  Thermometer,
+  Timer,
   Trash2,
   Upload,
   X,
@@ -66,9 +69,21 @@ type CoursePacingPoint = {
   lastTime: string;
   cutoffLabel?: string;
   cutoffElapsedMin?: number;
+  pauseMin?: number;
   service: 'start' | 'food' | 'hot_food' | 'drink' | 'none' | 'finish';
   baseLife?: boolean;
   personalBag?: boolean;
+};
+
+type CoursePacingRow = CoursePacingPoint & {
+  predictedElapsedMin: number;
+  predictedClock: string;
+  isLate: boolean;
+  cutoffDeltaMin: number | null;
+  segmentGainM: number;
+  segmentLossM: number;
+  temperatureC: number | null;
+  heatPenaltyPct: number;
 };
 
 type PacingStartClock = {
@@ -275,10 +290,17 @@ const SWISS_CANYON_111K_POINTS: CoursePacingPoint[] = [
 ];
 
 export default function RacePredictorRoute() {
+  return (
+    <AppShell>
+      <PredictorContent />
+    </AppShell>
+  );
+}
+
+export function PredictorContent() {
   const [view, setView] = useState<ViewMode>('predict');
 
   return (
-    <AppShell>
       <div className="mx-auto w-full max-w-md px-4 pb-8 pt-4">
         <header className="mb-4">
           <p className="text-eyebrow mb-2">Race Predictor</p>
@@ -331,7 +353,6 @@ export default function RacePredictorRoute() {
           <PredictionWorkspace />
         )}
       </div>
-    </AppShell>
   );
 }
 
@@ -605,6 +626,16 @@ function PredictionWorkspace() {
         onChange={handleFileImport}
       />
 
+      {prediction ? (
+        <PredictionResult
+          prediction={prediction}
+          name={name}
+          onNameChange={setName}
+          onSave={() => savePredictionMutation.mutate()}
+          saving={savePredictionMutation.isPending}
+        />
+      ) : null}
+
       {prediction && !controlsOpen ? (
         <button
           type="button"
@@ -692,16 +723,6 @@ function PredictionWorkspace() {
             </p>
           ) : null}
         </>
-      ) : null}
-
-      {prediction ? (
-        <PredictionResult
-          prediction={prediction}
-          name={name}
-          onNameChange={setName}
-          onSave={() => savePredictionMutation.mutate()}
-          saving={savePredictionMutation.isPending}
-        />
       ) : null}
 
       {showAttachments && routeDetail ? (
@@ -1259,8 +1280,13 @@ function PredictionResult({
     'uncertainty.total_time.p90',
     'summary.p90_total_time_min',
   );
-  const ravitos = extractRavitoPoints(prediction);
-  const segments = extractSegments(prediction);
+  const coursePlan = coursePlanForPredictionResult(prediction, name);
+  const pacingRows = coursePlan
+    ? buildCoursePacingRows(prediction, coursePlan, pacingStartClock(prediction, coursePlan))
+    : [];
+  const ravitoCount = pacingRows.filter(
+    (row) => isFoodRavito(row) && row.km > 0,
+  ).length;
 
   return (
     <section className="rounded-md border border-border-subtle bg-card p-4">
@@ -1331,142 +1357,104 @@ function PredictionResult({
 
       <div className="mt-4 space-y-2">
         <DetailDisclosure
-          title="Ravitos et pauses"
-          icon={<Clock className="h-4 w-4 text-brand-cyan" />}
-          defaultOpen
+          title="Graph"
+          icon={<Mountain className="h-4 w-4 text-brand-cyan" />}
         >
-          {ravitos.length ? (
-            <div className="space-y-2">
-              {ravitos.map((ravito, index) => (
-                <div
-                  key={`${ravito.name}-${index}`}
-                  className="bg-surface-2 flex items-center justify-between rounded-md p-3 text-sm"
-                >
-                  <div>
-                    <p className="font-semibold text-foreground">
-                      {String(ravito.name || `Ravito ${index + 1}`)}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Km {Number(ravito.distance_km ?? ravito.km ?? 0).toFixed(1)}
-                    </p>
-                  </div>
-                  <span className="text-xs text-muted-foreground">
-                    {formatMinutes(Number(ravito.pause_min ?? 0))}
-                  </span>
-                </div>
-              ))}
-            </div>
+          {pacingRows.length ? (
+            <PacingBriefingVisual
+              prediction={prediction}
+              rows={pacingRows}
+              ravitoCount={ravitoCount}
+              totalTime={total}
+              embedded
+            />
           ) : (
-            <p className="text-xs text-muted-foreground">Aucun ravito calcule.</p>
+            <p className="text-xs text-muted-foreground">
+              Profil de pacing indisponible pour cette prediction.
+            </p>
           )}
         </DetailDisclosure>
 
         <DetailDisclosure
-          title="Segments"
+          title="Temps de passage"
+          icon={<Clock className="h-4 w-4 text-brand-cyan" />}
+        >
+          {pacingRows.length ? (
+            <PacingCheckpointCards rows={pacingRows} embedded />
+          ) : (
+            <p className="text-xs text-muted-foreground">Aucun passage calcule.</p>
+          )}
+        </DetailDisclosure>
+
+        <DetailDisclosure
+          title="Tableau complet"
           icon={<MapPinned className="h-4 w-4 text-brand-cyan" />}
         >
-          <div className="space-y-2">
-            {segments.slice(0, 12).map((segment, index) => (
-              <SegmentRow
-                key={String(segment.segment_id ?? segment.id ?? index)}
-                segment={segment}
-                index={index}
+          {pacingRows.length ? (
+            <PacingCompleteTable
+              prediction={prediction}
+              rows={pacingRows}
+              totalTime={total}
+              embedded
+            />
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Tableau de pacing indisponible pour cette prediction.
+            </p>
+          )}
+        </DetailDisclosure>
+
+        <DetailDisclosure
+          title="Athlete, meteo et moteur"
+          icon={<SlidersHorizontal className="h-4 w-4 text-brand-cyan" />}
+        >
+          <div className="space-y-3">
+            <TechnicalSubsection title="Calibration athlete">
+              <KeyValueGrid
+                data={
+                  prediction.calibration ??
+                  prediction.athlete_model ??
+                  prediction.debug_trace
+                }
+                keys={[
+                  ['p_run_wkg', 'P run'],
+                  ['p_ref_steady_wkg', 'P steady'],
+                  ['calibration_quality', 'Qualite'],
+                  ['sample_count', 'Samples'],
+                  ['source', 'Source'],
+                ]}
               />
-            ))}
-            {segments.length > 12 ? (
-              <p className="text-center text-[11px] text-muted-foreground">
-                +{segments.length - 12} segments non affiches sur mobile
-              </p>
-            ) : null}
+            </TechnicalSubsection>
+            <TechnicalSubsection title="Meteo et altitude">
+              <KeyValueGrid
+                data={prediction.environment}
+                keys={[
+                  ['weather_source', 'Source'],
+                  ['temperature_c', 'Temp.'],
+                  ['temperature_max_c', 'Max'],
+                  ['weather_factor', 'Facteur'],
+                  ['altitude_factor_mean', 'Altitude'],
+                ]}
+              />
+            </TechnicalSubsection>
+            <TechnicalSubsection title="Fatigue et moteur">
+              <KeyValueGrid
+                data={
+                  prediction.fatigue ?? prediction.hybrid_model ?? prediction.debug_trace
+                }
+                keys={[
+                  ['fatigue_alpha', 'Alpha'],
+                  ['alpha', 'Alpha'],
+                  ['source', 'Source'],
+                  ['residual_correction_min', 'Correction'],
+                  ['confidence', 'Confiance'],
+                ]}
+              />
+            </TechnicalSubsection>
           </div>
-        </DetailDisclosure>
-
-        <DetailDisclosure
-          title="Calibration athlete"
-          icon={<Activity className="h-4 w-4 text-brand-cyan" />}
-        >
-          <KeyValueGrid
-            data={
-              prediction.calibration ?? prediction.athlete_model ?? prediction.debug_trace
-            }
-            keys={[
-              ['p_run_wkg', 'P run'],
-              ['p_ref_steady_wkg', 'P steady'],
-              ['calibration_quality', 'Qualite'],
-              ['sample_count', 'Samples'],
-              ['source', 'Source'],
-            ]}
-          />
-        </DetailDisclosure>
-
-        <DetailDisclosure
-          title="Meteo et altitude"
-          icon={<CloudSun className="h-4 w-4 text-brand-cyan" />}
-        >
-          <KeyValueGrid
-            data={prediction.environment}
-            keys={[
-              ['weather_source', 'Source'],
-              ['temperature_c', 'Temp.'],
-              ['temperature_max_c', 'Max'],
-              ['weather_factor', 'Facteur'],
-              ['altitude_factor_mean', 'Altitude'],
-            ]}
-          />
-        </DetailDisclosure>
-
-        <DetailDisclosure
-          title="Fatigue et moteur"
-          icon={<Mountain className="h-4 w-4 text-brand-cyan" />}
-        >
-          <KeyValueGrid
-            data={prediction.fatigue ?? prediction.hybrid_model ?? prediction.debug_trace}
-            keys={[
-              ['fatigue_alpha', 'Alpha'],
-              ['alpha', 'Alpha'],
-              ['source', 'Source'],
-              ['residual_correction_min', 'Correction'],
-              ['confidence', 'Confiance'],
-            ]}
-          />
         </DetailDisclosure>
       </div>
     </section>
-  );
-}
-
-function SegmentRow({
-  segment,
-  index,
-}: {
-  segment: Record<string, unknown>;
-  index: number;
-}) {
-  const distance = Number(segment.distance_km ?? segment.end_km ?? 0);
-  const time = Number(
-    segment.predicted_time_min ?? segment.segment_time_min ?? segment.time_min ?? 0,
-  );
-  const pace = Number(
-    segment.predicted_pace ??
-      segment.pace_min_per_km ??
-      (distance > 0 ? time / distance : 0),
-  );
-  const gain = Number(segment.elevation_gain_m ?? segment.elevation_gain ?? 0);
-  const grade = Number(segment.avg_grade_percent ?? segment.grade_percent ?? 0);
-  return (
-    <div className="bg-surface-2 rounded-md p-3">
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold text-foreground">Segment {index + 1}</p>
-        <p className="text-xs text-muted-foreground">{formatMinutes(time)}</p>
-      </div>
-      <div className="mt-2 grid grid-cols-3 gap-2 text-[11px] text-muted-foreground">
-        <span>{distance.toFixed(1)} km</span>
-        <span>{Number.isFinite(pace) && pace > 0 ? `${pace.toFixed(2)}/km` : '--'}</span>
-        <span>
-          +{Math.round(gain)} m · {grade.toFixed(1)}%
-        </span>
-      </div>
-    </div>
   );
 }
 
@@ -1664,129 +1652,615 @@ function CoursePacingTable({
     (point) => isFoodRavito(point) && point.km > 0,
   ).length;
   const startClock = pacingStartClock(prediction, points);
+  const rows = buildCoursePacingRows(prediction, points, startClock);
+  const totalTime = metric(prediction, 'total_time_min', 'summary.total_time_min');
+
+  return (
+    <>
+      <PacingBriefingVisual
+        prediction={prediction}
+        rows={rows}
+        ravitoCount={ravitoCount}
+        totalTime={totalTime}
+      />
+
+      <PacingCheckpointCards rows={rows} />
+
+      <PacingCompleteTable prediction={prediction} rows={rows} totalTime={totalTime} />
+    </>
+  );
+}
+
+function PacingBriefingVisual({
+  prediction,
+  rows,
+  ravitoCount,
+  totalTime,
+  embedded = false,
+}: {
+  prediction: RacePredictionResult;
+  rows: CoursePacingRow[];
+  ravitoCount: number;
+  totalTime: number;
+  embedded?: boolean;
+}) {
+  const distance = metric(prediction, 'total_distance_km', 'summary.total_distance_km');
+  const elevation = metric(
+    prediction,
+    'total_elevation_gain_m',
+    'summary.total_elevation_gain_m',
+  );
+  const moving = metric(prediction, 'moving_time_min', 'summary.moving_time_min');
+  const highest = rows.reduce<CoursePacingRow | null>(
+    (best, row) => (!best || row.altitudeM > best.altitudeM ? row : best),
+    null,
+  );
+  const hottest = rows.reduce<CoursePacingRow | null>((best, row) => {
+    if (row.temperatureC == null) return best;
+    if (!best || best.temperatureC == null || row.temperatureC > best.temperatureC)
+      return row;
+    return best;
+  }, null);
+  const tightestCutoff = rows.reduce<CoursePacingRow | null>((best, row) => {
+    if (row.cutoffDeltaMin == null || row.km <= 0) return best;
+    if (!best || best.cutoffDeltaMin == null) return row;
+    return row.cutoffDeltaMin > best.cutoffDeltaMin ? row : best;
+  }, null);
+
+  return (
+    <section
+      className={
+        embedded
+          ? 'space-y-3'
+          : 'overflow-hidden rounded-md border border-border-subtle bg-card'
+      }
+    >
+      <div className={embedded ? '' : 'border-b border-border-subtle p-4'}>
+        {!embedded ? (
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-eyebrow">Briefing pacing</p>
+            <h2 className="mt-1 font-display text-xl font-bold text-foreground">
+              Profil, ravitos et passage predit
+            </h2>
+          </div>
+          <span className="inline-flex items-center gap-1 rounded-full bg-[var(--chip-bg)] px-2 py-1 text-[11px] font-semibold text-brand-cyan">
+            <Flag className="h-3.5 w-3.5" />
+            {formatPacingDuration(totalTime)}
+          </span>
+        </div>
+        ) : null}
+
+        <div className={`${embedded ? '' : 'mt-4'} grid grid-cols-3 gap-2`}>
+          <BriefingMetric
+            label="Distance"
+            value={distance > 0 ? `${distance.toFixed(1)} km` : '--'}
+          />
+          <BriefingMetric
+            label="D+"
+            value={elevation > 0 ? `+${Math.round(elevation)} m` : '--'}
+          />
+          <BriefingMetric label="Ravitos" value={String(ravitoCount)} />
+        </div>
+      </div>
+
+      <div className={embedded ? 'space-y-3' : 'p-4'}>
+        <ElevationProfileChart rows={rows} totalDistanceKm={distance} />
+
+        <div className="mt-3 grid grid-cols-3 gap-2">
+          <BriefingInsight
+            icon={<Mountain className="h-3.5 w-3.5" />}
+            label="Point haut"
+            value={
+              highest
+                ? `${highest.name} · ${Math.round(highest.altitudeM)} m`
+                : '--'
+            }
+          />
+          <BriefingInsight
+            icon={<Thermometer className="h-3.5 w-3.5" />}
+            label="Plus chaud"
+            value={
+              hottest && hottest.temperatureC != null
+                ? `${Math.round(hottest.temperatureC)}°C · ${hottest.name}`
+                : '--'
+            }
+          />
+          <BriefingInsight
+            icon={<Timer className="h-3.5 w-3.5" />}
+            label="Barriere"
+            value={
+              tightestCutoff?.cutoffDeltaMin != null
+                ? `${formatCutoffStatus(tightestCutoff.cutoffDeltaMin)} · ${tightestCutoff.name}`
+                : 'Aucune'
+            }
+            tone={
+              tightestCutoff?.cutoffDeltaMin != null &&
+              tightestCutoff.cutoffDeltaMin > 0
+                ? 'danger'
+                : 'default'
+            }
+          />
+        </div>
+
+        <div className="mt-3 flex items-center justify-between rounded-md bg-[var(--chip-bg)] px-3 py-2 text-[11px] text-muted-foreground">
+          <span>Moving {formatPacingDuration(moving)}</span>
+          <span>{rows.length} points de passage</span>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function BriefingMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md bg-surface-2 p-3">
+      <p className="text-sm font-bold leading-none text-foreground">{value}</p>
+      <p className="mt-1 text-[11px] text-muted-foreground">{label}</p>
+    </div>
+  );
+}
+
+function BriefingInsight({
+  icon,
+  label,
+  value,
+  tone = 'default',
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  tone?: 'default' | 'danger';
+}) {
+  return (
+    <div className="min-w-0 rounded-md border border-border-subtle bg-surface-2 p-2">
+      <p
+        className={`flex items-center gap-1 text-[10px] font-semibold ${
+          tone === 'danger' ? 'text-danger' : 'text-muted-foreground'
+        }`}
+      >
+        {icon}
+        {label}
+      </p>
+      <p className="mt-1 line-clamp-2 text-[11px] font-semibold leading-snug text-foreground">
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function ElevationProfileChart({
+  rows,
+  totalDistanceKm,
+}: {
+  rows: CoursePacingRow[];
+  totalDistanceKm: number;
+}) {
+  const width = 360;
+  const height = 194;
+  const padX = 16;
+  const padTop = 16;
+  const padBottom = 30;
+  const profile = rows.filter(
+    (row) =>
+      Number.isFinite(row.km) &&
+      Number.isFinite(row.altitudeM) &&
+      row.km >= 0,
+  );
+
+  if (profile.length < 2) {
+    return (
+      <div className="rounded-md border border-dashed border-border-subtle bg-surface-2 p-4 text-xs text-muted-foreground">
+        Profil altimetrique indisponible pour cette prediction.
+      </div>
+    );
+  }
+
+  const maxKm = Math.max(totalDistanceKm, ...profile.map((point) => point.km), 1);
+  const minAltitude = Math.min(...profile.map((point) => point.altitudeM));
+  const maxAltitude = Math.max(...profile.map((point) => point.altitudeM));
+  const altitudeSpan = Math.max(1, maxAltitude - minAltitude);
+  const plotHeight = height - padTop - padBottom;
+  const baselineY = height - padBottom;
+  const xForKm = (km: number) => padX + (km / maxKm) * (width - padX * 2);
+  const yForAltitude = (altitudeM: number) =>
+    padTop + (1 - (altitudeM - minAltitude) / altitudeSpan) * plotHeight;
+  const path = profile
+    .map((point, index) => {
+      const x = xForKm(point.km);
+      const y = yForAltitude(point.altitudeM);
+      return `${index === 0 ? 'M' : 'L'} ${x.toFixed(2)} ${y.toFixed(2)}`;
+    })
+    .join(' ');
+  const firstProfilePoint = profile[0]!;
+  const lastProfilePoint = profile[profile.length - 1]!;
+  const areaPath = `${path} L ${xForKm(lastProfilePoint.km).toFixed(2)} ${baselineY} L ${xForKm(firstProfilePoint.km).toFixed(2)} ${baselineY} Z`;
+  const labelRows = profileLabelRows(profile);
+  const gridAltitudes = [minAltitude, (minAltitude + maxAltitude) / 2, maxAltitude];
+
+  return (
+    <div className="rounded-md border border-border-subtle bg-surface-2 p-2">
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        role="img"
+        aria-label="Profil altimetrique avec points de ravitaillement"
+        className="block h-auto w-full"
+      >
+        <defs>
+          <linearGradient id="pacing-elevation-fill" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor="var(--brand-sunset)" stopOpacity="0.42" />
+            <stop offset="100%" stopColor="var(--brand-primary)" stopOpacity="0.08" />
+          </linearGradient>
+        </defs>
+
+        {gridAltitudes.map((altitude) => {
+          const y = yForAltitude(altitude);
+          return (
+            <g key={altitude}>
+              <line
+                x1={padX}
+                x2={width - padX}
+                y1={y}
+                y2={y}
+                stroke="var(--border-subtle)"
+                strokeDasharray="4 5"
+              />
+              <text
+                x={padX}
+                y={Math.max(11, y - 3)}
+                fill="var(--muted-foreground)"
+                fontSize="9"
+              >
+                {Math.round(altitude)}m
+              </text>
+            </g>
+          );
+        })}
+
+        <path d={areaPath} fill="url(#pacing-elevation-fill)" />
+        <path
+          d={path}
+          fill="none"
+          stroke="var(--brand-sunset)"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="3"
+        />
+
+        {profile.map((row) => {
+          const x = xForKm(row.km);
+          const y = yForAltitude(row.altitudeM);
+          const aid = isOfficialAidPoint(row);
+          const important = aid || row.service === 'start' || row.service === 'finish';
+          return (
+            <g key={`${row.name}-${row.km}`}>
+              {important ? (
+                <line
+                  x1={x}
+                  x2={x}
+                  y1={padTop}
+                  y2={baselineY}
+                  stroke={aid ? 'var(--brand-sunset)' : 'var(--border-subtle)'}
+                  strokeDasharray="3 6"
+                  strokeOpacity={aid ? 0.42 : 0.7}
+                />
+              ) : null}
+              <circle
+                cx={x}
+                cy={y}
+                r={aid ? 4.5 : 3}
+                fill={
+                  row.service === 'finish'
+                    ? 'var(--foreground)'
+                    : aid
+                      ? 'var(--brand-sunset)'
+                      : 'var(--card)'
+                }
+                stroke="var(--foreground)"
+                strokeOpacity={important ? 0.9 : 0.42}
+                strokeWidth={aid ? 1.6 : 1}
+              />
+            </g>
+          );
+        })}
+
+        {labelRows.map((row, index) => {
+          const x = xForKm(row.km);
+          const y = yForAltitude(row.altitudeM);
+          const anchor = x < 62 ? 'start' : x > width - 62 ? 'end' : 'middle';
+          const labelY = index % 2 === 0 ? Math.max(12, y - 12) : Math.min(baselineY - 8, y + 18);
+          return (
+            <text
+              key={`label-${row.name}-${row.km}`}
+              x={x}
+              y={labelY}
+              textAnchor={anchor}
+              fill="var(--foreground)"
+              fontSize="9"
+              fontWeight="700"
+            >
+              {compactPointName(row.name)}
+            </text>
+          );
+        })}
+
+        <line
+          x1={padX}
+          x2={width - padX}
+          y1={baselineY}
+          y2={baselineY}
+          stroke="var(--border-subtle)"
+        />
+        <text x={padX} y={height - 9} fill="var(--muted-foreground)" fontSize="10">
+          0 km
+        </text>
+        <text
+          x={width - padX}
+          y={height - 9}
+          textAnchor="end"
+          fill="var(--muted-foreground)"
+          fontSize="10"
+        >
+          {formatKm(maxKm)} km
+        </text>
+      </svg>
+    </div>
+  );
+}
+
+function PacingCheckpointCards({
+  rows,
+  embedded = false,
+}: {
+  rows: CoursePacingRow[];
+  embedded?: boolean;
+}) {
+  const list = (
+    <div className="space-y-2">
+      {rows.map((row) => (
+        <PacingCheckpointCard key={`${row.name}-${row.km}`} row={row} />
+      ))}
+    </div>
+  );
+
+  if (embedded) return list;
+
+  return (
+    <section className="rounded-md border border-border-subtle bg-card p-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-foreground">Temps de passage</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Lecture mobile des ravitos, passages, meteo et denivele.
+          </p>
+        </div>
+        <span className="rounded-full bg-[var(--chip-bg)] px-2 py-1 text-[11px] text-muted-foreground">
+          {rows.length} points
+        </span>
+      </div>
+
+      {list}
+    </section>
+  );
+}
+
+function PacingCheckpointCard({ row }: { row: CoursePacingRow }) {
+  const hasCutoff = row.cutoffDeltaMin != null;
+  const cutoffTone =
+    hasCutoff && row.cutoffDeltaMin! > 0 ? 'text-danger' : 'text-muted-foreground';
+
+  return (
+    <article className="rounded-md border border-border-subtle bg-surface-2 p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="mb-1">
+            <ServiceBadge point={row} />
+          </div>
+          <h3 className="truncate text-sm font-bold text-foreground">{row.name}</h3>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">
+            Km {formatKm(row.km)} · {Math.round(row.altitudeM)} m
+          </p>
+        </div>
+        <div className="shrink-0 text-right">
+          <p
+            className={`font-display text-xl font-bold leading-none ${
+              row.isLate ? 'text-danger' : 'text-foreground'
+            }`}
+          >
+            {formatPacingDuration(row.predictedElapsedMin)}
+          </p>
+          <p className="mt-1 text-xs font-semibold text-brand-cyan">
+            {row.predictedClock}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
+        <PacingMiniStat label="D+ seg." value={`+${Math.round(row.segmentGainM)} m`} />
+        <PacingMiniStat
+          label="Pause"
+          value={row.pauseMin && row.pauseMin > 0 ? formatMinutes(row.pauseMin) : '--'}
+        />
+        <PacingMiniStat
+          label="Meteo"
+          value={
+            row.temperatureC != null
+              ? `${Math.round(row.temperatureC)}°C${row.heatPenaltyPct >= 1 ? ` · +${Math.round(row.heatPenaltyPct)}%` : ''}`
+              : '--'
+          }
+          tone={row.heatPenaltyPct >= 5 ? 'warning' : 'default'}
+        />
+        <PacingMiniStat
+          label="Barriere"
+          value={
+            hasCutoff && row.cutoffDeltaMin != null
+              ? formatCutoffStatus(row.cutoffDeltaMin)
+              : row.lastTime || '--'
+          }
+          className={cutoffTone}
+        />
+      </div>
+    </article>
+  );
+}
+
+function PacingMiniStat({
+  label,
+  value,
+  tone = 'default',
+  className = '',
+}: {
+  label: string;
+  value: string;
+  tone?: 'default' | 'warning';
+  className?: string;
+}) {
+  const toneClass = tone === 'warning' ? 'text-warning-fg' : 'text-foreground';
+  return (
+    <div className="min-w-0 rounded bg-[var(--chip-bg)] px-2 py-2">
+      <p className="text-[10px] text-muted-foreground">{label}</p>
+      <p className={`mt-0.5 truncate font-semibold ${toneClass} ${className}`}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function PacingCompleteTable({
+  prediction,
+  rows,
+  totalTime,
+  embedded = false,
+}: {
+  prediction: RacePredictionResult;
+  rows: CoursePacingRow[];
+  totalTime: number;
+  embedded?: boolean;
+}) {
+  const table = (
+    <div className={embedded ? '-mx-3 overflow-x-auto px-3' : '-mx-4 overflow-x-auto px-4'}>
+      <table className="min-w-[900px] border-separate border-spacing-0 text-left text-[11px]">
+        <thead>
+          <tr className="text-muted-foreground">
+            <th className="sticky left-0 z-10 border-b border-border-subtle bg-card py-2 pr-3 font-semibold">
+              Point
+            </th>
+            <th className="border-b border-border-subtle px-2 py-2 font-semibold">
+              Km
+            </th>
+            <th className="border-b border-border-subtle px-2 py-2 font-semibold">
+              Prévu
+            </th>
+            <th className="border-b border-border-subtle px-2 py-2 font-semibold">
+              H. de pass.
+            </th>
+            <th className="border-b border-border-subtle px-2 py-2 font-semibold">
+              Barrière
+            </th>
+            <th className="border-b border-border-subtle px-2 py-2 font-semibold">
+              Météo
+            </th>
+            <th className="border-b border-border-subtle px-2 py-2 font-semibold">
+              Type
+            </th>
+            <th className="border-b border-border-subtle px-2 py-2 font-semibold">
+              Pause
+            </th>
+            <th className="border-b border-border-subtle px-2 py-2 font-semibold">
+              D+
+            </th>
+            <th className="border-b border-border-subtle px-2 py-2 font-semibold">
+              D-
+            </th>
+            <th className="border-b border-border-subtle px-2 py-2 font-semibold">
+              Alt.
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={`${row.name}-${row.km}`} className="border-b border-border-subtle">
+              <td className="sticky left-0 z-10 border-b border-border-subtle bg-card py-2 pr-3">
+                <p className="max-w-[150px] truncate font-semibold text-foreground">
+                  {row.name}
+                </p>
+              </td>
+              <td className="border-b border-border-subtle px-2 py-2 text-foreground">
+                {formatKm(row.km)}
+              </td>
+              <td className="border-b border-border-subtle px-2 py-2">
+                <span
+                  className={`block font-semibold ${row.isLate ? 'text-danger' : 'text-foreground'}`}
+                >
+                  {formatPacingDuration(row.predictedElapsedMin)}
+                </span>
+                {row.cutoffDeltaMin != null ? (
+                  <span
+                    className={`block text-[10px] ${row.isLate ? 'text-danger' : 'text-muted-foreground'}`}
+                  >
+                    {signedMinutes(row.cutoffDeltaMin)}
+                  </span>
+                ) : null}
+              </td>
+              <td className="border-b border-border-subtle px-2 py-2">
+                <span
+                  className={`font-semibold ${row.isLate ? 'text-danger' : 'text-brand-cyan'}`}
+                >
+                  {row.predictedClock}
+                </span>
+              </td>
+              <td className="border-b border-border-subtle px-2 py-2">
+                <span
+                  className={
+                    row.cutoffLabel
+                      ? 'font-semibold text-warning-fg'
+                      : 'text-muted-foreground'
+                  }
+                >
+                  {row.cutoffLabel ?? row.lastTime ?? '--'}
+                </span>
+              </td>
+              <td className="border-b border-border-subtle px-2 py-2">
+                <WeatherTag prediction={prediction} elapsedMin={row.predictedElapsedMin} />
+              </td>
+              <td className="border-b border-border-subtle px-2 py-2">
+                <ServiceBadge point={row} />
+              </td>
+              <td className="border-b border-border-subtle px-2 py-2 text-muted-foreground">
+                {row.pauseMin && row.pauseMin > 0 ? formatMinutes(row.pauseMin) : '--'}
+              </td>
+              <td className="border-b border-border-subtle px-2 py-2 text-muted-foreground">
+                +{row.elevationGainM}
+              </td>
+              <td className="border-b border-border-subtle px-2 py-2 text-muted-foreground">
+                -{row.elevationLossM}
+              </td>
+              <td className="border-b border-border-subtle px-2 py-2 text-muted-foreground">
+                {row.altitudeM}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+
+  if (embedded) return table;
 
   return (
     <section className="rounded-md border border-border-subtle bg-card p-4">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-foreground">Plan de pacing</p>
+          <p className="text-sm font-semibold text-foreground">Table complete</p>
           <p className="mt-1 text-xs text-muted-foreground">
-            {ravitoCount} ravitos officiels. Les points sans food sont des passages.
+            Vue detaillee des barrieres, services, pauses, D+ cumule et meteo.
           </p>
         </div>
         <span className="bg-brand-primary/10 rounded-full px-2 py-1 text-[11px] font-semibold text-brand-cyan">
-          {formatMinutes(metric(prediction, 'total_time_min', 'summary.total_time_min'))}
+          {formatPacingDuration(totalTime)}
         </span>
       </div>
-
-      <div className="-mx-4 overflow-x-auto px-4">
-        <table className="min-w-[760px] border-separate border-spacing-0 text-left text-[11px]">
-          <thead>
-            <tr className="text-muted-foreground">
-              <th className="sticky left-0 z-10 border-b border-border-subtle bg-card py-2 pr-3 font-semibold">
-                Point
-              </th>
-              <th className="border-b border-border-subtle px-2 py-2 font-semibold">
-                Km
-              </th>
-              <th className="border-b border-border-subtle px-2 py-2 font-semibold">
-                Prévu
-              </th>
-              <th className="border-b border-border-subtle px-2 py-2 font-semibold">
-                Heure de passage
-              </th>
-              <th className="border-b border-border-subtle px-2 py-2 font-semibold">
-                Barrière
-              </th>
-              <th className="border-b border-border-subtle px-2 py-2 font-semibold">
-                Type
-              </th>
-              <th className="border-b border-border-subtle px-2 py-2 font-semibold">
-                D+
-              </th>
-              <th className="border-b border-border-subtle px-2 py-2 font-semibold">
-                D-
-              </th>
-              <th className="border-b border-border-subtle px-2 py-2 font-semibold">
-                Alt.
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {points.map((point) => {
-              const predicted =
-                point.service === 'finish'
-                  ? metric(prediction, 'total_time_min', 'summary.total_time_min')
-                  : predictedElapsedAtKm(prediction, point.km);
-              const predictedClock = formatPredictedClock(startClock, predicted);
-              const isLate =
-                point.cutoffElapsedMin != null && predicted > point.cutoffElapsedMin;
-              return (
-                <tr
-                  key={`${point.name}-${point.km}`}
-                  className="border-b border-border-subtle"
-                >
-                  <td className="sticky left-0 z-10 border-b border-border-subtle bg-card py-2 pr-3">
-                    <p className="max-w-[150px] truncate font-semibold text-foreground">
-                      {point.name}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground">
-                      Best {point.bestTime}
-                    </p>
-                  </td>
-                  <td className="border-b border-border-subtle px-2 py-2 text-foreground">
-                    {point.km.toFixed(point.km % 1 === 0 ? 0 : 1)}
-                  </td>
-                  <td className="border-b border-border-subtle px-2 py-2">
-                    <span
-                      className={`block font-semibold ${isLate ? 'text-danger' : 'text-foreground'}`}
-                    >
-                      {formatMinutes(predicted)}
-                    </span>
-                    {point.cutoffElapsedMin != null ? (
-                      <span
-                        className={`block text-[10px] ${isLate ? 'text-danger' : 'text-muted-foreground'}`}
-                      >
-                        {signedMinutes(predicted - point.cutoffElapsedMin)}
-                      </span>
-                    ) : null}
-                  </td>
-                  <td className="border-b border-border-subtle px-2 py-2">
-                    <span
-                      className={`font-semibold ${isLate ? 'text-danger' : 'text-brand-cyan'}`}
-                    >
-                      {predictedClock}
-                    </span>
-                  </td>
-                  <td className="border-b border-border-subtle px-2 py-2">
-                    <span
-                      className={
-                        point.cutoffLabel
-                          ? 'font-semibold text-warning-fg'
-                          : 'text-muted-foreground'
-                      }
-                    >
-                      {point.cutoffLabel ?? point.lastTime ?? '--'}
-                    </span>
-                  </td>
-                  <td className="border-b border-border-subtle px-2 py-2">
-                    <ServiceBadge point={point} />
-                  </td>
-                  <td className="border-b border-border-subtle px-2 py-2 text-muted-foreground">
-                    +{point.elevationGainM}
-                  </td>
-                  <td className="border-b border-border-subtle px-2 py-2 text-muted-foreground">
-                    -{point.elevationLossM}
-                  </td>
-                  <td className="border-b border-border-subtle px-2 py-2 text-muted-foreground">
-                    {point.altitudeM}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      {table}
     </section>
   );
 }
@@ -2217,6 +2691,23 @@ function DetailDisclosure({
   );
 }
 
+function TechnicalSubsection({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        {title}
+      </p>
+      {children}
+    </div>
+  );
+}
+
 function KeyValueGrid({ data, keys }: { data: unknown; keys: Array<[string, string]> }) {
   const record = asRecord(data);
   const rows = keys
@@ -2276,6 +2767,137 @@ function coursePlanForPrediction(
   );
 }
 
+function coursePlanForPredictionResult(
+  prediction: RacePredictionResult,
+  name: string,
+): CoursePacingPoint[] | null {
+  return (
+    coursePlanFromText(name, prediction.filename) ??
+    coursePlanFromPredictionData(prediction)
+  );
+}
+
+function coursePlanFromPredictionData(
+  prediction: RacePredictionResult,
+): CoursePacingPoint[] | null {
+  const totalDistance = metric(
+    prediction,
+    'total_distance_km',
+    'summary.total_distance_km',
+  );
+  const segments = extractSegments(prediction);
+  const ravitos = extractRavitoPoints(prediction);
+
+  if (totalDistance <= 0 && !segments.length && !ravitos.length) return null;
+
+  const finishKm =
+    totalDistance > 0
+      ? totalDistance
+      : Math.max(
+          ...segments.map((segment) =>
+            Number(segment.to_km ?? segment.end_km ?? segment.distance_km ?? 0),
+          ),
+          0,
+        );
+  if (finishKm <= 0) return null;
+
+  const startProfile = courseProfileAtKm(prediction, 0);
+  const finishProfile = courseProfileAtKm(prediction, finishKm);
+  const points: CoursePacingPoint[] = [
+    {
+      name: 'START',
+      km: 0,
+      elevationGainM: 0,
+      elevationLossM: 0,
+      altitudeM: startProfile.altitudeM,
+      bestTime: '',
+      lastTime: '',
+      service: 'start',
+    },
+    ...ravitos
+      .map((ravito, index): CoursePacingPoint | null => {
+        const km = Number(ravito.distance_km ?? ravito.km ?? 0);
+        if (!Number.isFinite(km) || km <= 0 || km >= finishKm) return null;
+        const profile = courseProfileAtKm(prediction, km);
+        return {
+          name: String(ravito.name || `Ravito ${index + 1}`),
+          km: roundOne(km),
+          elevationGainM: profile.elevationGainM,
+          elevationLossM: profile.elevationLossM,
+          altitudeM: profile.altitudeM,
+          bestTime: '',
+          lastTime: '',
+          pauseMin: Number(ravito.pause_min ?? 0),
+          service: 'food',
+        };
+      })
+      .filter((point): point is CoursePacingPoint => point != null),
+    {
+      name: 'FINISH',
+      km: roundOne(finishKm),
+      elevationGainM: finishProfile.elevationGainM,
+      elevationLossM: finishProfile.elevationLossM,
+      altitudeM: finishProfile.altitudeM,
+      bestTime: '',
+      lastTime: '',
+      service: 'finish',
+    },
+  ];
+
+  return points.sort((a, b) => a.km - b.km);
+}
+
+function courseProfileAtKm(
+  prediction: RacePredictionResult,
+  targetKm: number,
+): Pick<CoursePacingPoint, 'elevationGainM' | 'elevationLossM' | 'altitudeM'> {
+  const segments = extractSegments(prediction);
+  if (!segments.length) {
+    return { elevationGainM: 0, elevationLossM: 0, altitudeM: 0 };
+  }
+
+  let previousToKm = 0;
+  let cumulativeGain = 0;
+  let cumulativeLoss = 0;
+  let altitude = Number(segments[0]?.altitude_m ?? 0);
+
+  for (const segment of segments) {
+    const explicitFrom = Number(segment.from_km);
+    const distanceKm = Number(segment.distance_km ?? 0);
+    const fromKm = Number.isFinite(explicitFrom) ? explicitFrom : previousToKm;
+    const explicitTo = Number(segment.to_km ?? segment.end_km);
+    const toKm = Number.isFinite(explicitTo) ? explicitTo : fromKm + distanceKm;
+    const segmentGain = Number(segment.elevation_gain_m ?? segment.elevation_gain ?? 0);
+    const segmentLoss = Number(segment.elevation_loss_m ?? segment.elevation_loss ?? 0);
+    const segmentAltitude = Number(segment.altitude_m ?? altitude);
+
+    if (targetKm >= toKm) {
+      cumulativeGain += Number.isFinite(segmentGain) ? segmentGain : 0;
+      cumulativeLoss += Number.isFinite(segmentLoss) ? segmentLoss : 0;
+      if (Number.isFinite(segmentAltitude)) altitude = segmentAltitude;
+      previousToKm = toKm;
+      continue;
+    }
+
+    if (targetKm >= fromKm) {
+      const ratio =
+        toKm > fromKm
+          ? Math.max(0, Math.min(1, (targetKm - fromKm) / (toKm - fromKm)))
+          : 0;
+      cumulativeGain += (Number.isFinite(segmentGain) ? segmentGain : 0) * ratio;
+      cumulativeLoss += (Number.isFinite(segmentLoss) ? segmentLoss : 0) * ratio;
+      if (Number.isFinite(segmentAltitude)) altitude = segmentAltitude;
+    }
+    break;
+  }
+
+  return {
+    elevationGainM: Math.round(cumulativeGain),
+    elevationLossM: Math.round(cumulativeLoss),
+    altitudeM: Math.round(Number.isFinite(altitude) ? altitude : 0),
+  };
+}
+
 function coursePlanFromText(
   ...values: Array<string | null | undefined>
 ): CoursePacingPoint[] | null {
@@ -2310,6 +2932,99 @@ function officialRavitosFromCoursePlan(
       name: point.name,
       pause_min: officialPauseMin(point),
     }));
+}
+
+function buildCoursePacingRows(
+  prediction: RacePredictionResult,
+  points: CoursePacingPoint[],
+  startClock: PacingStartClock | null,
+): CoursePacingRow[] {
+  const total = metric(prediction, 'total_time_min', 'summary.total_time_min');
+  let previousGain = 0;
+  let previousLoss = 0;
+
+  return points.map((point) => {
+    const predictedElapsedMin =
+      point.service === 'finish' ? total : predictedElapsedAtKm(prediction, point.km);
+    const weather = weatherAtElapsed(prediction, predictedElapsedMin);
+    const cutoffDeltaMin =
+      point.cutoffElapsedMin != null
+        ? predictedElapsedMin - point.cutoffElapsedMin
+        : null;
+    const row: CoursePacingRow = {
+      ...point,
+      predictedElapsedMin,
+      predictedClock: formatPredictedClock(startClock, predictedElapsedMin),
+      isLate: cutoffDeltaMin != null && cutoffDeltaMin > 0,
+      cutoffDeltaMin,
+      segmentGainM: Math.max(0, point.elevationGainM - previousGain),
+      segmentLossM: Math.max(0, point.elevationLossM - previousLoss),
+      pauseMin: point.pauseMin ?? (isOfficialAidPoint(point) ? officialPauseMin(point) : 0),
+      temperatureC: weather?.tempC ?? null,
+      heatPenaltyPct: weather?.heatPenaltyPct ?? 0,
+    };
+    previousGain = point.elevationGainM;
+    previousLoss = point.elevationLossM;
+    return row;
+  });
+}
+
+function profileLabelRows(rows: CoursePacingRow[]): CoursePacingRow[] {
+  const highest = rows.reduce<CoursePacingRow | null>(
+    (best, row) => (!best || row.altitudeM > best.altitudeM ? row : best),
+    null,
+  );
+  const labels = rows.filter(
+    (row) =>
+      row.service === 'start' ||
+      row.service === 'finish' ||
+      row.baseLife ||
+      row.personalBag ||
+      row === highest,
+  );
+  const seen = new Set<string>();
+  return labels
+    .filter((row) => {
+      const key = `${row.name}-${row.km}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 6);
+}
+
+function compactPointName(name: string): string {
+  const compact: Record<string, string> = {
+    START: 'Start',
+    FINISH: 'Finish',
+    Chasseron: 'Chasseron',
+    'Gorges de Noirveau': 'Noirveau',
+    'Les Places': 'Les Places',
+    'Bas du Chapeau de Napoleon': 'Chapeau',
+  };
+  return compact[name] ?? name.split(' ').slice(0, 2).join(' ');
+}
+
+function formatKm(km: number): string {
+  if (!Number.isFinite(km)) return '--';
+  return km % 1 === 0 ? km.toFixed(0) : km.toFixed(1);
+}
+
+function formatPacingDuration(minutes: number): string {
+  if (!Number.isFinite(minutes) || minutes < 0) return '--';
+  if (minutes === 0) return '0 min';
+  const rounded = Math.round(minutes);
+  const h = Math.floor(rounded / 60);
+  const m = rounded % 60;
+  if (h <= 0) return `${m} min`;
+  return `${h}h${String(m).padStart(2, '0')}`;
+}
+
+function formatCutoffStatus(deltaMin: number): string {
+  if (!Number.isFinite(deltaMin)) return '--';
+  if (deltaMin > 0) return `+${formatPacingDuration(deltaMin)}`;
+  if (deltaMin < 0) return `-${formatPacingDuration(Math.abs(deltaMin))}`;
+  return 'pile';
 }
 
 function mergeOfficialRavitos(
@@ -2393,7 +3108,11 @@ function parseDatetimeLocalParts(value: string): {
     /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?$/,
   );
   if (!match) return null;
-  const [, year, month, day, hours, minutes] = match.map(Number);
+  const year = Number(match[1] ?? Number.NaN);
+  const month = Number(match[2] ?? Number.NaN);
+  const day = Number(match[3] ?? Number.NaN);
+  const hours = Number(match[4] ?? Number.NaN);
+  const minutes = Number(match[5] ?? Number.NaN);
   if (
     !Number.isFinite(year) ||
     !Number.isFinite(month) ||
@@ -2603,6 +3322,56 @@ function normalizeRavitos(input: unknown): RouteRavitoPoint[] {
       };
     })
     .filter((item) => item.km > 0);
+}
+
+// Température (et pénalité chaleur) au temps écoulé donné, lue dans la timeline
+// météo de la prédiction (environment.exposure_timeline, indexée en minutes
+// moving — cohérent avec predictedElapsedAtKm).
+function weatherAtElapsed(
+  prediction: RacePredictionResult,
+  elapsedMin: number,
+): { tempC: number; heatPenaltyPct: number } | null {
+  const env = prediction.environment as Record<string, unknown> | undefined;
+  const timeline = (env?.exposure_timeline ?? env?.weather_timeline) as
+    | Array<Record<string, number>>
+    | undefined;
+  if (!Array.isArray(timeline) || timeline.length === 0) return null;
+  let best = timeline[0];
+  if (!best) return null;
+  for (const entry of timeline) {
+    if (
+      Math.abs(Number(entry.elapsed_min) - elapsedMin) <
+      Math.abs(Number(best.elapsed_min) - elapsedMin)
+    ) {
+      best = entry;
+    }
+  }
+  const tempC = Number(best.temperature_c);
+  if (!Number.isFinite(tempC)) return null;
+  return { tempC, heatPenaltyPct: Number(best.heat_penalty_percent ?? 0) };
+}
+
+// Petit badge météo (température à l'heure de passage). Vire à l'orange si la
+// pénalité chaleur est notable.
+function WeatherTag({
+  prediction,
+  elapsedMin,
+}: {
+  prediction: RacePredictionResult;
+  elapsedMin: number;
+}) {
+  const weather = weatherAtElapsed(prediction, elapsedMin);
+  if (!weather) return null;
+  const hot = weather.heatPenaltyPct >= 5;
+  return (
+    <span
+      className={`inline-flex items-center gap-1 whitespace-nowrap text-[11px] ${hot ? 'text-warning-fg' : 'text-muted-foreground'}`}
+      title={`Pénalité chaleur +${Math.round(weather.heatPenaltyPct)}%`}
+    >
+      {Math.round(weather.tempC)}°C
+      {weather.heatPenaltyPct >= 1 ? ` · +${Math.round(weather.heatPenaltyPct)}%` : ''}
+    </span>
+  );
 }
 
 function formatMinutes(minutes: number): string {
