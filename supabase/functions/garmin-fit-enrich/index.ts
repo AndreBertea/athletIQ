@@ -9,6 +9,7 @@ import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { errorResponse, handleCors, jsonResponse } from "../_shared/cors.ts";
 import { loadGarminClient } from "../_shared/garmin.ts";
 import { requireUser } from "../_shared/supabase.ts";
+import { encodePolyline } from "../_shared/polyline.ts";
 
 type Row = Record<string, unknown>;
 
@@ -148,6 +149,13 @@ async function enrichOne(
     activityPatch.has_streams = true;
     activityPatch.raw_streams_path = rawStreamsPath;
   }
+  // Trace GPS légère stockée sur l'activité → la carte du détail s'affiche
+  // instantanément sans télécharger le JSON streams.
+  const latlngData = (streams.latlng as { data?: unknown[] } | undefined)?.data;
+  const summaryPolyline = encodePolyline(
+    latlngData as Array<[number, number] | null> | undefined,
+  );
+  if (summaryPolyline) activityPatch.summary_polyline = summaryPolyline;
   const { error: activityError } = await serviceClient
     .from("activities")
     .update(activityPatch)
