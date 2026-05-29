@@ -432,8 +432,16 @@ export interface GpxRouteDetail {
   elevation_gain_m?: number | null;
   owned_by_user: boolean;
   attachments: GpxAttachmentRead[];
+  /** Ravitos officiels globaux de la course (BDD, lisibles par tous). */
+  official_ravitos?: OfficialRavitoPoint[] | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface OfficialRavitoPoint {
+  km: number;
+  name: string;
+  service?: string | null;
 }
 
 export interface RouteRavitoPoint {

@@ -32,6 +32,7 @@ import {
   type GpxAttachmentRead,
   type GpxRouteDetail,
   type GpxRouteSummary,
+  type OfficialRavitoPoint,
   type RacePredictionResult,
   type RaceReferenceCandidate,
   type RouteRavitoPoint,
@@ -403,14 +404,13 @@ function PredictionWorkspace() {
 
   const routeDetail = routeDetailQuery.data ?? null;
   const routeDistance = Number(routeDetail?.distance_km ?? 0);
-  const officialCoursePlan = useMemo(
-    () => coursePlanForRoute(routeDetail),
-    [routeDetail],
-  );
-  const officialRavitos = useMemo(
-    () => officialRavitosFromCoursePlan(officialCoursePlan),
-    [officialCoursePlan],
-  );
+  const officialRavitos = useMemo(() => {
+    // Source de verite : ravitos officiels globaux stockes sur la course en BDD.
+    const fromDb = officialRavitosFromRoute(routeDetail);
+    if (fromDb.length) return fromDb;
+    // Fallback retrocompatible : hardcode par nom (ex. Swiss Canyon avant migration BDD).
+    return officialRavitosFromCoursePlan(coursePlanForRoute(routeDetail));
+  }, [routeDetail]);
   const effectiveRavitos = useMemo(
     () =>
       officialRavitos.length
@@ -1837,10 +1837,14 @@ function PacingBriefingVisual({
               />
               <span
                 className="h-1.5 w-1.5 rounded-full"
-                style={{ background: 'var(--info)' }}
+                style={{ background: 'var(--danger-fg)' }}
+              />
+              <span
+                className="h-1.5 w-1.5 rounded-full"
+                style={{ background: 'var(--muted-foreground)' }}
               />
             </span>
-            Ravito
+            Points
           </span>
         </div>
         <ElevationProfileChart
@@ -1999,8 +2003,9 @@ function pacingConfidenceValues(
 function pacingDotColor(service: CoursePacingPoint['service']): string {
   switch (service) {
     case 'food':
+      return 'var(--warning)';
     case 'hot_food':
-      return 'var(--brand-sunset)';
+      return 'var(--danger-fg)';
     case 'drink':
       return 'var(--info)';
     case 'finish':
@@ -2012,20 +2017,51 @@ function pacingDotColor(service: CoursePacingPoint['service']): string {
   }
 }
 
-function pacingGraphMarkerColor(service: CoursePacingPoint['service']): string {
+function pacingGraphMarkerStyle(service: CoursePacingPoint['service']): {
+  color: string;
+  dash: string;
+  opacity: number;
+  radius: number;
+  strokeWidth: number;
+  textOpacity: number;
+} {
   switch (service) {
     case 'hot_food':
-      return 'var(--brand-sunset)';
+      return {
+        color: 'var(--danger-fg)',
+        dash: '2 2',
+        opacity: 0.52,
+        radius: 3.6,
+        strokeWidth: 1,
+        textOpacity: 1,
+      };
     case 'food':
-      return 'var(--warning)';
+      return {
+        color: 'var(--warning)',
+        dash: '2 2',
+        opacity: 0.5,
+        radius: 3.5,
+        strokeWidth: 1,
+        textOpacity: 1,
+      };
     case 'drink':
-      return 'var(--info)';
-    case 'finish':
-      return 'var(--success-fg)';
-    case 'start':
-      return 'var(--success-fg)';
+      return {
+        color: 'var(--info)',
+        dash: '2 2',
+        opacity: 0.45,
+        radius: 3.3,
+        strokeWidth: 0.9,
+        textOpacity: 0.95,
+      };
     default:
-      return 'var(--muted-foreground)';
+      return {
+        color: 'var(--muted-foreground)',
+        dash: '1 4',
+        opacity: 0.3,
+        radius: 2.4,
+        strokeWidth: 0.75,
+        textOpacity: 0.78,
+      };
   }
 }
 
@@ -2077,7 +2113,7 @@ function ElevationProfileChart({
     .map((point) => `${xForKm(point.km).toFixed(1)},${yForAlt(point.alt).toFixed(1)}`)
     .join(' ');
   const areaPts = `0,${H - botAxis} ${linePts} ${W},${H - botAxis}`;
-  const ravitos = rows.filter((row) => isOfficialAidPoint(row));
+  const graphMarkers = rows.filter((row) => isPacingCourseMarker(row));
   const tickStep = totalDist > 80 ? 20 : totalDist > 40 ? 10 : 5;
   const kmTicks: number[] = [];
   for (let km = 0; km < totalDist - tickStep / 2; km += tickStep) kmTicks.push(km);
@@ -2147,36 +2183,37 @@ function ElevationProfileChart({
         </g>
       ))}
 
-      {ravitos.map((row) => {
+      {graphMarkers.map((row) => {
         const px = xForKm(row.km);
         const py = yForAlt(altAt(row.km));
-        const color = pacingGraphMarkerColor(row.service);
+        const marker = pacingGraphMarkerStyle(row.service);
         return (
-          <g key={`ravito-${row.name}-${row.km}`}>
+          <g key={`pacing-marker-${row.name}-${row.km}`}>
             <line
               x1={px}
               x2={px}
               y1={py}
               y2={H - botAxis}
-              stroke={color}
-              strokeWidth="1"
-              strokeDasharray="2 2"
-              opacity="0.45"
+              stroke={marker.color}
+              strokeWidth={marker.strokeWidth}
+              strokeDasharray={marker.dash}
+              opacity={marker.opacity}
             />
             <circle
               cx={px}
               cy={py}
-              r="3.5"
-              fill={color}
+              r={marker.radius}
+              fill={marker.color}
               stroke="var(--card)"
               strokeWidth="1.5"
             />
             <text
               x={px + 3}
               y={py - 6}
-              fill={color}
+              fill={marker.color}
               fontSize="8"
               fontWeight="700"
+              opacity={marker.textOpacity}
               textAnchor="start"
               transform={`rotate(-45 ${px + 3} ${py - 6})`}
             >
@@ -2230,7 +2267,7 @@ function PacingCheckpointCards({
 
 function PacingCheckpointCard({ row }: { row: CoursePacingRow }) {
   const dot = pacingDotColor(row.service);
-  const hasService = isOfficialAidPoint(row);
+  const hasService = isPacingCourseMarker(row);
   const cells: Array<{ label: string; value: string; warn?: boolean }> = [
     { label: 'D+', value: `+${Math.round(row.elevationGainM)}m` },
     { label: 'Alt.', value: `${Math.round(row.altitudeM)}m` },
@@ -2484,11 +2521,14 @@ function ServiceBadge({ point }: { point: CoursePacingPoint }) {
         : point.service === 'start'
           ? 'Depart'
           : 'Passage';
-  const tone = isFoodRavito(point)
-    ? 'border-brand-primary/30 bg-brand-primary/10 text-brand-cyan'
-    : point.service === 'drink'
-      ? 'border-brand-cyan/30 bg-brand-cyan/10 text-brand-cyan'
-      : 'border-border-subtle bg-surface-2 text-muted-foreground';
+  const tone =
+    point.service === 'hot_food'
+      ? 'border-danger/30 bg-danger-bg text-danger-fg'
+      : point.service === 'food'
+        ? 'border-warning/30 bg-warning-bg text-warning-fg'
+        : point.service === 'drink'
+          ? 'border-brand-cyan/30 bg-brand-cyan/10 text-brand-cyan'
+          : 'border-border-subtle bg-surface-2 text-muted-foreground';
 
   return (
     <span
@@ -3122,6 +3162,10 @@ function isOfficialAidPoint(point: CoursePacingPoint): boolean {
   return isFoodRavito(point) || point.service === 'drink';
 }
 
+function isPacingCourseMarker(point: CoursePacingPoint): boolean {
+  return point.km > 0 && (isOfficialAidPoint(point) || point.service === 'none');
+}
+
 function officialPauseMin(point: CoursePacingPoint): number {
   if (point.service === 'drink') return 1.5;
   if (point.service === 'hot_food' || point.baseLife || point.personalBag) return 5;
@@ -3139,6 +3183,31 @@ function officialRavitosFromCoursePlan(
       name: point.name,
       pause_min: officialPauseMin(point),
     }));
+}
+
+// Pause par defaut selon le type de service (donnees BDD globales, sans baseLife/personalBag).
+function officialPauseMinForService(service?: string | null): number {
+  if (service === 'drink') return 1.5;
+  if (service === 'hot_food') return 5;
+  return 3;
+}
+
+// Ravitos officiels lus depuis la course en BDD (globaux, partages par tous les users).
+function officialRavitosFromRoute(route: GpxRouteDetail | null): RouteRavitoPoint[] {
+  const list = route?.official_ravitos;
+  if (!Array.isArray(list) || list.length === 0) return [];
+  return list
+    .map((ravito: OfficialRavitoPoint): RouteRavitoPoint | null => {
+      const km = Number(ravito?.km ?? 0);
+      if (!Number.isFinite(km) || km <= 0) return null;
+      return {
+        km: roundOne(km),
+        name: String(ravito?.name || 'Ravito'),
+        pause_min: officialPauseMinForService(ravito?.service),
+      };
+    })
+    .filter((point): point is RouteRavitoPoint => point != null)
+    .sort((a, b) => a.km - b.km);
 }
 
 function buildCoursePacingRows(
