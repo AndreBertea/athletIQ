@@ -33,6 +33,7 @@ if DB_PATH:
 os.environ.setdefault("DATABASE_URL", "sqlite:///stridedelta.db")
 os.environ.setdefault("JWT_SECRET_KEY", "predict-worker-local-only")
 os.environ.setdefault("STRAVA_CLIENT_ID", "0")  # non utilisé ici
+os.environ.setdefault("ENCRYPTION_KEY", "predict-worker-local")  # requis par Settings, non utilisé ici
 
 try:
     import requests

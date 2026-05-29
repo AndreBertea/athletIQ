@@ -47,4 +47,16 @@ fi
 echo "→ Worker prédiction OUVERT (DB: $PREDICT_DB_PATH). Laisse cette fenêtre ouverte."
 echo "   (Ctrl+C pour arrêter)"
 echo "=============================================================="
-exec caffeinate -s -i ./.venv/bin/python "$REPO_DIR/tools/predict-relay/predict_worker.py"
+
+# IMPORTANT : on lance le worker depuis un CWD VIDE. Le backend
+# (app.core.settings.Settings) utilise env_file=".env" + extra=forbid : si
+# pydantic trouvait NOTRE .env (qui contient des clés propres au worker comme
+# SUPABASE_URL/OLD_USER_ID, non déclarées dans Settings), l'import du moteur
+# planterait (extra_forbidden). Depuis un dossier vide, pydantic ne trouve aucun
+# .env et lit uniquement os.environ (source qui ignore les variables inconnues).
+# Les secrets ont déjà été chargés dans l'environnement via `source .env` ci-dessus.
+VENV_PY="$PWD/.venv/bin/python"
+WORKER="$REPO_DIR/tools/predict-relay/predict_worker.py"
+RUNDIR="$(mktemp -d)"
+cd "$RUNDIR"
+exec caffeinate -s -i "$VENV_PY" "$WORKER"
