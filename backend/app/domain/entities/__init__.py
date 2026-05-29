@@ -14,6 +14,68 @@ from .activity_weather import ActivityWeather, ActivityWeatherRead
 from .garmin_daily import GarminDaily, GarminDailyRead
 from .training_load import TrainingLoad, TrainingLoadRead
 from .fit_metrics import FitMetrics, FitMetricsRead
+from .race_prediction import (
+    RacePrediction,
+    RacePredictionComparison,
+    RacePredictionComparisonRead,
+    RacePredictorV3ResidualModel,
+    RacePredictionRead,
+    RaceReferenceCandidate,
+    RaceValidationReference,
+)
+from .athletic_profile import (
+    ActivityLevel,
+    AthleticProfile,
+    AthleticProfileRead,
+    AthleticProfileUpdate,
+    AthleticSex,
+    ExperienceLevel,
+    PracticeDominant,
+    WeeklyVolumeBand,
+)
+from .reference_test import (
+    ReferenceTest,
+    ReferenceTestCreate,
+    ReferenceTestQuality,
+    ReferenceTestRead,
+    ReferenceTestSurface,
+    ReferenceTestType,
+    ReferenceTestUpdate,
+)
+from .live_session import (
+    LiveSession,
+    LiveSessionSource,
+    LiveSessionStatus,
+    LiveSessionCreate,
+    LiveSessionRead,
+    LiveSessionDetail,
+    LiveTrackpoint,
+    LiveTrackpointRead,
+)
+from .coach_athlete import (
+    CoachAthleteRelation,
+    RelationStatus,
+    CoachAthleteRelationRead,
+    InviteAthleteRequest,
+    AthleteSummary,
+    CoachSummary,
+)
+from .daily_checkin import (
+    DailyCheckin,
+    DailyCheckinRead,
+    DailyCheckinCreate,
+    ReadinessScore,
+)
+from .gpx_route import (
+    GpxRoute,
+    GpxAttachment,
+    GpxRouteUserSettings,
+    GpxRouteSummary,
+    GpxRouteDetail,
+    GpxAttachmentRead,
+    GpxRouteUserSettingsRead,
+    GpxRouteUserSettingsUpdate,
+)
 
 __all__ = [
     "User", "UserCreate", "UserRead", "UserUpdate", "StravaAuth", "StravaAuthRead", "GoogleAuth", "GarminAuth", "GarminAuthRead",
@@ -26,4 +88,17 @@ __all__ = [
     "GarminDaily", "GarminDailyRead",
     "TrainingLoad", "TrainingLoadRead",
     "FitMetrics", "FitMetricsRead",
-] 
+    "RacePrediction", "RacePredictionRead", "RacePredictionComparison", "RacePredictionComparisonRead", "RaceValidationReference", "RaceReferenceCandidate", "RacePredictorV3ResidualModel",
+    "AthleticProfile", "AthleticProfileRead", "AthleticProfileUpdate",
+    "AthleticSex", "ActivityLevel", "ExperienceLevel", "PracticeDominant", "WeeklyVolumeBand",
+    "ReferenceTest", "ReferenceTestCreate", "ReferenceTestRead", "ReferenceTestUpdate",
+    "ReferenceTestType", "ReferenceTestSurface", "ReferenceTestQuality",
+    "LiveSession", "LiveSessionSource", "LiveSessionStatus",
+    "LiveSessionCreate", "LiveSessionRead", "LiveSessionDetail",
+    "LiveTrackpoint", "LiveTrackpointRead",
+    "CoachAthleteRelation", "RelationStatus",
+    "CoachAthleteRelationRead", "InviteAthleteRequest",
+    "AthleteSummary", "CoachSummary",
+    "DailyCheckin", "DailyCheckinRead", "DailyCheckinCreate", "ReadinessScore",
+    "GpxRoute", "GpxAttachment", "GpxRouteUserSettings", "GpxRouteSummary", "GpxRouteDetail", "GpxAttachmentRead", "GpxRouteUserSettingsRead", "GpxRouteUserSettingsUpdate",
+]

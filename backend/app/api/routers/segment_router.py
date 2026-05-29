@@ -6,12 +6,13 @@ import logging
 from datetime import date as date_type, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel import Session, select, func
+from sqlalchemy import String, cast
 from typing import List, Optional
 from uuid import UUID
 
 from app.core.database import get_session
 from app.auth.jwt import get_current_user_id
-from app.domain.entities.activity import Activity
+from app.domain.entities.activity import Activity, ActivitySource
 from app.domain.entities.segment import Segment, SegmentRead
 from app.domain.entities.segment_features import SegmentFeatures, SegmentFeaturesRead
 from app.domain.entities.activity_weather import ActivityWeather, ActivityWeatherRead
@@ -32,7 +33,7 @@ async def process_all_segments(
     session: Session = Depends(get_session),
 ):
     """Segmente toutes les activites enrichies de l'utilisateur."""
-    user_id = get_current_user_id(token.credentials)
+    user_id = UUID(get_current_user_id(token.credentials))
     try:
         result = segmentation_service.segment_all_enriched(session, user_id)
         return result
@@ -51,10 +52,10 @@ async def process_activity_segments(
     session: Session = Depends(get_session),
 ):
     """Segmente une activite specifique (accepte UUID ou strava_id)."""
-    user_id = get_current_user_id(token.credentials)
+    user_id = UUID(get_current_user_id(token.credentials))
 
     activity = resolve_activity(session, activity_id, user_id)
-    if not activity:
+    if not activity or activity.source != ActivitySource.GARMIN.value:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Activite non trouvee",
@@ -77,16 +78,21 @@ async def get_segmentation_status(
     session: Session = Depends(get_session),
 ):
     """Retourne le statut de segmentation pour l'utilisateur."""
-    user_id = get_current_user_id(token.credentials)
+    user_id = UUID(get_current_user_id(token.credentials))
 
     total_activities = session.exec(
-        select(func.count(Activity.id)).where(Activity.user_id == user_id)
+        select(func.count(Activity.id)).where(
+            Activity.user_id == user_id,
+            Activity.source == ActivitySource.GARMIN.value,
+        )
     ).one()
 
     enriched_activities = session.exec(
         select(func.count(Activity.id)).where(
             Activity.user_id == user_id,
+            Activity.source == ActivitySource.GARMIN.value,
             Activity.streams_data.is_not(None),
+            cast(Activity.streams_data, String) != "null",
         )
     ).one()
 
@@ -116,10 +122,10 @@ async def get_activity_segments(
     session: Session = Depends(get_session),
 ):
     """Retourne les segments d'une activite avec leurs features (accepte UUID ou strava_id)."""
-    user_id = get_current_user_id(token.credentials)
+    user_id = UUID(get_current_user_id(token.credentials))
 
     activity = resolve_activity(session, activity_id, user_id)
-    if not activity:
+    if not activity or activity.source != ActivitySource.GARMIN.value:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Activite non trouvee",
@@ -155,6 +161,25 @@ async def get_activity_segments(
 # ──────────────────────────────────────────────
 
 
+@router.get("/weather/status")
+async def get_weather_status(
+    token: str = Depends(security),
+    session: Session = Depends(get_session),
+):
+    """Retourne le statut d'enrichissement meteo pour l'utilisateur."""
+    user_id = UUID(get_current_user_id(token.credentials))
+    return weather_service.get_weather_enrichment_status(session, user_id)
+
+
+@router.get("/weather/template")
+async def get_weather_template(
+    token: str = Depends(security),
+):
+    """Retourne les templates de requete Open-Meteo utilises par l'enrichissement."""
+    get_current_user_id(token.credentials)
+    return weather_service.get_weather_request_templates()
+
+
 @router.get("/weather/{activity_id}")
 async def get_activity_weather(
     activity_id: str,
@@ -162,10 +187,10 @@ async def get_activity_weather(
     session: Session = Depends(get_session),
 ):
     """Retourne les donnees meteo d'une activite (accepte UUID ou strava_id)."""
-    user_id = get_current_user_id(token.credentials)
+    user_id = UUID(get_current_user_id(token.credentials))
 
     activity = resolve_activity(session, activity_id, user_id)
-    if not activity:
+    if not activity or activity.source != ActivitySource.GARMIN.value:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Activite non trouvee",
@@ -183,15 +208,72 @@ async def get_activity_weather(
     return ActivityWeatherRead.model_validate(weather)
 
 
+@router.post("/weather/{activity_id}/enrich")
+async def enrich_activity_weather(
+    activity_id: str,
+    token: str = Depends(security),
+    session: Session = Depends(get_session),
+):
+    """Calcule ou recalcule la meteo 10 min pour une activite precise."""
+    user_id = UUID(get_current_user_id(token.credentials))
+
+    activity = resolve_activity(session, activity_id, user_id)
+    if not activity or activity.source != ActivitySource.GARMIN.value:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Activite non trouvee",
+        )
+
+    try:
+        enriched = await weather_service.fetch_weather_for_activity(session, activity)
+        if not enriched:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Meteo impossible: coordonnees GPS ou donnees Open-Meteo indisponibles",
+            )
+
+        weather = session.exec(
+            select(ActivityWeather).where(ActivityWeather.activity_id == activity.id)
+        ).first()
+        if not weather:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Meteo calculee mais non retrouvee en base",
+            )
+
+        return ActivityWeatherRead.model_validate(weather)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur enrichissement meteo activite {activity_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de l'enrichissement meteo: {str(e)}",
+        )
+
+
 @router.post("/weather/enrich")
 async def enrich_all_activities_weather(
     token: str = Depends(security),
     session: Session = Depends(get_session),
+    max_activities: int = Query(default=25, ge=1, le=100),
+    days_back: Optional[int] = Query(default=None, ge=1, le=730),
+    include_historical_archive: bool = Query(
+        default=False,
+        description="Inclure les activites >93 jours qui necessitent archive-api.open-meteo.com",
+    ),
 ):
-    """Enrichit toutes les activites de l'utilisateur avec les donnees meteo."""
-    user_id = get_current_user_id(token.credentials)
+    """Enrichit un lot d'activites de l'utilisateur avec les donnees meteo."""
+    user_id = UUID(get_current_user_id(token.credentials))
     try:
-        result = await weather_service.enrich_all_weather(session, user_id)
+        result = await weather_service.enrich_all_weather(
+            session,
+            user_id,
+            max_activities=max_activities,
+            concurrency=1 if include_historical_archive else weather_service.DEFAULT_CONCURRENCY,
+            include_historical_archive=include_historical_archive,
+            days_back=days_back,
+        )
         return result
     except Exception as e:
         logger.error(f"Erreur enrichissement meteo user {user_id}: {e}")
@@ -199,42 +281,6 @@ async def enrich_all_activities_weather(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors de l'enrichissement meteo: {str(e)}",
         )
-
-
-@router.get("/weather/status")
-async def get_weather_status(
-    token: str = Depends(security),
-    session: Session = Depends(get_session),
-):
-    """Retourne le statut d'enrichissement meteo pour l'utilisateur."""
-    user_id = get_current_user_id(token.credentials)
-
-    total_activities = session.exec(
-        select(func.count(Activity.id)).where(Activity.user_id == user_id)
-    ).one()
-
-    with_streams = session.exec(
-        select(func.count(Activity.id)).where(
-            Activity.user_id == user_id,
-            Activity.streams_data.is_not(None),
-        )
-    ).one()
-
-    with_weather = session.exec(
-        select(func.count(ActivityWeather.id)).where(
-            ActivityWeather.activity_id.in_(
-                select(Activity.id).where(Activity.user_id == user_id)
-            )
-        )
-    ).one()
-
-    return {
-        "total_activities": total_activities,
-        "with_streams": with_streams,
-        "with_weather": with_weather,
-        "pending_weather": with_streams - with_weather,
-    }
-
 
 # ──────────────────────────────────────────────
 # Routes features derivees (tache 4.4.1)
@@ -247,7 +293,7 @@ async def compute_all_features(
     session: Session = Depends(get_session),
 ):
     """Calcule les features derivees per-segment pour toutes les activites de l'utilisateur."""
-    user_id = get_current_user_id(token.credentials)
+    user_id = UUID(get_current_user_id(token.credentials))
     try:
         result = derived_features_service.compute_all_segment_features(session, user_id)
         return result
@@ -266,12 +312,13 @@ async def compute_activity_features(
     session: Session = Depends(get_session),
 ):
     """Calcule les features derivees per-segment pour une activite specifique."""
-    user_id = get_current_user_id(token.credentials)
+    user_id = UUID(get_current_user_id(token.credentials))
 
     activity = session.exec(
         select(Activity).where(
             Activity.id == activity_id,
             Activity.user_id == user_id,
+            Activity.source == ActivitySource.GARMIN.value,
         )
     ).first()
     if not activity:
@@ -304,7 +351,7 @@ async def get_training_load(
     session: Session = Depends(get_session),
 ):
     """Retourne les donnees de training load pour l'utilisateur sur une plage de dates."""
-    user_id = get_current_user_id(token.credentials)
+    user_id = UUID(get_current_user_id(token.credentials))
 
     # Assurer le calcul des donnees si manquantes
     try:
@@ -335,7 +382,7 @@ async def compute_training_load(
     session: Session = Depends(get_session),
 ):
     """Calcule CTL/ATL/TSB pour l'utilisateur. Defaut : 90 derniers jours jusqu'a aujourd'hui."""
-    user_id = get_current_user_id(token.credentials)
+    user_id = UUID(get_current_user_id(token.credentials))
 
     today = date_type.today()
     d_from = date_from or (today - timedelta(days=90))

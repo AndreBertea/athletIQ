@@ -21,9 +21,9 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     op.create_table('segment',
-        sa.Column('id', sqlmodel.sql.sqltypes.GUID(), nullable=False),
-        sa.Column('activity_id', sqlmodel.sql.sqltypes.GUID(), nullable=False),
-        sa.Column('user_id', sqlmodel.sql.sqltypes.GUID(), nullable=False),
+        sa.Column('id', sa.Uuid(), nullable=False),
+        sa.Column('activity_id', sa.Uuid(), nullable=False),
+        sa.Column('user_id', sa.Uuid(), nullable=False),
         sa.Column('segment_index', sa.Integer(), nullable=False),
         sa.Column('distance_m', sa.Float(), nullable=False),
         sa.Column('elapsed_time_s', sa.Float(), nullable=False),
@@ -45,9 +45,9 @@ def upgrade() -> None:
     op.create_index('ix_segment_user_id', 'segment', ['user_id'])
 
     op.create_table('segmentfeatures',
-        sa.Column('id', sqlmodel.sql.sqltypes.GUID(), nullable=False),
-        sa.Column('segment_id', sqlmodel.sql.sqltypes.GUID(), nullable=False),
-        sa.Column('activity_id', sqlmodel.sql.sqltypes.GUID(), nullable=False),
+        sa.Column('id', sa.Uuid(), nullable=False),
+        sa.Column('segment_id', sa.Uuid(), nullable=False),
+        sa.Column('activity_id', sa.Uuid(), nullable=False),
         sa.Column('cumulative_distance_km', sa.Float(), nullable=False),
         sa.Column('elapsed_time_min', sa.Float(), nullable=False),
         sa.Column('cumulative_elev_gain_m', sa.Float(), nullable=True),

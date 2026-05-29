@@ -4,13 +4,30 @@ Couvre : _map_garmin_activity, _deduplicate_activity, sync_garmin_activities.
 """
 import asyncio
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass, field
 from typing import Optional, List
 from unittest.mock import MagicMock, patch, AsyncMock
 from uuid import UUID, uuid4
 
-from app.domain.entities.activity import Activity, ActivitySource, ActivityType
+from sqlalchemy.pool import StaticPool
+from sqlmodel import Session, SQLModel, create_engine, select
+
+from app.domain.entities.activity import Activity, ActivityCreate, ActivitySource, ActivityType
+from app.domain.entities.activity_weather import ActivityWeather
+from app.domain.entities.fit_metrics import FitMetrics
+from app.domain.entities.segment import Segment
+from app.domain.services.activity_service import ActivityService
+from app.domain.services.activity_matching_service import (
+    consolidate_strava_duplicate_into_garmin,
+    find_unlinked_provider_activity,
+)
+from app.domain.services.redis_quota_manager import (
+    DAILY_KEY,
+    PER_15MIN_LIMIT,
+    SHORT_KEY,
+    RedisQuotaManager,
+)
 from app.domain.services.garmin_sync_service import (
     _map_garmin_activity,
     _deduplicate_activity,
@@ -19,6 +36,7 @@ from app.domain.services.garmin_sync_service import (
     DEDUP_TIME_TOLERANCE_S,
     DEDUP_DISTANCE_TOLERANCE_M,
 )
+from app.domain.services.strava_sync_service import StravaSyncService
 
 
 # ============================================================
@@ -91,6 +109,7 @@ class TestMapGarminActivity:
         assert result["garmin_activity_id"] == 12345678901
         assert result["name"] == "Morning Run"
         assert result["activity_type"] == ActivityType.RUN
+        assert result["start_date_local"] == datetime(2026, 2, 7, 8, 0, 0)
         assert result["distance"] == 10000.0
         assert result["moving_time"] == 3000
         assert result["elapsed_time"] == 3200
@@ -207,9 +226,11 @@ class TestDeduplicateActivity:
         def fake_exec(query):
             result = MagicMock()
             try:
-                result.first.return_value = next(results_iter)
+                value = next(results_iter)
             except StopIteration:
-                result.first.return_value = None
+                value = None
+            result.first.return_value = value
+            result.all.return_value = [] if value is None else [value]
             return result
 
         session.exec = fake_exec
@@ -239,8 +260,8 @@ class TestDeduplicateActivity:
         )
         assert result is None
 
-    def test_fuzzy_match_strava_activity(self):
-        """Une activite Strava avec meme heure/distance est retrouvee."""
+    def test_strava_activity_is_not_reused_in_garmin_only_mode(self):
+        """Une activite Strava equivalente ne devient pas une source Garmin."""
         start = datetime(2026, 2, 7, 7, 0, 0)
         strava_activity = Activity(
             id=uuid4(), user_id=USER_ID, name="Strava Run",
@@ -249,7 +270,7 @@ class TestDeduplicateActivity:
             total_elevation_gain=100, strava_id=987654321,
             source=ActivitySource.STRAVA.value,
         )
-        # Premier exec (exact garmin_id) : None, deuxieme (fuzzy) : strava_activity
+        # Seul l'identifiant Garmin exact est consulte dans ce mode.
         session = self._make_session([None, strava_activity])
 
         result = _deduplicate_activity(
@@ -257,7 +278,7 @@ class TestDeduplicateActivity:
             start + timedelta(seconds=60),  # 1min d'ecart
             10050,  # 50m d'ecart
         )
-        assert result is strava_activity
+        assert result is None
 
     def test_fuzzy_no_match_time_too_far(self):
         """Activite avec meme distance mais heure trop differente."""
@@ -292,6 +313,7 @@ class TestSyncGarminActivities:
                 result.first.return_value = exec_results[call_count[0]]
             else:
                 result.first.return_value = None
+            result.all.return_value = []
             call_count[0] += 1
             return result
 
@@ -361,6 +383,7 @@ class TestSyncGarminActivities:
             # Dedup queries: first one (exact match) returns existing
             result = MagicMock()
             result.first.return_value = existing
+            result.all.return_value = []
             return result
 
         mock_session.exec = patched_exec
@@ -374,7 +397,7 @@ class TestSyncGarminActivities:
 
     @patch("app.domain.services.garmin_sync_service.garmin_auth")
     @patch("app.domain.services.garmin_sync_service.garth")
-    def test_sync_links_strava_activity(self, mock_garth, mock_auth, mock_session):
+    def test_sync_does_not_link_strava_activity(self, mock_garth, mock_auth, mock_session):
         mock_client = MagicMock()
         mock_auth.get_client.return_value = mock_client
 
@@ -383,10 +406,13 @@ class TestSyncGarminActivities:
         )
         mock_garth.Activity.list.side_effect = [[act1], []]
 
-        # Dedup returns strava activity (no garmin_activity_id)
+        # Une activite Strava potentiellement equivalente existe deja.
         strava_act = MagicMock()
         strava_act.garmin_activity_id = None
         strava_act.source = ActivitySource.STRAVA.value
+        strava_act.start_date = act1.start_time_gmt
+        strava_act.start_date_local = None
+        strava_act.distance = act1.distance
 
         original_exec = mock_session.exec
         call_count = [0]
@@ -395,12 +421,14 @@ class TestSyncGarminActivities:
             call_count[0] += 1
             if call_count[0] == 1:
                 return original_exec(query)
-            # First dedup (exact garmin_id): None, second (fuzzy): strava_act
+            # Exact Garmin lookup only: the Strava activity is never selected.
             result = MagicMock()
             if call_count[0] == 2:
                 result.first.return_value = None
+                result.all.return_value = []
             else:
                 result.first.return_value = strava_act
+                result.all.return_value = [strava_act]
             return result
 
         mock_session.exec = patched_exec
@@ -409,8 +437,9 @@ class TestSyncGarminActivities:
             sync_garmin_activities(mock_session, USER_ID, days_back=30)
         )
 
-        assert result["linked"] == 1
-        assert strava_act.garmin_activity_id == 111
+        assert result["created"] == 1
+        assert result["linked"] == 0
+        assert strava_act.garmin_activity_id is None
 
     @patch("app.domain.services.garmin_sync_service.garmin_auth")
     @patch("app.domain.services.garmin_sync_service.garth")
@@ -450,3 +479,255 @@ class TestGarminTypeMap:
     def test_walking_types(self):
         for key in ["walking", "hiking"]:
             assert GARMIN_TYPE_MAP[key] == ActivityType.WALK
+
+
+# ============================================================
+# Tests du flux d'affichage multi-source
+# ============================================================
+
+class TestMultisourceActivityDisplayFeed:
+    @pytest.fixture
+    def db_session(self):
+        engine = create_engine(
+            "sqlite://",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+        SQLModel.metadata.create_all(engine)
+        with Session(engine) as session:
+            yield session
+
+    @staticmethod
+    def make_activity(user_id, **overrides):
+        values = {
+            "user_id": user_id,
+            "name": "Morning Run",
+            "activity_type": ActivityType.RUN,
+            "start_date": datetime(2026, 5, 20, 7, 0),
+            "distance": 10000.0,
+            "moving_time": 3000,
+            "elapsed_time": 3100,
+            "total_elevation_gain": 80.0,
+        }
+        values.update(overrides)
+        return Activity(**values)
+
+    def test_includes_garmin_activity_before_fit_enrichment(self, db_session):
+        user_id = uuid4()
+        garmin_activity = self.make_activity(
+            user_id,
+            source=ActivitySource.GARMIN.value,
+            garmin_activity_id=991,
+            name="Garmin only",
+        )
+        strava_activity = self.make_activity(
+            user_id,
+            source=ActivitySource.STRAVA.value,
+            strava_id=441,
+            name="Strava run",
+            streams_data={"distance": {"data": [0, 10000]}},
+        )
+        db_session.add(garmin_activity)
+        db_session.add(strava_activity)
+        db_session.commit()
+
+        result = ActivityService().get_enriched_activities_paginated(
+            db_session,
+            str(user_id),
+            page=1,
+            per_page=10,
+        )
+        items = {item["name"]: item for item in result["items"]}
+
+        assert result["total"] == 1
+        assert items["Garmin only"]["activity_id"] == str(garmin_activity.id)
+        assert items["Garmin only"]["source"] == "garmin"
+        assert items["Garmin only"]["has_garmin"] is True
+        assert items["Garmin only"]["has_strava"] is False
+        assert items["Garmin only"]["has_fit_metrics"] is False
+        assert items["Garmin only"]["has_streams"] is False
+        assert "Strava run" not in items
+
+    def test_separates_garmin_source_from_fit_capability(self, db_session):
+        user_id = uuid4()
+        garmin_activity = self.make_activity(
+            user_id,
+            source=ActivitySource.GARMIN.value,
+            garmin_activity_id=992,
+        )
+        db_session.add(garmin_activity)
+        db_session.commit()
+        db_session.add(FitMetrics(activity_id=garmin_activity.id, record_count=10))
+        db_session.commit()
+
+        result = ActivityService().get_enriched_activities_paginated(
+            db_session,
+            str(user_id),
+            page=1,
+            per_page=10,
+        )
+
+        assert result["items"][0]["has_garmin"] is True
+        assert result["items"][0]["has_fit_metrics"] is True
+
+
+class TestCrossProviderActivityMatching:
+    @pytest.fixture
+    def db_session(self):
+        engine = create_engine(
+            "sqlite://",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+        SQLModel.metadata.create_all(engine)
+        with Session(engine) as session:
+            yield session
+
+    @staticmethod
+    def make_activity(user_id, **overrides):
+        values = {
+            "user_id": user_id,
+            "name": "Training",
+            "activity_type": ActivityType.RUN,
+            "start_date": datetime(2026, 5, 25, 18, 2, 10),
+            "distance": 10522.2,
+            "moving_time": 3000,
+            "elapsed_time": 3100,
+            "total_elevation_gain": 80.0,
+        }
+        values.update(overrides)
+        return Activity(**values)
+
+    def test_matches_legacy_strava_row_using_garmin_local_time(self, db_session):
+        user_id = uuid4()
+        strava = self.make_activity(
+            user_id,
+            source=ActivitySource.STRAVA.value,
+            strava_id=101,
+            start_date=datetime(2026, 5, 25, 20, 2, 10),
+        )
+        db_session.add(strava)
+        db_session.commit()
+
+        result = find_unlinked_provider_activity(
+            db_session,
+            user_id,
+            provider="strava",
+            start_date=datetime(2026, 5, 25, 18, 2, 10),
+            start_date_local=datetime(2026, 5, 25, 20, 2, 10),
+            distance=10522.24,
+        )
+
+        assert result.id == strava.id
+
+    def test_strava_import_links_preexisting_garmin_row(self, db_session):
+        user_id = uuid4()
+        garmin = self.make_activity(
+            user_id,
+            source=ActivitySource.GARMIN.value,
+            garmin_activity_id=202,
+            start_date_local=datetime(2026, 5, 25, 20, 2, 10),
+        )
+        db_session.add(garmin)
+        db_session.commit()
+        incoming = ActivityCreate(
+            name="Evening Run",
+            activity_type=ActivityType.RUN,
+            start_date=datetime(2026, 5, 25, 18, 2, 10, tzinfo=timezone.utc),
+            start_date_local=datetime(2026, 5, 25, 20, 2, 10),
+            distance=10522.2,
+            moving_time=3000,
+            elapsed_time=3100,
+            total_elevation_gain=80.0,
+            strava_id=303,
+            summary_polyline="strava-polyline",
+        )
+
+        activity, linked = StravaSyncService().save_or_link_activity(
+            db_session, user_id, incoming
+        )
+        db_session.commit()
+
+        rows = db_session.exec(select(Activity).where(Activity.user_id == user_id)).all()
+        assert linked is True
+        assert len(rows) == 1
+        assert activity.id == garmin.id
+        assert activity.garmin_activity_id == 202
+        assert activity.strava_id == 303
+        assert activity.summary_polyline == "strava-polyline"
+
+    def test_consolidates_existing_duplicate_without_losing_enrichment(self, db_session):
+        user_id = uuid4()
+        garmin = self.make_activity(
+            user_id,
+            source=ActivitySource.GARMIN.value,
+            garmin_activity_id=404,
+            streams_data={
+                "time": {"data": [0, 1]},
+                "stance_time": {"data": [250, 252]},
+            },
+        )
+        strava = self.make_activity(
+            user_id,
+            source=ActivitySource.STRAVA.value,
+            strava_id=505,
+            name="Evening Run",
+            start_date=datetime(2026, 5, 25, 20, 2, 10),
+            streams_data={
+                "time": {"data": [0, 2]},
+                "distance": {"data": [0, 10522.2]},
+            },
+        )
+        db_session.add(garmin)
+        db_session.add(strava)
+        db_session.commit()
+        db_session.add(FitMetrics(activity_id=garmin.id, record_count=2))
+        db_session.add(ActivityWeather(activity_id=garmin.id, temperature_c=18.0))
+        db_session.add(
+            Segment(
+                activity_id=garmin.id,
+                user_id=user_id,
+                segment_index=0,
+                distance_m=100.0,
+                elapsed_time_s=30.0,
+            )
+        )
+        db_session.commit()
+
+        consolidate_strava_duplicate_into_garmin(db_session, garmin, strava)
+        db_session.commit()
+
+        rows = db_session.exec(select(Activity).where(Activity.user_id == user_id)).all()
+        assert len(rows) == 1
+        merged = rows[0]
+        assert merged.id == garmin.id
+        assert merged.name == "Evening Run"
+        assert merged.garmin_activity_id == 404
+        assert merged.strava_id == 505
+        assert merged.streams_data["time"]["data"] == [0, 2]
+        assert merged.streams_data["stance_time"]["data"] == [250, 252]
+        assert db_session.exec(
+            select(FitMetrics).where(FitMetrics.activity_id == merged.id)
+        ).first() is not None
+        assert db_session.exec(
+            select(ActivityWeather).where(ActivityWeather.activity_id == merged.id)
+        ).first() is not None
+        assert db_session.exec(
+            select(Segment).where(Segment.activity_id == merged.id)
+        ).first() is not None
+
+
+class TestNonBlockingStravaQuota:
+    def test_full_short_window_does_not_sleep_in_request_path(self):
+        redis_client = MagicMock()
+        redis_client.get.side_effect = lambda key: (
+            "10" if key == DAILY_KEY else str(PER_15MIN_LIMIT)
+        )
+        redis_client.ttl.side_effect = lambda key: 120
+        manager = RedisQuotaManager(redis_client=redis_client)
+
+        with patch("time.sleep") as sleep:
+            result = manager.check_and_wait_if_needed()
+
+        assert result is False
+        sleep.assert_not_called()

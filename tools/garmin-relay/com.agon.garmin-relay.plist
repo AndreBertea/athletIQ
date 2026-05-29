@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  launchd : fait tourner le relais Garmin en permanence sur ton Mac, avec
+  redemarrage automatique en cas de crash ou de reboot.
+
+  Installation :
+    1. Adapte les chemins ci-dessous (REMPLACER /ABSOLUTE/PATH/...).
+    2. cp com.agon.garmin-relay.plist ~/Library/LaunchAgents/
+    3. launchctl load -w ~/Library/LaunchAgents/com.agon.garmin-relay.plist
+  Arret :
+    launchctl unload -w ~/Library/LaunchAgents/com.agon.garmin-relay.plist
+  Logs : voir les chemins StandardOutPath / StandardErrorPath ci-dessous.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.agon.garmin-relay</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <!-- python de ton venv, puis le script -->
+    <string>/ABSOLUTE/PATH/athletIQ/tools/garmin-relay/.venv/bin/python</string>
+    <string>/ABSOLUTE/PATH/athletIQ/tools/garmin-relay/garmin_relay.py</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/ABSOLUTE/PATH/athletIQ/tools/garmin-relay</string>
+
+  <!-- Charge les variables depuis l'environnement du shell de login ;
+       en pratique on injecte plutot le .env via EnvironmentVariables ci-dessous,
+       OU on lance via un wrapper run.sh qui "source .env". Voir README. -->
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>SUPABASE_URL</key>
+    <string>https://rjojtypjmykfkgnndamt.supabase.co</string>
+    <key>SUPABASE_SERVICE_ROLE_KEY</key>
+    <string>REMPLACER_PAR_TA_CLE_SERVICE_ROLE</string>
+    <key>ENCRYPTION_KEY</key>
+    <string>REMPLACER_PAR_TA_CLE_ENCRYPTION</string>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>/ABSOLUTE/PATH/athletIQ/tools/garmin-relay/relay.log</string>
+  <key>StandardErrorPath</key>
+  <string>/ABSOLUTE/PATH/athletIQ/tools/garmin-relay/relay.err.log</string>
+</dict>
+</plist>

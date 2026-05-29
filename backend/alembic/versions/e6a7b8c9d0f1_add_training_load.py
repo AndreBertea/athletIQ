@@ -21,8 +21,8 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     op.create_table('trainingload',
-        sa.Column('id', sqlmodel.sql.sqltypes.GUID(), nullable=False),
-        sa.Column('user_id', sqlmodel.sql.sqltypes.GUID(), nullable=False),
+        sa.Column('id', sa.Uuid(), nullable=False),
+        sa.Column('user_id', sa.Uuid(), nullable=False),
         sa.Column('date', sa.Date(), nullable=False),
         sa.Column('ctl_42d', sa.Float(), nullable=True),
         sa.Column('atl_7d', sa.Float(), nullable=True),

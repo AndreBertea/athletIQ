@@ -24,7 +24,7 @@ export interface SegmentPrediction {
 }
 
 export interface RacePredictionResult {
-  engine_version: "v3_supabase_mvp";
+  engine_version: "v3_hybrid";
   filename: string;
   analysis_mode: string;
   ravito_mode: string;
@@ -78,11 +78,29 @@ interface SegmentGeometry {
   altitudeM: number;
 }
 
+interface AthleteCalibration {
+  source: "activities" | "fallback";
+  route_profile: "road" | "trail";
+  activities_used: number;
+  road_activities_used: number;
+  trail_activities_used: number;
+  power_wkg: number;
+  road_power_wkg?: number;
+  trail_power_wkg?: number;
+  trail_factor: number;
+  note?: string;
+}
+
 const GPX_MAX_BYTES = 2 * 1024 * 1024;
-const MAX_POINTS = 1000;
+// Garde-fou de securite uniquement (le runtime Deno encaisse des dizaines de
+// milliers de points sans souci). On garde la pleine resolution du GPX pour ne
+// pas fausser distance et D+ sur les longues courses.
+const MAX_POINTS = 50000;
 const MIN_SEGMENT_M = 200;
 const MAX_SEGMENT_M = 1000;
 const GRADE_CHANGE_CUT = 0.04;
+// Seuil anti-bruit GPS (hysteresis) pour le calcul du denivele.
+const ELE_THRESHOLD_M = 2;
 
 export function assertGpxSize(sizeBytes: number): void {
   if (sizeBytes > GPX_MAX_BYTES) {
@@ -132,14 +150,20 @@ export async function buildRacePrediction(
 
   const totalDistanceKm = sum(segments.map((segment) => segment.distanceM)) / 1000;
   const totalElevationGainM = sum(segments.map((segment) => segment.elevGainM));
-  const calibration = await calibrateAthlete(options.serviceClient, options.userId, options.historyStartDate);
+  const routeProfile = inferRouteProfile(options.analysisMode ?? "auto", totalDistanceKm, totalElevationGainM);
+  const calibration = await calibrateAthlete(
+    options.serviceClient,
+    options.userId,
+    routeProfile,
+    options.historyStartDate,
+  );
   const ravitos = resolveRavitos(totalDistanceKm, options.ravitoMode ?? "auto", options.customRavitos ?? []);
   const manualTemperature = options.manualTemperatureC ?? null;
   const effortMultiplier = effortToMultiplier(options.effortMode ?? "steady");
   const warnings: string[] = [];
 
   if (points.length >= MAX_POINTS) {
-    warnings.push("GPX downsamplé à 1000 points pour respecter les limites Edge Function.");
+    warnings.push(`GPX très volumineux : échantillonné à ${MAX_POINTS} points (garde-fou de sécurité).`);
   }
   if (calibration.source === "fallback") {
     warnings.push("Calibration historique insuffisante: modèle athlète MVP par défaut utilisé.");
@@ -151,9 +175,10 @@ export async function buildRacePrediction(
   const predictedSegments = segments.map((segment) => {
     const completion = totalDistanceKm > 0 ? cumulativeDistanceKm / totalDistanceKm : 0;
     const altitudeFactor = segment.altitudeM > 1500
-      ? 1 + ((segment.altitudeM - 1500) / 1000) * 0.03
+      ? 1 + ((segment.altitudeM - 1500) / 1000) * 0.06
       : 1;
-    const fatigueFactor = 1 + completion * 0.14 + Math.max(0, segment.elevGainM) * 0.00012;
+    const fatigueFactor = 1 + completion * (routeProfile === "trail" ? 0.20 : 0.12) +
+      Math.max(0, segment.elevGainM) * (routeProfile === "trail" ? 0.00018 : 0.00010);
     const temperatureFactor = temperatureToFactor(manualTemperature);
     const mode = segment.grade > 0.16 ? "walk" : "run";
     const cost = mode === "walk" ? minettiWalkCost(segment.grade) : minettiRunCost(segment.grade);
@@ -186,7 +211,7 @@ export async function buildRacePrediction(
   const totalTimeMin = movingTimeMin + totalPauseMin;
 
   return {
-    engine_version: "v3_supabase_mvp",
+    engine_version: "v3_hybrid",
     filename: options.filename,
     analysis_mode: options.analysisMode ?? "auto",
     ravito_mode: options.ravitoMode ?? "auto",
@@ -211,8 +236,8 @@ export async function buildRacePrediction(
       temperature_factor: round(temperatureToFactor(manualTemperature), 3),
     },
     fatigue: {
-      model: "linear_distance_plus_segment_climb",
-      max_distance_penalty_pct: 14,
+      model: "distance_completion_plus_segment_climb",
+      max_distance_penalty_pct: routeProfile === "trail" ? 20 : 12,
     },
     warnings,
   };
@@ -227,6 +252,9 @@ function buildSegments(points: GpxPoint[]): SegmentGeometry[] {
   let currentLossM = 0;
   let lastGrade = 0;
   let totalDistanceM = 0;
+  // Reference d'altitude avec hysteresis : on ne comptabilise D+/D- qu'au-dela
+  // du seuil, pour ignorer le bruit GPS tout en gardant la pleine resolution.
+  let refEle = points[0]?.ele ?? 0;
 
   for (let i = 1; i < points.length; i += 1) {
     const prev = points[i - 1];
@@ -234,11 +262,16 @@ function buildSegments(points: GpxPoint[]): SegmentGeometry[] {
     const dist = haversine(prev, point);
     if (!Number.isFinite(dist) || dist <= 0) continue;
 
-    const deltaEle = point.ele - prev.ele;
     currentDistanceM += dist;
     totalDistanceM += dist;
-    if (deltaEle > 0) currentGainM += deltaEle;
-    else currentLossM += Math.abs(deltaEle);
+    const deltaEle = point.ele - refEle;
+    if (deltaEle >= ELE_THRESHOLD_M) {
+      currentGainM += deltaEle;
+      refEle = point.ele;
+    } else if (deltaEle <= -ELE_THRESHOLD_M) {
+      currentLossM += -deltaEle;
+      refEle = point.ele;
+    }
 
     const grade = (point.ele - points[startIndex].ele) / Math.max(currentDistanceM, 1);
     const shouldCut =
@@ -271,12 +304,14 @@ function buildSegments(points: GpxPoint[]): SegmentGeometry[] {
 async function calibrateAthlete(
   client: SupabaseClient,
   userId: string,
+  routeProfile: "road" | "trail",
   historyStartDate?: string | null,
-): Promise<Record<string, unknown>> {
+): Promise<AthleteCalibration> {
   let query = client
     .from("activities")
     .select("distance_m,moving_time_s,elev_gain_m,sport_type,start_date_utc")
     .eq("user_id", userId)
+    .in("sport_type", ["Run", "TrailRun"])
     .gt("distance_m", 2000)
     .gt("moving_time_s", 600)
     .order("start_date_utc", { ascending: false })
@@ -295,25 +330,59 @@ async function calibrateAthlete(
       if (distance <= 0 || movingTime <= 0) return null;
       const speed = distance / movingTime;
       const climbPenalty = 1 + Math.min(elevGain / Math.max(distance, 1), 0.15) * 1.8;
-      return clamp(speed * 3.6 * climbPenalty, 6.5, 13.5);
+      return {
+        sportType: String(activity.sport_type ?? ""),
+        powerWkg: clamp(speed * 3.6 * climbPenalty, 6.5, 13.5),
+      };
     })
-    .filter((value): value is number => value != null && Number.isFinite(value));
+    .filter((value): value is { sportType: string; powerWkg: number } =>
+      value != null && Number.isFinite(value.powerWkg)
+    );
 
   if (usable.length < 3) {
     return {
       source: "fallback",
       activities_used: usable.length,
+      road_activities_used: usable.filter((activity) => activity.sportType === "Run").length,
+      trail_activities_used: usable.filter((activity) => activity.sportType === "TrailRun").length,
+      route_profile: routeProfile,
       power_wkg: 9.5,
+      trail_factor: routeProfile === "trail" ? 1.2 : 1,
       note: "Profil MVP neutre faute d'historique suffisant.",
     };
   }
 
-  usable.sort((a, b) => a - b);
-  const median = usable[Math.floor(usable.length / 2)];
+  const roadPowers = usable
+    .filter((activity) => activity.sportType === "Run")
+    .map((activity) => activity.powerWkg);
+  const trailPowers = usable
+    .filter((activity) => activity.sportType === "TrailRun")
+    .map((activity) => activity.powerWkg);
+  const allPowers = usable.map((activity) => activity.powerWkg);
+  const allMedian = median(allPowers);
+  const roadMedian = roadPowers.length >= 3 ? median(roadPowers) : allMedian;
+  const trailMedianRaw = trailPowers.length >= 5 ? median(trailPowers) : null;
+  const priorTrailFactor = 1.2;
+  const trailFactor = trailMedianRaw != null && roadMedian > 0
+    ? clamp(roadMedian / trailMedianRaw, 1.05, 1.35)
+    : priorTrailFactor;
+  const selectedPower = routeProfile === "trail"
+    ? trailMedianRaw ?? (roadMedian / priorTrailFactor)
+    : roadMedian;
+
   return {
     source: "activities",
     activities_used: usable.length,
-    power_wkg: round(median, 2),
+    road_activities_used: roadPowers.length,
+    trail_activities_used: trailPowers.length,
+    route_profile: routeProfile,
+    power_wkg: round(selectedPower, 2),
+    road_power_wkg: round(roadMedian, 2),
+    trail_power_wkg: trailMedianRaw == null ? undefined : round(trailMedianRaw, 2),
+    trail_factor: round(trailFactor, 3),
+    note: routeProfile === "trail"
+      ? "Calibration trail: puissance issue des activites TrailRun si disponibles, sinon puissance route divisee par le prior trail."
+      : "Calibration route: puissance issue des activites Run uniquement.",
   };
 }
 
@@ -331,6 +400,10 @@ function resolveRavitos(
   if (customRavitos.length > 0) {
     return customRavitos
       .filter((ravito) => ravito.km > 0 && ravito.km < totalDistanceKm)
+      .map((ravito, index) => ({
+        ...ravito,
+        pause_min: autoPauseForAidPoint(totalDistanceKm, ravito, index),
+      }))
       .sort((a, b) => a.km - b.km);
   }
 
@@ -341,7 +414,7 @@ function resolveRavitos(
     points.push({
       km: round(km, 1),
       name: `Ravito ${points.length + 1}`,
-      pause_min: totalDistanceKm >= 80 ? 6 : 4,
+      pause_min: autoPauseForAidPoint(totalDistanceKm, { km, name: "", pause_min: 0 }, points.length),
     });
   }
   return points;
@@ -355,6 +428,56 @@ export function parseCustomRavitos(value: FormDataEntryValue | null): RavitoPoin
     name: String(item.name ?? `Ravito ${index + 1}`),
     pause_min: Number(item.pause_min ?? item.pauseMin ?? 0),
   })).filter((item) => Number.isFinite(item.km) && Number.isFinite(item.pause_min));
+}
+
+function inferRouteProfile(
+  analysisMode: string,
+  totalDistanceKm: number,
+  totalElevationGainM: number,
+): "road" | "trail" {
+  if (analysisMode === "road") return "road";
+  if (analysisMode === "trail") return "trail";
+  const dPlusPerKm = totalElevationGainM / Math.max(totalDistanceKm, 1);
+  return dPlusPerKm >= 15 || totalDistanceKm >= 35 ? "trail" : "road";
+}
+
+function autoPauseForAidPoint(
+  totalDistanceKm: number,
+  ravito: Pick<RavitoPoint, "km" | "name" | "pause_min">,
+  index: number,
+): number {
+  if (totalDistanceKm < 35) return 0;
+
+  const km = Number(ravito.km ?? 0);
+  const name = normalizeText(ravito.name);
+  const isLongUltra = totalDistanceKm >= 80;
+  const isDrinkOnly = name.includes("verrieres");
+  const isHotOrBase =
+    name.includes("gorges") ||
+    name.includes("places") ||
+    name.includes("chapeau") ||
+    name.includes("roche");
+
+  if (!isLongUltra) {
+    return round(km >= 30 ? 5 : 4, 1);
+  }
+
+  if (isDrinkOnly) return 6;
+
+  let pause = 12;
+  if (km >= 40) pause += 2;
+  if (km >= 70) pause += Math.min(8, (km - 70) * 0.16);
+  if (isHotOrBase) pause += 10;
+  if (index >= 8) pause += 2;
+
+  return round(clamp(pause, 10, 28), 1);
+}
+
+function normalizeText(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase();
 }
 
 function downsample(points: GpxPoint[], maxPoints: number): GpxPoint[] {
@@ -419,6 +542,14 @@ function formatDuration(minutes: number): string {
 function average(values: number[]): number {
   if (values.length === 0) return 0;
   return sum(values) / values.length;
+}
+
+function median(values: number[]): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 1) return sorted[middle];
+  return (sorted[middle - 1] + sorted[middle]) / 2;
 }
 
 function sum(values: number[]): number {

@@ -10,6 +10,7 @@ from typing import Optional
 from uuid import UUID
 
 from app.core.database import get_session
+from app.core.settings import get_settings
 from app.auth.jwt import get_current_user_id
 from app.domain.entities import ActivityWithStreams, ActivityStats
 from app.domain.services.activity_service import activity_service
@@ -19,6 +20,14 @@ from app.api.routers._shared import security
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _require_strava_integration() -> None:
+    if not get_settings().STRAVA_INTEGRATION_ENABLED:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Enrichissement Strava temporairement suspendu",
+        )
 
 
 @router.get("/activities")
@@ -73,7 +82,7 @@ async def get_enriched_activities(
     sport_type: Optional[str] = Query(None),
     date_from: Optional[str] = Query(None, description="Date minimale ISO (YYYY-MM-DD)")
 ):
-    """Recupere les activites enrichies depuis PostgreSQL avec pagination"""
+    """Recupere les resumes d'activites multi-sources avec indicateurs d'enrichissement."""
     try:
         user_id = get_current_user_id(token.credentials)
         return activity_service.get_enriched_activities_paginated(
@@ -102,11 +111,11 @@ async def get_enriched_activity_stats(
 
 @router.get("/activities/enriched/{activity_id}")
 async def get_enriched_activity(
-    activity_id: int,
+    activity_id: str,
     token: str = Depends(security),
     session: Session = Depends(get_session)
 ):
-    """Recupere une activite enrichie specifique par strava_id"""
+    """Recupere le resume d'une activite par UUID ou identifiant fournisseur."""
     try:
         user_id = get_current_user_id(token.credentials)
         return activity_service.get_enriched_activity(session, user_id, activity_id)
@@ -118,7 +127,7 @@ async def get_enriched_activity(
 
 @router.get("/activities/enriched/{activity_id}/streams")
 async def get_enriched_activity_streams(
-    activity_id: int,
+    activity_id: str,
     token: str = Depends(security),
     session: Session = Depends(get_session)
 ):
@@ -147,12 +156,13 @@ async def get_activity(
 
 
 @router.post("/activities/{activity_id}/enrich")
-async def enrich_single_activity(
+def enrich_single_activity(
     activity_id: UUID,
     token: str = Depends(security),
     session: Session = Depends(get_session)
 ):
     """Enrichit une activite specifique avec ses donnees detaillees Strava"""
+    _require_strava_integration()
     user_id = get_current_user_id(token.credentials)
     try:
         return activity_service.enrich_single(session, user_id, activity_id)
@@ -166,12 +176,13 @@ async def enrich_single_activity(
 
 
 @router.post("/activities/enrich-batch")
-async def enrich_batch_activities(
+def enrich_batch_activities(
     token: str = Depends(security),
     session: Session = Depends(get_session),
     max_activities: int = Query(default=10, ge=1, le=50)
 ):
     """Enrichit un lot d'activites avec les donnees detaillees Strava"""
+    _require_strava_integration()
     user_id = get_current_user_id(token.credentials)
     try:
         return activity_service.enrich_batch(session, user_id, max_activities)
@@ -205,6 +216,7 @@ async def start_auto_enrichment(
     session: Session = Depends(get_session)
 ):
     """Demarre l'enrichissement automatique pour l'utilisateur"""
+    _require_strava_integration()
     user_id = get_current_user_id(token.credentials)
     return auto_enrichment_service.start_enrichment_for_user(user_id)
 
@@ -216,6 +228,7 @@ async def prioritize_activity_enrichment(
     session: Session = Depends(get_session)
 ):
     """Met une activite en priorite haute pour l'enrichissement"""
+    _require_strava_integration()
     user_id = get_current_user_id(token.credentials)
     try:
         return activity_service.prioritize_activity(session, user_id, activity_id)
@@ -248,3 +261,33 @@ async def update_activity_type(
         if "non trouvee" in error_msg:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error_msg)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_msg)
+
+
+@router.post("/activities/auto-correct")
+async def auto_correct_activity_types(
+    token: str = Depends(security),
+    session: Session = Depends(get_session)
+):
+    """Analyse les activites et propose des corrections basees sur les mots-cles du titre/description"""
+    user_id = get_current_user_id(token.credentials)
+    try:
+        return activity_service.auto_correct_activity_types(session, user_id)
+    except Exception as e:
+        logger.error(f"Erreur auto-correct: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erreur lors de l'analyse: {str(e)}")
+
+
+@router.post("/activities/apply-corrections")
+async def apply_auto_corrections(
+    body: dict,
+    token: str = Depends(security),
+    session: Session = Depends(get_session)
+):
+    """Applique les corrections d'activites proposees par auto_correct_activity_types"""
+    user_id = get_current_user_id(token.credentials)
+    try:
+        corrections = body.get("corrections", [])
+        return activity_service.apply_auto_corrections(session, user_id, corrections)
+    except Exception as e:
+        logger.error(f"Erreur apply-corrections: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erreur lors de l'application: {str(e)}")

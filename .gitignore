@@ -166,3 +166,17 @@ check_services.sh
 !DATA_AQI_PLAN.md
 !LICENSE
 !docs/**/*.md
+
+# Token Garmin live (ne jamais committer)
+garmin_token.json
+
+# Relais Garmin maison — secrets & runtime
+tools/garmin-relay/.env
+tools/garmin-relay/.venv/
+tools/garmin-relay/*.log
+.vercel
+
+# Worker prédiction (2e Mac) — secrets & runtime
+tools/predict-relay/.env
+tools/predict-relay/.venv/
+tools/predict-relay/*.log

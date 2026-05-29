@@ -10,7 +10,6 @@ remplacement transparent.
 """
 
 import logging
-import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict
 
@@ -126,7 +125,7 @@ class RedisQuotaManager:
     # ------------------------------------------------------------------
 
     def check_and_wait_if_needed(self) -> bool:
-        """Vérifie les quotas et attend si nécessaire. Retourne False si quota daily atteint."""
+        """Verifie les quotas sans bloquer le serveur pendant leur reinitialisation."""
         daily = self.daily_count
         if daily >= self.daily_limit:
             logger.warning("Quota journalier Strava atteint")
@@ -134,14 +133,16 @@ class RedisQuotaManager:
 
         short = self.per_15min_count
         if short >= self.per_15min_limit:
-            # Attendre le temps restant du TTL de la clé 15min
             try:
                 ttl = self._get_redis().ttl(SHORT_KEY)
             except redis.RedisError:
-                ttl = 60  # fallback raisonnable
-            wait_time = max(ttl, 1)
-            logger.info(f"Quota 15min atteint, attente de {wait_time}s")
-            time.sleep(wait_time)
+                ttl = 60
+            retry_after = ttl if ttl and ttl > 0 else 60
+            logger.info(
+                "Quota 15min atteint, enrichissement differe de %ss",
+                retry_after,
+            )
+            return False
 
         return True
 

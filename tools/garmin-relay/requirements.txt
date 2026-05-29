@@ -1,0 +1,4 @@
+garth==0.6.3
+requests>=2.31.0
+cryptography>=42.0.0
+fitparse>=1.2.0

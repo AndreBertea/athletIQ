@@ -12,6 +12,7 @@ import zipfile
 from io import BytesIO
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
+from urllib.parse import quote
 from uuid import UUID
 
 import garth
@@ -24,14 +25,155 @@ if TYPE_CHECKING:
 
 from app.auth.garmin_auth import garmin_auth
 from app.domain.entities.activity import Activity, ActivitySource, ActivityType
+from app.domain.entities.activity_weather import ActivityWeather
 from app.domain.entities.fit_metrics import FitMetrics
 from app.domain.entities.garmin_daily import GarminDaily
 from app.domain.entities.user import GarminAuth
+from app.domain.services.activity_matching_service import (
+    DEDUP_DISTANCE_TOLERANCE_M,
+    DEDUP_TIME_TOLERANCE_S,
+)
 from app.domain.services.derived_features_service import recompute_training_load_from
 
 logger = logging.getLogger(__name__)
 
 REQUEST_DELAY_S = 1.0  # 1s entre chaque date (safe pour Garmin)
+
+
+def _number(value: Any) -> Optional[float]:
+    """Retourne un nombre Garmin utilisable, sinon None."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return float(value)
+
+
+def _get_number(payload: Dict[str, Any], *keys: str) -> Optional[float]:
+    for key in keys:
+        value = _number(payload.get(key))
+        if value is not None:
+            return value
+    return None
+
+
+def _extract_vo2max(payload: Any) -> Optional[float]:
+    """Extrait la VO2 max de la reponse maxmet, dont la forme varie selon Garmin."""
+    if isinstance(payload, list):
+        for entry in reversed(payload):
+            value = _extract_vo2max(entry)
+            if value is not None:
+                return value
+        return None
+    if not isinstance(payload, dict):
+        return None
+
+    value = _get_number(
+        payload,
+        "vo2MaxPreciseValue",
+        "vo2MaxValue",
+        "vo2Max",
+        "vo_2_max_precise_value",
+        "vo_2_max",
+    )
+    if value is not None:
+        return value
+
+    for key in ("running", "generic", "metrics", "maxMet"):
+        value = _extract_vo2max(payload.get(key))
+        if value is not None:
+            return value
+    return None
+
+
+def _extract_race_prediction_times(payload: Any) -> Dict[str, float]:
+    """Normalise les formats Garmin Race Predictor en durees exprimees en secondes."""
+    result: Dict[str, float] = {}
+
+    if isinstance(payload, dict):
+        direct_fields = {
+            "race_prediction_5k_seconds": (
+                "racePrediction5KTime",
+                "racePrediction5kTime",
+                "prediction5KTime",
+            ),
+            "race_prediction_10k_seconds": (
+                "racePrediction10KTime",
+                "racePrediction10kTime",
+                "prediction10KTime",
+            ),
+            "race_prediction_half_seconds": (
+                "racePredictionHalfTime",
+                "racePredictionHalfMarathonTime",
+                "predictionHalfTime",
+            ),
+            "race_prediction_marathon_seconds": (
+                "racePredictionMarathonTime",
+                "predictionMarathonTime",
+            ),
+        }
+        for target, keys in direct_fields.items():
+            value = _get_number(payload, *keys)
+            if value is not None:
+                result[target] = value
+
+        nested = payload.get("racePredictions")
+        if nested is not None:
+            result.update(_extract_race_prediction_times(nested))
+
+        distance = _get_number(payload, "raceDistance", "distance", "distanceMeters")
+        duration = _get_number(
+            payload,
+            "time",
+            "racePredictionTime",
+            "predictedTime",
+            "timeSeconds",
+        )
+        if distance is not None and duration is not None:
+            if abs(distance - 5000) < 100:
+                result["race_prediction_5k_seconds"] = duration
+            elif abs(distance - 10000) < 100:
+                result["race_prediction_10k_seconds"] = duration
+            elif abs(distance - 21097.5) < 200:
+                result["race_prediction_half_seconds"] = duration
+            elif abs(distance - 42195) < 300:
+                result["race_prediction_marathon_seconds"] = duration
+
+    elif isinstance(payload, list):
+        for entry in payload:
+            result.update(_extract_race_prediction_times(entry))
+
+    return result
+
+
+def _fetch_current_performance(client: garth.Client) -> Dict[str, Any]:
+    """Recupere les indicateurs Garmin courants qui ne sont pas des mesures par jour."""
+    data: Dict[str, Any] = {}
+    try:
+        settings = client.connectapi("/userprofile-service/userprofile/user-settings")
+        user_data = settings.get("userData", {}) if isinstance(settings, dict) else {}
+        vo2max = _get_number(user_data, "vo2MaxRunning")
+        threshold_speed = _get_number(user_data, "lactateThresholdSpeed")
+        threshold_hr = _get_number(user_data, "lactateThresholdHeartRate")
+        if vo2max is not None:
+            data["vo2max_estimated"] = vo2max
+        if threshold_speed is not None:
+            data["lactate_threshold_speed_mps"] = threshold_speed
+        if threshold_hr is not None:
+            data["lactate_threshold_hr"] = round(threshold_hr)
+    except Exception as e:
+        logger.debug(f"Garmin user performance settings: {e}")
+
+    try:
+        profile = client.user_profile
+        display_name = profile.get("displayName") if isinstance(profile, dict) else None
+        if display_name:
+            predictions = client.connectapi(
+                f"/metrics-service/metrics/racepredictions/latest/{quote(str(display_name), safe='')}"
+            )
+            data.update(_extract_race_prediction_times(predictions))
+    except Exception as e:
+        logger.debug(f"Garmin race predictions: {e}")
+
+    return data
 
 
 async def sync_daily_data(
@@ -58,6 +200,7 @@ async def sync_daily_data(
     client = garmin_auth.get_client(garmin_auth_record.oauth_token_encrypted)
 
     today = date.today()
+    current_performance = _fetch_current_performance(client)
     synced = 0
     errors = 0
 
@@ -65,6 +208,8 @@ async def sync_daily_data(
         target_date = today - timedelta(days=i)
         try:
             data = _fetch_day(client, target_date)
+            if target_date == today and current_performance:
+                data = {**(data or {}), **current_performance}
             if data:
                 _upsert(session, user_id, target_date, data)
                 synced += 1
@@ -79,7 +224,12 @@ async def sync_daily_data(
     session.add(garmin_auth_record)
     session.commit()
 
-    return {"days_synced": synced, "errors": errors, "total_requested": days_back}
+    return {
+        "days_synced": synced,
+        "errors": errors,
+        "total_requested": days_back,
+        "performance_metrics_synced": bool(current_performance),
+    }
 
 
 def _fetch_day(client: garth.Client, day: date) -> Optional[Dict[str, Any]]:
@@ -162,6 +312,12 @@ def _fetch_day(client: garth.Client, day: date) -> Optional[Dict[str, Any]]:
         if summary:
             if summary.average_stress_level is not None:
                 data["stress_score"] = summary.average_stress_level
+            if summary.total_steps is not None:
+                data["total_steps"] = summary.total_steps
+            if summary.total_kilocalories is not None:
+                data["total_kilocalories"] = summary.total_kilocalories
+            if summary.active_kilocalories is not None:
+                data["active_kilocalories"] = summary.active_kilocalories
             if summary.body_battery_highest_value is not None:
                 data["body_battery_max"] = summary.body_battery_highest_value
             if summary.body_battery_lowest_value is not None:
@@ -183,9 +339,15 @@ def _fetch_day(client: garth.Client, day: date) -> Optional[Dict[str, Any]]:
 
     # VO2max
     try:
-        scores = garth.GarminScoresData.get(day, client=client)
-        if scores and scores.vo_2_max_precise_value:
-            data["vo2max_estimated"] = scores.vo_2_max_precise_value
+        max_metrics = client.connectapi(
+            f"/metrics-service/metrics/maxmet/daily/{day}/{day}"
+        )
+        vo2max = _extract_vo2max(max_metrics)
+        if vo2max is None:
+            scores = garth.GarminScoresData.get(day, client=client)
+            vo2max = getattr(scores, "vo_2_max_precise_value", None) if scores else None
+        if vo2max is not None:
+            data["vo2max_estimated"] = vo2max
     except Exception as e:
         logger.debug(f"VO2max {day}: {e}")
 
@@ -451,11 +613,6 @@ GARMIN_TYPE_MAP: Dict[str, ActivityType] = {
     "hiking": ActivityType.WALK,
 }
 
-# Tolerance pour la deduplication fuzzy
-DEDUP_TIME_TOLERANCE_S = 300  # 5 minutes
-DEDUP_DISTANCE_TOLERANCE_M = 200  # 200m
-
-
 def _map_garmin_activity(
     garmin_act: garth.Activity,
     user_id: UUID,
@@ -486,6 +643,7 @@ def _map_garmin_activity(
         "name": garmin_act.activity_name or "Garmin Activity",
         "activity_type": activity_type,
         "start_date": garmin_act.start_time_gmt or garmin_act.start_time_local or datetime.utcnow(),
+        "start_date_local": garmin_act.start_time_local,
         "distance": distance,
         "moving_time": moving_time,
         "elapsed_time": elapsed_time,
@@ -505,38 +663,104 @@ def _deduplicate_activity(
     garmin_activity_id: int,
     start_date: datetime,
     distance: float,
+    start_date_local: Optional[datetime] = None,
 ) -> Optional[Activity]:
     """
-    Verifie si une activite existe deja.
-    1) Match exact par garmin_activity_id
-    2) Fuzzy match par start_date + distance (pour eviter les doublons Strava/Garmin)
-    Retourne l'Activity existante ou None.
+    Verifie si une activite Garmin existe deja par son identifiant fournisseur.
+
+    Strava est suspendu : aucune ligne Strava existante ne doit etre rattachee
+    ni reutilisee pour construire l'historique Garmin.
     """
-    # 1) Match exact garmin_activity_id
-    existing = session.exec(
+    return session.exec(
         select(Activity).where(
             Activity.user_id == user_id,
             Activity.garmin_activity_id == garmin_activity_id,
         )
     ).first()
-    if existing:
-        return existing
 
-    # 2) Fuzzy match : meme heure (+/- 5min) et distance similaire (+/- 200m)
-    time_lower = start_date - timedelta(seconds=DEDUP_TIME_TOLERANCE_S)
-    time_upper = start_date + timedelta(seconds=DEDUP_TIME_TOLERANCE_S)
 
-    existing = session.exec(
-        select(Activity).where(
-            Activity.user_id == user_id,
-            Activity.start_date >= time_lower,
-            Activity.start_date <= time_upper,
-            Activity.distance >= distance - DEDUP_DISTANCE_TOLERANCE_M,
-            Activity.distance <= distance + DEDUP_DISTANCE_TOLERANCE_M,
-        )
+def _get_garmin_client_for_user(session: Session, user_id: UUID) -> Any:
+    garmin_auth_record = session.exec(
+        select(GarminAuth).where(GarminAuth.user_id == user_id)
     ).first()
 
-    return existing
+    if not garmin_auth_record:
+        raise ValueError(f"Aucune authentification Garmin pour user_id={user_id}")
+
+    return garmin_auth.get_client(garmin_auth_record.oauth_token_encrypted)
+
+
+def _garmin_activity_start_time(activity: Any) -> Optional[datetime]:
+    return activity.start_time_gmt or activity.start_time_local
+
+
+async def _list_garmin_activities_for_period(client: Any, days_back: int) -> List[Any]:
+    cutoff = datetime.utcnow() - timedelta(days=days_back)
+    all_activities: List[Any] = []
+    start = 0
+    page_size = 20
+
+    while True:
+        page = garth.Activity.list(limit=page_size, start=start, client=client)
+        if not page:
+            break
+
+        all_activities.extend(page)
+        last_time = _garmin_activity_start_time(page[-1])
+        if last_time and last_time < cutoff:
+            break
+
+        start += page_size
+        await asyncio.sleep(1.0)
+
+    return [
+        activity
+        for activity in all_activities
+        if not _garmin_activity_start_time(activity)
+        or _garmin_activity_start_time(activity) >= cutoff
+    ]
+
+
+async def preview_garmin_activity_import(
+    session: Session,
+    user_id: UUID,
+    days_back: int = 30,
+) -> Dict[str, Any]:
+    """Compte les activites Garmin disponibles sur une periode sans les importer."""
+    client = _get_garmin_client_for_user(session, user_id)
+    cutoff = datetime.utcnow() - timedelta(days=days_back)
+    activities = await _list_garmin_activities_for_period(client, days_back)
+
+    garmin_ids: list[int] = []
+    for activity in activities:
+        try:
+            garmin_ids.append(int(activity.activity_id))
+        except (TypeError, ValueError):
+            continue
+
+    existing_ids: set[int] = set()
+    if garmin_ids:
+        existing_ids = {
+            int(activity_id)
+            for activity_id in session.exec(
+                select(Activity.garmin_activity_id).where(
+                    Activity.user_id == user_id,
+                    Activity.garmin_activity_id.in_(garmin_ids),
+                )
+            ).all()
+            if activity_id is not None
+        }
+
+    total = len(garmin_ids)
+    existing = len(existing_ids)
+
+    return {
+        "days_back": days_back,
+        "period_started_at": cutoff.isoformat(),
+        "total_activities": total,
+        "existing_activities": existing,
+        "missing_activities": max(0, total - existing),
+    }
 
 
 async def sync_garmin_activities(
@@ -547,50 +771,27 @@ async def sync_garmin_activities(
     """
     Synchronise les activites Garmin dans la table Activity.
 
-    Liste les activites via garth.Activity.list(), dedup, cree Activity source=GARMIN.
-    Si une activite existe deja via Strava (fuzzy match), lie le garmin_activity_id.
+    Liste les activites via garth.Activity.list(), dedup par identifiant Garmin,
+    et cree des Activity source=GARMIN.
 
     Returns:
-        dict avec created, linked, skipped, errors, total
+        dict avec created, linked, merged, skipped, errors, total
     """
-    garmin_auth_record = session.exec(
-        select(GarminAuth).where(GarminAuth.user_id == user_id)
-    ).first()
-
-    if not garmin_auth_record:
-        raise ValueError(f"Aucune authentification Garmin pour user_id={user_id}")
-
-    client = garmin_auth.get_client(garmin_auth_record.oauth_token_encrypted)
+    client = _get_garmin_client_for_user(session, user_id)
 
     # Recuperer les activites (garth pagine par start/limit)
     cutoff = datetime.utcnow() - timedelta(days=days_back)
     created = 0
     linked = 0
+    merged = 0
     skipped = 0
     errors = 0
-    earliest_created_date: Optional[date] = None
 
     try:
-        # garth.Activity.list() retourne les plus recentes d'abord
-        # On charge par pages de 20 jusqu'a depasser le cutoff
-        all_activities: List[garth.Activity] = []
-        start = 0
-        page_size = 20
-        while True:
-            page = garth.Activity.list(limit=page_size, start=start, client=client)
-            if not page:
-                break
-            all_activities.extend(page)
-            # Si la derniere activite de la page est avant le cutoff, on arrete
-            last = page[-1]
-            last_time = last.start_time_gmt or last.start_time_local
-            if last_time and last_time < cutoff:
-                break
-            start += page_size
-            await asyncio.sleep(1.0)  # rate limit genereux pour Garmin
+        all_activities = await _list_garmin_activities_for_period(client, days_back)
     except Exception as e:
         logger.error(f"Erreur listing activites Garmin: {e}")
-        return {"created": 0, "linked": 0, "skipped": 0, "errors": 1, "total": 0}
+        return {"created": 0, "linked": 0, "merged": 0, "skipped": 0, "errors": 1, "total": 0}
 
     for garmin_act in all_activities:
         act_time = garmin_act.start_time_gmt or garmin_act.start_time_local
@@ -601,46 +802,44 @@ async def sync_garmin_activities(
             mapped = _map_garmin_activity(garmin_act, user_id)
             existing = _deduplicate_activity(
                 session, user_id, garmin_act.activity_id,
-                mapped["start_date"], mapped["distance"],
+                mapped["start_date"], mapped["distance"], mapped["start_date_local"],
             )
 
             if existing:
-                if existing.garmin_activity_id == garmin_act.activity_id:
-                    # Deja synce depuis Garmin, skip
-                    skipped += 1
-                else:
-                    # Existe via Strava, on lie le garmin_activity_id
-                    existing.garmin_activity_id = garmin_act.activity_id
-                    if existing.source == ActivitySource.STRAVA.value:
-                        pass  # On garde source=strava, on ajoute juste l'ID Garmin
+                if existing.start_date_local is None and mapped["start_date_local"]:
+                    existing.start_date_local = mapped["start_date_local"]
                     session.add(existing)
-                    session.commit()
-                    linked += 1
+                session.commit()
+                skipped += 1
             else:
                 # Nouvelle activite Garmin
                 activity = Activity(**mapped)
                 session.add(activity)
                 session.commit()
                 created += 1
-                if activity.start_date:
-                    created_date = activity.start_date.date()
-                    if earliest_created_date is None or created_date < earliest_created_date:
-                        earliest_created_date = created_date
 
         except Exception as e:
             logger.warning(f"Erreur sync activite Garmin {garmin_act.activity_id}: {e}")
             errors += 1
 
-    # Recalculer la charge d'entrainement si de nouvelles activites ont ete creees
-    if created > 0 and earliest_created_date:
+    # Une sync Garmin est aussi la bascule de provenance des charges derivees :
+    # on reconstruit l'historique depuis les seules activites Garmin.
+    earliest_garmin_dt = session.exec(
+        select(func.min(Activity.start_date)).where(
+            Activity.user_id == user_id,
+            Activity.source == ActivitySource.GARMIN.value,
+        )
+    ).one()
+    if earliest_garmin_dt:
         try:
-            recompute_training_load_from(session, user_id, earliest_created_date)
+            recompute_training_load_from(session, user_id, earliest_garmin_dt.date())
         except Exception as e:
             logger.warning(f"Sync Garmin: recalcul training load echoue: {e}")
 
     return {
         "created": created,
         "linked": linked,
+        "merged": merged,
         "skipped": skipped,
         "errors": errors,
         "total": len(all_activities),
@@ -978,6 +1177,77 @@ def get_garmin_enrichment_status(session: Session, user_id: UUID) -> Dict[str, A
         "enriched_activities": enriched,
         "pending_activities": pending,
         "enrichment_percentage": percentage,
+    }
+
+
+def get_garmin_period_import_status(
+    session: Session,
+    user_id: UUID,
+    days_back: int = 30,
+) -> Dict[str, Any]:
+    """
+    Retourne les compteurs d'import pour une periode precise.
+
+    `weather_done` compte les activites avec timeline 10 min, pas seulement une
+    ligne meteo ancienne, car c'est le format exploite dans le detail activite.
+    """
+    from app.domain.services.weather_service import _extract_activity_gps
+
+    cutoff = datetime.utcnow() - timedelta(days=days_back)
+    activities = session.exec(
+        select(Activity).where(
+            Activity.user_id == user_id,
+            Activity.source == ActivitySource.GARMIN.value,
+            Activity.garmin_activity_id.is_not(None),
+            Activity.start_date >= cutoff,
+        ).order_by(Activity.start_date.desc())
+    ).all()
+    activity_ids = [activity.id for activity in activities if activity.id is not None]
+    total = len(activity_ids)
+
+    fit_done_ids: set[UUID] = set()
+    weather_row_ids: set[UUID] = set()
+    weather_timeline_ids: set[UUID] = set()
+
+    if activity_ids:
+        fit_done_ids = {
+            activity_id
+            for activity_id in session.exec(
+                select(FitMetrics.activity_id).where(FitMetrics.activity_id.in_(activity_ids))
+            ).all()
+            if activity_id is not None
+        }
+
+        weather_rows = session.exec(
+            select(ActivityWeather.activity_id, ActivityWeather.hourly_snapshot).where(
+                ActivityWeather.activity_id.in_(activity_ids)
+            )
+        ).all()
+        weather_row_ids = {row[0] for row in weather_rows}
+        weather_timeline_ids = {
+            row[0]
+            for row in weather_rows
+            if isinstance(row[1], dict) and isinstance(row[1].get("timeline_10min"), list)
+        }
+
+    weather_eligible = sum(
+        1 for activity in activities if _extract_activity_gps(activity) is not None
+    )
+    fit_done = len(fit_done_ids)
+    weather_done = len(weather_timeline_ids)
+
+    return {
+        "days_back": days_back,
+        "period_started_at": cutoff.isoformat(),
+        "total_activities": total,
+        "fit_total": total,
+        "fit_done": fit_done,
+        "fit_pending": max(0, total - fit_done),
+        "weather_total": weather_eligible,
+        "weather_recorded": len(weather_row_ids),
+        "weather_done": weather_done,
+        "weather_pending": max(0, weather_eligible - weather_done),
+        "weather_without_coordinates": max(0, total - weather_eligible),
     }
 
 

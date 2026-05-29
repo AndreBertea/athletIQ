@@ -21,8 +21,8 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     op.create_table('activityweather',
-        sa.Column('id', sqlmodel.sql.sqltypes.GUID(), nullable=False),
-        sa.Column('activity_id', sqlmodel.sql.sqltypes.GUID(), nullable=False),
+        sa.Column('id', sa.Uuid(), nullable=False),
+        sa.Column('activity_id', sa.Uuid(), nullable=False),
         sa.Column('temperature_c', sa.Float(), nullable=True),
         sa.Column('humidity_pct', sa.Float(), nullable=True),
         sa.Column('wind_speed_kmh', sa.Float(), nullable=True),

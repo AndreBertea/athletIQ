@@ -3,9 +3,11 @@ Service de récupération des données détaillées Strava avec gestion des quot
 """
 import requests
 import time
+import json
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timedelta
 from sqlmodel import Session, select
+from sqlalchemy import String, cast, or_
 from fastapi import HTTPException, status
 from uuid import UUID
 import asyncio
@@ -18,6 +20,19 @@ from app.domain.services.redis_quota_manager import RedisQuotaManager
 
 
 logger = logging.getLogger(__name__)
+
+
+def _has_usable_streams(raw: Any) -> bool:
+    if raw is None:
+        return False
+    if isinstance(raw, str):
+        if raw.strip().lower() == "null":
+            return False
+        try:
+            raw = json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            return False
+    return isinstance(raw, dict) and bool(raw)
 
 
 class StravaQuotaManager:
@@ -35,7 +50,7 @@ class StravaQuotaManager:
         self.last_daily_reset = datetime.utcnow().date()
     
     def check_and_wait_if_needed(self) -> bool:
-        """Vérifie les quotas et attend si nécessaire"""
+        """Verifie les quotas sans bloquer le serveur pendant leur reinitialisation."""
         now = datetime.utcnow()
         
         # Reset quotas si nécessaire
@@ -53,13 +68,10 @@ class StravaQuotaManager:
             return False
         
         if self.per_15min_count >= self.per_15min_limit:
-            # Attendre jusqu'à la prochaine fenêtre de 15 min
             wait_time = 900 - (now - self.last_15min_reset).total_seconds()
             if wait_time > 0:
-                logger.info(f"Quota 15min atteint, attente de {wait_time:.0f}s")
-                time.sleep(wait_time)
-                self.per_15min_count = 0
-                self.last_15min_reset = datetime.utcnow()
+                logger.info(f"Quota 15min atteint, enrichissement differe de {wait_time:.0f}s")
+            return False
         
         return True
     
@@ -265,7 +277,7 @@ class DetailedStravaService:
             return False
         
         # Vérifier si les données sont déjà présentes
-        if activity.streams_data and activity.laps_data:
+        if _has_usable_streams(activity.streams_data) and activity.laps_data:
             logger.info(f"Activité {activity.id} déjà enrichie")
             return True
         
@@ -331,7 +343,10 @@ class DetailedStravaService:
             .where(
                 Activity.user_id == UUID(user_id),
                 Activity.strava_id.is_not(None),
-                Activity.streams_data.is_(None)
+                or_(
+                    Activity.streams_data.is_(None),
+                    cast(Activity.streams_data, String) == "null",
+                )
             )
             .order_by(Activity.start_date.desc())
             .limit(max_activities)
@@ -353,6 +368,9 @@ class DetailedStravaService:
             if self.quota_manager.daily_count >= self.quota_manager.daily_limit:
                 logger.warning("Quota journalier Strava atteint, arrêt de l'enrichissement. Réessayez demain.")
                 break
+            if self.quota_manager.per_15min_count >= self.quota_manager.per_15min_limit:
+                logger.info("Quota 15min Strava atteint, reprise au prochain créneau.")
+                break
 
             if self.enrich_activity_with_details(session, user_id, activity):
                 enriched_count += 1
@@ -371,4 +389,4 @@ class DetailedStravaService:
 
 
 # Instance globale
-detailed_strava_service = DetailedStravaService() 
+detailed_strava_service = DetailedStravaService()

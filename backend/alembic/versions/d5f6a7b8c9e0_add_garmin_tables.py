@@ -21,8 +21,8 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     op.create_table('garminauth',
-        sa.Column('id', sqlmodel.sql.sqltypes.GUID(), nullable=False),
-        sa.Column('user_id', sqlmodel.sql.sqltypes.GUID(), nullable=False),
+        sa.Column('id', sa.Uuid(), nullable=False),
+        sa.Column('user_id', sa.Uuid(), nullable=False),
         sa.Column('garmin_display_name', sa.String(), nullable=True),
         sa.Column('oauth_token_encrypted', sa.String(), nullable=False),
         sa.Column('token_created_at', sa.DateTime(), nullable=False),
@@ -36,8 +36,8 @@ def upgrade() -> None:
     op.create_index('ix_garminauth_user_id', 'garminauth', ['user_id'])
 
     op.create_table('garmindaily',
-        sa.Column('id', sqlmodel.sql.sqltypes.GUID(), nullable=False),
-        sa.Column('user_id', sqlmodel.sql.sqltypes.GUID(), nullable=False),
+        sa.Column('id', sa.Uuid(), nullable=False),
+        sa.Column('user_id', sa.Uuid(), nullable=False),
         sa.Column('date', sa.Date(), nullable=False),
         sa.Column('training_readiness', sa.Float(), nullable=True),
         sa.Column('hrv_rmssd', sa.Float(), nullable=True),

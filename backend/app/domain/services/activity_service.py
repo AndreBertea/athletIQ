@@ -2,13 +2,16 @@
 Service d'activites : filtrage, pagination, statistiques, transformation, mise a jour de type.
 """
 import logging
+import json
 from sqlmodel import Session, select, func
+from sqlalchemy import String, cast, or_
+from sqlalchemy.orm import defer
 from uuid import UUID
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Any, Optional
 
 from app.domain.entities import Activity, ActivityStats, StravaAuth
-from app.domain.entities.activity import ActivityType
+from app.domain.entities.activity import ActivitySource, ActivityType
 from app.domain.entities.activity_weather import ActivityWeather
 from app.domain.entities.fit_metrics import FitMetrics
 from app.domain.services.detailed_strava_service import detailed_strava_service
@@ -17,19 +20,55 @@ from app.domain.services.strava_sync_service import strava_sync_service
 
 logger = logging.getLogger(__name__)
 
-VALID_ACTIVITY_TYPES = [
-    'Run', 'TrailRun', 'Ride', 'Swim', 'Walk', 'RacketSport', 'Tennis',
-    'Badminton', 'Squash', 'Padel', 'WeightTraining', 'RockClimbing',
-    'Hiking', 'Yoga', 'Pilates', 'Crossfit', 'Gym', 'VirtualRun',
-    'VirtualRide', 'Other'
-]
+VALID_ACTIVITY_TYPES = [activity_type.value for activity_type in ActivityType]
+
+
+def streams_data_usable_clause():
+    """SQL clause for activities with actual stream payloads, not JSON null."""
+    return (
+        Activity.streams_data.is_not(None),
+        cast(Activity.streams_data, String) != "null",
+    )
+
+
+def streams_data_missing_clause():
+    """SQL clause for activities that need stream enrichment."""
+    return or_(
+        Activity.streams_data.is_(None),
+        cast(Activity.streams_data, String) == "null",
+    )
+
+
+def normalize_streams_data(raw: Any) -> Optional[dict]:
+    """Return stream dict or None, handling SQLite JSON null stored as text."""
+    if raw is None:
+        return None
+    if isinstance(raw, str):
+        if raw.strip().lower() == "null":
+            return None
+        try:
+            raw = json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            return None
+    if not isinstance(raw, dict) or not raw:
+        return None
+    return raw
 
 
 def _activity_to_enriched_dict(a: Activity) -> dict:
+    """Serialize the activity summary independently from provider-specific data."""
+    activity_type = a.activity_type_override if a.activity_type_override else a.activity_type
+    sport_type = activity_type.value if activity_type else None
+
     return {
-        "activity_id": a.strava_id,
+        "id": str(a.id),
+        # Stable application identity. External provider IDs remain separate below.
+        "activity_id": str(a.id),
+        "source": a.source,
+        "strava_id": a.strava_id,
+        "garmin_activity_id": a.garmin_activity_id,
         "name": a.name,
-        "sport_type": a.activity_type.value if a.activity_type else None,
+        "sport_type": sport_type,
         "distance_m": a.distance,
         "moving_time_s": a.moving_time,
         "elapsed_time_s": a.elapsed_time,
@@ -40,6 +79,7 @@ def _activity_to_enriched_dict(a: Activity) -> dict:
         "avg_heartrate_bpm": a.average_heartrate,
         "max_heartrate_bpm": a.max_heartrate,
         "avg_cadence": a.average_cadence,
+        "calories_kcal": a.calories,
         "description": a.description,
         "location_city": a.location_city,
         "location_country": a.location_country,
@@ -61,7 +101,10 @@ class ActivityService:
         activity_type: Optional[str] = None,
         date_from: Optional[str] = None,
     ) -> dict:
-        base_query = select(Activity).where(Activity.user_id == UUID(user_id))
+        base_query = select(Activity).where(
+            Activity.user_id == UUID(user_id),
+            Activity.source == ActivitySource.GARMIN.value,
+        )
 
         if date_from:
             try:
@@ -109,7 +152,9 @@ class ActivityService:
             d = a.model_dump() if hasattr(a, 'model_dump') else a.dict()
             d["has_strava"] = a.strava_id is not None
             d["has_weather"] = a.id in weather_ids
-            d["has_garmin"] = a.id in garmin_ids
+            d["has_garmin"] = a.garmin_activity_id is not None
+            d["has_fit_metrics"] = a.id in garmin_ids
+            d["has_streams"] = normalize_streams_data(a.streams_data) is not None
             items.append(d)
 
         return {
@@ -127,6 +172,7 @@ class ActivityService:
         activities = session.exec(
             select(Activity).where(
                 Activity.user_id == UUID(user_id),
+                Activity.source == ActivitySource.GARMIN.value,
                 Activity.start_date >= cutoff_date,
             )
         ).all()
@@ -185,7 +231,7 @@ class ActivityService:
             select(func.count()).select_from(Activity).where(
                 Activity.user_id == UUID(user_id),
                 Activity.strava_id.is_not(None),
-                Activity.streams_data.is_not(None),
+                *streams_data_usable_clause(),
             )
         ).one()
 
@@ -221,10 +267,12 @@ class ActivityService:
         sport_type: Optional[str] = None,
         date_from: Optional[str] = None,
     ) -> dict:
+        # This is the compact display feed consumed by the activity list and
+        # dashboard charts. Activities remain visible before optional streams,
+        # FIT metrics or weather enrichment exists.
         base_query = select(Activity).where(
             Activity.user_id == UUID(user_id),
-            Activity.strava_id.is_not(None),
-            Activity.streams_data.is_not(None),
+            Activity.source == ActivitySource.GARMIN.value,
         )
 
         if date_from:
@@ -239,7 +287,13 @@ class ActivityService:
 
         total = session.exec(select(func.count()).select_from(base_query.subquery())).one()
         offset = (page - 1) * per_page
-        query = base_query.order_by(Activity.start_date.desc()).offset(offset).limit(per_page)
+        query = (
+            base_query
+            .options(defer(Activity.streams_data), defer(Activity.laps_data))
+            .order_by(Activity.start_date.desc())
+            .offset(offset)
+            .limit(per_page)
+        )
         activities = session.exec(query).all()
         total_pages = (total + per_page - 1) // per_page if total > 0 else 1
 
@@ -248,6 +302,7 @@ class ActivityService:
 
         weather_ids: set = set()
         garmin_ids: set = set()
+        stream_ids: set = set()
         if activity_uuids:
             weather_ids = set(
                 session.exec(
@@ -263,13 +318,23 @@ class ActivityService:
                     )
                 ).all()
             )
+            stream_ids = set(
+                session.exec(
+                    select(Activity.id).where(
+                        Activity.id.in_(activity_uuids),
+                        *streams_data_usable_clause(),
+                    )
+                ).all()
+            )
 
         items = []
         for a in activities:
             d = _activity_to_enriched_dict(a)
             d["has_strava"] = a.strava_id is not None
             d["has_weather"] = a.id in weather_ids
-            d["has_garmin"] = a.id in garmin_ids
+            d["has_garmin"] = a.garmin_activity_id is not None
+            d["has_fit_metrics"] = a.id in garmin_ids
+            d["has_streams"] = a.id in stream_ids
             items.append(d)
 
         return {
@@ -291,12 +356,17 @@ class ActivityService:
 
         query = select(Activity).where(
             Activity.user_id == UUID(user_id),
+            Activity.source == ActivitySource.GARMIN.value,
             Activity.start_date >= cutoff_date,
         )
         if sport_type:
             query = query.where(Activity.activity_type == sport_type)
 
-        query = query.order_by(Activity.start_date.desc())
+        query = (
+            query
+            .options(defer(Activity.streams_data), defer(Activity.laps_data))
+            .order_by(Activity.start_date.desc())
+        )
         activities = session.exec(query).all()
 
         total_distance_km = sum(a.distance or 0 for a in activities) / 1000
@@ -308,13 +378,17 @@ class ActivityService:
 
         activity_list = []
         for a in activities:
-            st = a.activity_type.value if a.activity_type else "Unknown"
+            activity_type = a.activity_type_override if a.activity_type_override else a.activity_type
+            st = activity_type.value if activity_type else "Unknown"
             activities_by_sport_type[st] = activities_by_sport_type.get(st, 0) + 1
             distance_by_sport_type[st] = distance_by_sport_type.get(st, 0) + (a.distance or 0) / 1000
             time_by_sport_type[st] = time_by_sport_type.get(st, 0) + (a.moving_time or 0) / 3600
 
             activity_list.append({
-                "activity_id": a.strava_id,
+                "activity_id": str(a.id),
+                "source": a.source,
+                "strava_id": a.strava_id,
+                "garmin_activity_id": a.garmin_activity_id,
                 "name": a.name,
                 "sport_type": st,
                 "distance_m": a.distance,
@@ -335,35 +409,61 @@ class ActivityService:
             "activities": activity_list,
         }
 
-    def get_enriched_activity(self, session: Session, user_id: str, activity_id: int) -> dict:
-        activity = session.exec(
-            select(Activity).where(
-                Activity.user_id == UUID(user_id),
-                Activity.strava_id == activity_id,
-            )
-        ).first()
-
-        if not activity:
-            raise ValueError("Activite enrichie non trouvee")
-
-        return _activity_to_enriched_dict(activity)
-
-    def get_enriched_activity_streams(self, session: Session, user_id: str, activity_id: int) -> dict:
-        activity = session.exec(
-            select(Activity).where(
-                Activity.user_id == UUID(user_id),
-                Activity.strava_id == activity_id,
-            )
-        ).first()
+    def get_enriched_activity(self, session: Session, user_id: str, activity_id: str) -> dict:
+        activity = self._get_summary_activity(session, user_id, activity_id)
 
         if not activity:
             raise ValueError("Activite non trouvee")
 
-        if not activity.streams_data:
+        return _activity_to_enriched_dict(activity)
+
+    def _get_summary_activity(self, session: Session, user_id: str, activity_id: str) -> Optional[Activity]:
+        """Resolve an activity by application UUID or either provider ID."""
+        user_uuid = UUID(user_id)
+        try:
+            activity_uuid = UUID(str(activity_id))
+            return session.exec(
+                select(Activity)
+                .options(defer(Activity.streams_data), defer(Activity.laps_data))
+                .where(
+                    Activity.user_id == user_uuid,
+                    Activity.source == ActivitySource.GARMIN.value,
+                    Activity.id == activity_uuid,
+                )
+            ).first()
+        except ValueError:
+            pass
+
+        try:
+            external_id = int(activity_id)
+        except (ValueError, TypeError):
+            return None
+
+        return session.exec(
+            select(Activity)
+            .options(defer(Activity.streams_data), defer(Activity.laps_data))
+            .where(
+                Activity.user_id == user_uuid,
+                Activity.source == ActivitySource.GARMIN.value,
+                or_(
+                    Activity.strava_id == external_id,
+                    Activity.garmin_activity_id == external_id,
+                ),
+            )
+        ).first()
+
+    def get_enriched_activity_streams(self, session: Session, user_id: str, activity_id: str) -> dict:
+        activity = self._get_summary_activity(session, user_id, activity_id)
+
+        if not activity:
+            raise ValueError("Activite non trouvee")
+
+        streams = normalize_streams_data(activity.streams_data)
+        if not streams:
             return {"activity_id": activity_id, "streams": {}, "message": "Aucun stream disponible pour cette activite"}
 
         streams_clean = {}
-        for k, v in activity.streams_data.items():
+        for k, v in streams.items():
             if k == "segment_efforts":
                 continue
             # Dérouler le format Strava {data: [...], series_type, resolution} en tableau brut
@@ -399,6 +499,7 @@ class ActivityService:
             select(Activity).where(
                 Activity.id == activity_id,
                 Activity.user_id == UUID(user_id),
+                Activity.source == ActivitySource.GARMIN.value,
             )
         ).first()
         if not activity:
@@ -407,11 +508,12 @@ class ActivityService:
 
     def get_activity_streams(self, session: Session, user_id: str, activity_id: UUID) -> dict:
         activity = self.get_activity_by_id(session, user_id, activity_id)
-        if not activity.streams_data:
+        streams = normalize_streams_data(activity.streams_data)
+        if not streams:
             raise ValueError("Donnees detaillees non disponibles pour cette activite")
         return {
             "activity_id": str(activity_id),
-            "streams_data": activity.streams_data,
+            "streams_data": streams,
             "laps_data": activity.laps_data,
         }
 
@@ -429,7 +531,7 @@ class ActivityService:
         return {
             "message": "Activite enrichie avec succes",
             "activity_id": str(activity_id),
-            "has_streams": bool(activity.streams_data),
+            "has_streams": bool(normalize_streams_data(activity.streams_data)),
             "has_laps": bool(activity.laps_data),
             "quota_status": detailed_strava_service.quota_manager.get_status(),
         }
@@ -440,7 +542,7 @@ class ActivityService:
         if not activity.strava_id:
             raise ValueError("Cette activite n'est pas liee a Strava")
 
-        if activity.streams_data:
+        if normalize_streams_data(activity.streams_data):
             return {
                 "message": "Cette activite est deja enrichie",
                 "activity_id": str(activity_id),
@@ -457,7 +559,7 @@ class ActivityService:
     def update_activity_type(
         self, session: Session, user_id: str, activity_id_str: str, activity_type: str
     ) -> dict:
-        # Resolve activity by UUID or strava_id
+        # Resolve activity by UUID or Garmin provider id in Garmin-only mode.
         activity = None
         try:
             activity_uuid = UUID(activity_id_str)
@@ -465,19 +567,21 @@ class ActivityService:
                 select(Activity).where(
                     Activity.id == activity_uuid,
                     Activity.user_id == UUID(user_id),
+                    Activity.source == ActivitySource.GARMIN.value,
                 )
             ).first()
         except ValueError:
             try:
-                strava_id = int(activity_id_str)
+                garmin_activity_id = int(activity_id_str)
                 activity = session.exec(
                     select(Activity).where(
-                        Activity.strava_id == strava_id,
+                        Activity.garmin_activity_id == garmin_activity_id,
                         Activity.user_id == UUID(user_id),
+                        Activity.source == ActivitySource.GARMIN.value,
                     )
                 ).first()
             except ValueError:
-                raise ValueError("L'ID de l'activite doit etre un UUID valide ou un ID numerique Strava")
+                raise ValueError("L'ID de l'activite doit etre un UUID valide ou un ID numerique Garmin")
 
         if not activity:
             raise ValueError("Activite non trouvee")
@@ -485,22 +589,22 @@ class ActivityService:
         if activity_type not in VALID_ACTIVITY_TYPES:
             raise ValueError(f"Type d'activite invalide. Types valides: {', '.join(VALID_ACTIVITY_TYPES)}")
 
-        old_type = activity.activity_type
-
-        activity.activity_type = activity_type
+        old_override = activity.activity_type_override
+        resolved_activity_type = ActivityType(activity_type)
+        activity.activity_type_override = resolved_activity_type
         activity.updated_at = datetime.utcnow()
 
         session.add(activity)
         session.commit()
         session.refresh(activity)
 
-        logger.info(f"Type d'activite {activity.id} modifie: {old_type} -> {activity_type} (utilisateur: {user_id})")
+        logger.info(f"Type override {activity.id} modifie: {old_override} -> {resolved_activity_type} (utilisateur: {user_id})")
 
         return {
             "message": "Type d'activite mis a jour avec succes",
             "activity_id": str(activity.id),
-            "old_type": old_type,
-            "new_type": activity_type,
+            "old_type": old_override.value if old_override else None,
+            "new_type": resolved_activity_type.value,
             "activity": {
                 "id": str(activity.id),
                 "name": activity.name,
@@ -511,6 +615,186 @@ class ActivityService:
             },
         }
 
+
+    def auto_correct_activity_types(self, session: Session, user_id: str) -> dict:
+        """Analyse les noms et descriptions des activités pour proposer des corrections de type."""
+        # Dictionnaire des mots-clés → type d'activité
+        # Note: Utiliser UNIQUEMENT les types disponibles dans ActivityType enum
+        keyword_map = {
+            # Trail / Cross
+            'trail': ActivityType.TRAIL_RUN,
+            'trail run': ActivityType.TRAIL_RUN,
+            'trailrun': ActivityType.TRAIL_RUN,
+            'sentier': ActivityType.TRAIL_RUN,
+            'montagne': ActivityType.TRAIL_RUN,
+            'cross': ActivityType.TRAIL_RUN,
+            'off-road': ActivityType.TRAIL_RUN,
+
+            # Padel
+            'padel': ActivityType.PADEL,
+            'pádel': ActivityType.PADEL,
+
+            # Natation
+            'swim': ActivityType.SWIM,
+            'natation': ActivityType.SWIM,
+            'piscine': ActivityType.SWIM,
+            'eau': ActivityType.SWIM,
+
+            # Vélo / Ride
+            'ride': ActivityType.RIDE,
+            'vélo': ActivityType.RIDE,
+            'bike': ActivityType.RIDE,
+            'cycling': ActivityType.RIDE,
+
+            # Marche / Walk
+            'walk': ActivityType.WALK,
+            'marche': ActivityType.WALK,
+            'rando': ActivityType.WALK,
+            'randonnée': ActivityType.WALK,
+            'hiking': ActivityType.WALK,
+        }
+
+        activities = session.exec(
+            select(Activity).where(
+                Activity.user_id == UUID(user_id),
+                Activity.source == ActivitySource.GARMIN.value,
+            )
+        ).all()
+
+        suggestions = []
+        manual_review = []
+
+        standard_time_prefixes = (
+            "morning",
+            "afternoon",
+            "evening",
+            "lunch",
+            "night",
+            "early morning",
+        )
+        standard_sport_names = (
+            "run",
+            "ride",
+            "walk",
+            "swim",
+            "trail run",
+        )
+        standard_french_names = (
+            "course à pied le matin",
+            "course à pied l'après-midi",
+            "course à pied en soirée",
+            "course à pied le soir",
+            "course à pied à midi",
+            "course à pied de nuit",
+        )
+
+        def is_standard_strava_name(name: str) -> bool:
+            normalized_name = " ".join(name.lower().strip().replace("’", "'").split())
+            is_standard_english = any(
+                normalized_name == f"{prefix} {sport_name}"
+                for prefix in standard_time_prefixes
+                for sport_name in standard_sport_names
+            )
+            return is_standard_english or normalized_name in standard_french_names
+
+        for activity in activities:
+            # Analyse du titre et description
+            name = activity.name or ""
+            description = activity.description or ""
+            text_to_analyze = name.lower() + " " + description.lower()
+
+            # Cherche les mots-clés
+            suggested_type = None
+            matched_keywords = []
+
+            for keyword, activity_type in keyword_map.items():
+                if keyword in text_to_analyze:
+                    suggested_type = activity_type
+                    matched_keywords.append(keyword)
+                    break  # Première correspondance (ordre de priorité)
+
+            # Propose une correction seulement si:
+            # 1. Un mot-clé a été trouvé
+            # 2. Le type détecté est différent du type actuel ET du type override
+            current_type = activity.activity_type_override if activity.activity_type_override else activity.activity_type
+
+            if suggested_type and suggested_type != current_type:
+                suggestions.append({
+                    "activity_id": str(activity.id),
+                    "strava_id": activity.strava_id,
+                    "name": name,
+                    "current_type": current_type.value if current_type else None,
+                    "suggested_type": suggested_type.value,
+                    "matched_keywords": matched_keywords,
+                    "description": description,
+                    "start_date": activity.start_date.isoformat() if activity.start_date else None,
+                    "distance": activity.distance,
+                })
+                continue
+
+            if (
+                not activity.activity_type_override
+                and not suggested_type
+                and name
+                and not is_standard_strava_name(name)
+            ):
+                manual_review.append({
+                    "activity_id": str(activity.id),
+                    "strava_id": activity.strava_id,
+                    "name": name,
+                    "current_type": current_type.value if current_type else None,
+                    "description": description,
+                    "start_date": activity.start_date.isoformat() if activity.start_date else None,
+                    "distance": activity.distance,
+                    "review_reason": "Nom non standard sans mot-cle fiable",
+                })
+
+        return {
+            "message": f"Analyse complete: {len(suggestions)} suggestion(s), {len(manual_review)} activite(s) a verifier",
+            "total_activities": len(activities),
+            "suggestions_count": len(suggestions),
+            "manual_review_count": len(manual_review),
+            "suggestions": suggestions,
+            "manual_review": manual_review,
+        }
+
+    def apply_auto_corrections(self, session: Session, user_id: str, corrections: list) -> dict:
+        """Applique les corrections d'activités proposées par auto_correct_activity_types."""
+        applied = []
+        failed = []
+
+        for correction in corrections:
+            try:
+                activity_id = correction.get("activity_id")
+                new_type = correction.get("suggested_type")
+
+                # Valide les données
+                if not activity_id or not new_type:
+                    failed.append({"activity_id": activity_id, "reason": "Donnees invalides"})
+                    continue
+
+                # Applique la correction
+                result = self.update_activity_type(session, user_id, activity_id, new_type)
+                applied.append({
+                    "activity_id": activity_id,
+                    "new_type": new_type,
+                    "success": True,
+                })
+                logger.info(f"Auto-correction appliquee: {activity_id} → {new_type}")
+            except Exception as e:
+                failed.append({
+                    "activity_id": correction.get("activity_id"),
+                    "reason": str(e),
+                })
+                logger.error(f"Erreur auto-correction {correction.get('activity_id')}: {str(e)}")
+
+        return {
+            "message": f"{len(applied)} correction(s) appliquee(s), {len(failed)} erreur(s)",
+            "applied_count": len(applied),
+            "failed_count": len(failed),
+            "applied": applied,
+            "failed": failed,
+        }
 
     def sync_and_enrich(self, session: Session, user_id: str, days_back: int) -> dict:
         """Synchronise les activites Strava puis lance l'enrichissement automatique."""

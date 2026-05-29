@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from sqlmodel import Session
 
 from app.core.database import get_session
+from app.core.settings import get_settings
 from app.auth.jwt import get_current_user_id
 from app.domain.services.activity_service import activity_service
 from app.domain.services.detailed_strava_service import detailed_strava_service
@@ -28,6 +29,11 @@ async def sync_strava_activities(
 ):
     """Synchronise les activites Strava de l'utilisateur puis lance l'enrichissement automatique"""
     user_id = get_current_user_id(token.credentials)
+    if not get_settings().STRAVA_INTEGRATION_ENABLED:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Synchronisation Strava temporairement suspendue",
+        )
     try:
         return activity_service.sync_and_enrich(session, user_id, days_back)
     except HTTPException:
@@ -83,6 +89,12 @@ async def strava_webhook_event(request: Request):
         result = validate_and_dispatch_event(event)
     except ValueError as e:
         return JSONResponse(status_code=200, content={"status": "error", "detail": str(e)})
+
+    if (
+        not get_settings().STRAVA_INTEGRATION_ENABLED
+        and not (event.get("object_type") == "activity" and event.get("aspect_type") == "delete")
+    ):
+        return JSONResponse(status_code=200, content={"status": "ignored", "detail": "Strava integration paused"})
 
     asyncio.get_event_loop().run_in_executor(None, process_webhook_event, event)
     return JSONResponse(status_code=200, content=result)

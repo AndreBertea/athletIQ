@@ -204,6 +204,11 @@ async def strava_login(
     session: Session = Depends(get_session)
 ):
     """Initie la connexion OAuth Strava"""
+    if not get_settings().STRAVA_INTEGRATION_ENABLED:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Connexion Strava temporairement suspendue",
+        )
     user_id = get_current_user_id(token.credentials)
     auth_url = strava_oauth.get_authorization_url(state=user_id)
     return {"authorization_url": auth_url}
@@ -215,12 +220,14 @@ async def strava_callback(
     session: Session = Depends(get_session)
 ):
     """Callback OAuth Strava - Traite l'authentification et redirige"""
+    settings = get_settings()
+    if not settings.STRAVA_INTEGRATION_ENABLED:
+        return RedirectResponse(url=f"{settings.FRONTEND_URL}/parametres?strava=paused")
+
     params = dict(request.query_params)
     code = params.get("code")
     state = params.get("state")
     error = params.get("error")
-
-    settings = get_settings()
 
     if error:
         logger.error(f"Erreur OAuth recue de Strava: {error}")

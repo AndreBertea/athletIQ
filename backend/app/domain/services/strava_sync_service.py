@@ -14,6 +14,10 @@ from uuid import UUID
 from app.auth.strava_oauth import strava_oauth
 from app.domain.entities.activity import Activity, ActivityCreate
 from app.domain.entities.user import StravaAuth
+from app.domain.services.activity_matching_service import (
+    attach_strava_data,
+    find_unlinked_provider_activity,
+)
 from app.domain.services.derived_features_service import recompute_training_load_from
 
 
@@ -46,23 +50,6 @@ class StravaSyncService:
             strava_auth.expires_at = datetime.fromtimestamp(new_tokens.expires_at)
             strava_auth.updated_at = datetime.utcnow()
             session.commit()
-
-            # Recalculer la charge d'entrainement si de nouvelles activites ont ete ajoutees
-            if new_activities:
-                try:
-                    min_start = min(
-                        (a.start_date for a in new_activities if a.start_date),
-                        default=None,
-                    )
-                    if min_start:
-                        recompute_training_load_from(
-                            session,
-                            UUID(user_id),
-                            min_start.date(),
-                            date_type.today(),
-                        )
-                except Exception as e:
-                    logger.warning(f"Sync Strava: recalcul training load echoue: {e}")
             
             return new_tokens.access_token, strava_auth.strava_athlete_id
         
@@ -215,6 +202,30 @@ class StravaSyncService:
             weighted_average_watts=strava_activity.get("weighted_average_watts"),
             kilojoules=strava_activity.get("kilojoules"),
         )
+
+    def save_or_link_activity(
+        self,
+        session: Session,
+        user_id: UUID,
+        activity_create: ActivityCreate,
+    ) -> tuple[Activity, bool]:
+        """Save a Strava workout or link it to its pre-existing Garmin row."""
+        garmin_match = find_unlinked_provider_activity(
+            session,
+            user_id,
+            provider="garmin",
+            start_date=activity_create.start_date,
+            start_date_local=activity_create.start_date_local,
+            distance=activity_create.distance,
+        )
+        if garmin_match:
+            attach_strava_data(garmin_match, activity_create)
+            session.add(garmin_match)
+            return garmin_match, True
+
+        activity = Activity(user_id=user_id, **activity_create.model_dump())
+        session.add(activity)
+        return activity, False
     
     def sync_activities(self, session: Session, user_id: str, days_back: int = 30) -> Dict[str, Any]:
         """Synchronise les activités Strava d'un utilisateur"""
@@ -230,34 +241,65 @@ class StravaSyncService:
             # Récupérer les activités Strava
             strava_activities = self.fetch_strava_activities(access_token, after_date)
             
-            # Récupérer les activités déjà synchronisées
-            existing_strava_ids = session.exec(
+            user_uuid = UUID(user_id)
+
+            # Recuperer les activites deja synchronisees pour cet utilisateur.
+            # La contrainte est par user pour permettre a deux comptes locaux
+            # distincts d'importer le meme compte Strava en developpement/test.
+            existing_strava_ids = set(session.exec(
                 select(Activity.strava_id).where(
-                    Activity.user_id == UUID(user_id),
+                    Activity.user_id == user_uuid,
                     Activity.strava_id.is_not(None)
                 )
-            ).all()
-            
-            # Filtrer les nouvelles activités
+            ).all())
+
+            # Filtrer les nouvelles activités en dédupliquant aussi à l'intérieur
+            # du batch Strava (la pagination peut renvoyer deux fois la même
+            # activité si la liste bouge pendant le fetch)
+            seen_strava_ids: set = set()
             new_activities = []
             for strava_activity in strava_activities:
                 strava_id = strava_activity.get("id")
-                if strava_id not in existing_strava_ids:
-                    activity_create = self.convert_strava_activity(strava_activity, user_id)
-                    new_activities.append(activity_create)
-            
+                if strava_id is None:
+                    continue
+                if strava_id in existing_strava_ids or strava_id in seen_strava_ids:
+                    continue
+                seen_strava_ids.add(strava_id)
+                activity_create = self.convert_strava_activity(strava_activity, user_id)
+                new_activities.append(activity_create)
+
             # Sauvegarder les nouvelles activités
             saved_count = 0
+            linked_count = 0
+            created_activities: list[ActivityCreate] = []
             for activity_create in new_activities:
-                # Créer Activity en ajoutant user_id
-                activity = Activity(
-                    user_id=UUID(user_id),
-                    **activity_create.model_dump()
+                _, linked = self.save_or_link_activity(
+                    session, user_uuid, activity_create
                 )
-                session.add(activity)
-                saved_count += 1
-            
+                if linked:
+                    linked_count += 1
+                else:
+                    saved_count += 1
+                    created_activities.append(activity_create)
+
             session.commit()
+
+            # Recalculer la charge d'entrainement si de nouvelles activites ont ete ajoutees
+            if created_activities:
+                try:
+                    min_start = min(
+                        (a.start_date for a in created_activities if a.start_date),
+                        default=None,
+                    )
+                    if min_start:
+                        recompute_training_load_from(
+                            session,
+                            UUID(user_id),
+                            min_start.date(),
+                            date_type.today(),
+                        )
+                except Exception as e:
+                    logger.warning(f"Sync Strava: recalcul training load echoue: {e}")
             
             # Message adapté selon la période
             if days_back >= 9999:
@@ -269,6 +311,7 @@ class StravaSyncService:
                 "message": f"{period_msg} terminé",
                 "total_activities_fetched": len(strava_activities),
                 "new_activities_saved": saved_count,
+                "activities_linked_to_garmin": linked_count,
                 "athlete_id": athlete_id,
                 "period": "all" if days_back >= 9999 else f"{days_back}_days"
             }

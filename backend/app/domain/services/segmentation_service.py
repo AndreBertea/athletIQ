@@ -9,8 +9,9 @@ from typing import Dict, Any, List, Optional
 from uuid import UUID
 
 from sqlmodel import Session, select
+from sqlalchemy import String, cast
 
-from app.domain.entities.activity import Activity
+from app.domain.entities.activity import Activity, ActivitySource
 from app.domain.entities.segment import Segment
 from app.domain.entities.segment_features import SegmentFeatures
 
@@ -232,7 +233,11 @@ def segment_all_enriched(session: Session, user_id: Optional[UUID] = None) -> Di
     Si user_id est fourni, limite a cet utilisateur.
     Retourne un resume {processed, skipped, errors}.
     """
-    query = select(Activity).where(Activity.streams_data.is_not(None))
+    query = select(Activity).where(
+        Activity.source == ActivitySource.GARMIN.value,
+        Activity.streams_data.is_not(None),
+        cast(Activity.streams_data, String) != "null",
+    )
     if user_id:
         query = query.where(Activity.user_id == user_id)
 

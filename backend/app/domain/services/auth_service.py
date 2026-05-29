@@ -11,6 +11,7 @@ from app.auth.strava_oauth import strava_oauth
 from app.auth.google_oauth import google_oauth
 from app.auth.garmin_auth import garmin_auth
 from app.domain.entities import User, UserCreate, StravaAuth, GoogleAuth, GarminAuth
+from app.domain.services.garmin_cache import garmin_token_cache
 
 logger = logging.getLogger(__name__)
 
@@ -260,11 +261,13 @@ class AuthService:
         """
         Login Garmin one-time : authentifie via Garth, stocke le token chiffre.
         Email et mot de passe ne sont JAMAIS stockes.
+        Token mis en cache en mémoire pour éviter les re-authentifications inutiles.
         """
         encrypted_token = garmin_auth.login(email, password)
+        user_uuid = UUID(user_id)
 
         existing = session.exec(
-            select(GarminAuth).where(GarminAuth.user_id == UUID(user_id))
+            select(GarminAuth).where(GarminAuth.user_id == user_uuid)
         ).first()
 
         if existing:
@@ -273,14 +276,17 @@ class AuthService:
             existing.updated_at = datetime.utcnow()
         else:
             new_auth = GarminAuth(
-                user_id=UUID(user_id),
+                user_id=user_uuid,
                 oauth_token_encrypted=encrypted_token,
                 token_created_at=datetime.utcnow(),
             )
             session.add(new_auth)
 
         session.commit()
-        logger.info(f"Garmin connecte pour user {user_id}")
+
+        # Mettre le token en cache pour éviter les re-auth inutiles
+        garmin_token_cache.set(user_uuid, encrypted_token)
+        logger.info(f"Garmin connecte pour user {user_id} (token mis en cache)")
 
         return {"connected": True, "message": "Garmin Connect lie avec succes"}
 
@@ -295,6 +301,7 @@ class AuthService:
 
         return {
             "connected": True,
+            "display_name": garmin_auth_record.garmin_display_name,
             "garmin_display_name": garmin_auth_record.garmin_display_name,
             "token_created_at": garmin_auth_record.token_created_at,
             "last_sync_at": garmin_auth_record.last_sync_at,
@@ -302,8 +309,9 @@ class AuthService:
 
     def disconnect_garmin(self, session: Session, user_id: str) -> dict:
         """Supprime l'authentification Garmin d'un utilisateur."""
+        user_uuid = UUID(user_id)
         garmin_auth_record = session.exec(
-            select(GarminAuth).where(GarminAuth.user_id == UUID(user_id))
+            select(GarminAuth).where(GarminAuth.user_id == user_uuid)
         ).first()
 
         if not garmin_auth_record:
@@ -311,9 +319,54 @@ class AuthService:
 
         session.delete(garmin_auth_record)
         session.commit()
-        logger.info(f"Garmin deconnecte pour user {user_id}")
+
+        # Invalider le token du cache
+        garmin_token_cache.invalidate(user_uuid)
+        logger.info(f"Garmin deconnecte pour user {user_id} (cache invalidé)")
 
         return {"connected": False, "message": "Garmin Connect deconnecte"}
+
+    def verify_garmin_token(self, session: Session, user_id: str) -> dict:
+        """Vérifie que le token Garmin de l'utilisateur est toujours valide."""
+        user_uuid = UUID(user_id)
+        garmin_auth_record = session.exec(
+            select(GarminAuth).where(GarminAuth.user_id == user_uuid)
+        ).first()
+
+        if not garmin_auth_record:
+            return {"connected": False, "valid": False, "message": "Aucune connexion Garmin"}
+
+        try:
+            # Essayer de décrypter et utiliser le token
+            decrypted_token = garmin_auth.decrypt_token(garmin_auth_record.oauth_token_encrypted)
+
+            # Vérifier que le token n'est pas expiré (token créé < 90 jours)
+            if garmin_auth_record.token_created_at:
+                age_days = (datetime.utcnow() - garmin_auth_record.token_created_at).days
+                if age_days > 90:
+                    logger.warning(f"Token Garmin expiré pour user {user_id} (age: {age_days} jours)")
+                    return {
+                        "connected": True,
+                        "valid": False,
+                        "message": "Token expiré, veuillez vous reconnecter",
+                        "expired": True,
+                    }
+
+            logger.info(f"Token Garmin valide pour user {user_id}")
+            return {
+                "connected": True,
+                "valid": True,
+                "message": "Token valide",
+                "token_age_days": age_days if garmin_auth_record.token_created_at else None,
+            }
+        except Exception as e:
+            logger.error(f"Erreur verification token Garmin pour user {user_id}: {e}")
+            return {
+                "connected": True,
+                "valid": False,
+                "message": "Erreur lors de la vérification du token",
+                "error": str(e),
+            }
 
 
 auth_service = AuthService()

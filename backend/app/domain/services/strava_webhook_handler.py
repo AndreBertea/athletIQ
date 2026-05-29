@@ -113,10 +113,15 @@ def handle_activity_create(owner_id: int, strava_activity_id: int) -> None:
             return
 
         activity_create = strava_sync_service.convert_strava_activity(strava_data, user_id)
-        activity = Activity(user_id=UUID(user_id), **activity_create.model_dump())
-        session.add(activity)
+        activity, linked = strava_sync_service.save_or_link_activity(
+            session, UUID(user_id), activity_create
+        )
         session.commit()
-        logger.info(f"Webhook activity.create: activite strava_id={strava_activity_id} sauvegardee (id={activity.id})")
+        action = "rattachee a Garmin" if linked else "sauvegardee"
+        logger.info(
+            f"Webhook activity.create: activite strava_id={strava_activity_id} "
+            f"{action} (id={activity.id})"
+        )
 
         # Recalculer la charge d'entrainement a partir de la date de l'activite
         try:

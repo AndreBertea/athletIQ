@@ -111,18 +111,19 @@ def clear_auth_cookies(response: JSONResponse) -> JSONResponse:
     return response
 
 
-def resolve_activity(session: Session, activity_id_str: str, user_id: str):
+def resolve_activity(session: Session, activity_id_str: str, user_id: str | UUID):
     """Resout une activite par UUID, strava_id ou garmin_activity_id."""
     from app.domain.entities.activity import Activity
 
     activity = None
+    user_uuid = user_id if isinstance(user_id, UUID) else UUID(str(user_id))
     # 1. Essayer comme UUID
     try:
         activity_uuid = UUID(activity_id_str)
         activity = session.exec(
             select(Activity).where(
                 Activity.id == activity_uuid,
-                Activity.user_id == UUID(user_id),
+                Activity.user_id == user_uuid,
             )
         ).first()
     except ValueError:
@@ -135,7 +136,7 @@ def resolve_activity(session: Session, activity_id_str: str, user_id: str):
             activity = session.exec(
                 select(Activity).where(
                     Activity.strava_id == strava_id,
-                    Activity.user_id == UUID(user_id),
+                    Activity.user_id == user_uuid,
                 )
             ).first()
         except (ValueError, TypeError):
@@ -148,7 +149,7 @@ def resolve_activity(session: Session, activity_id_str: str, user_id: str):
             activity = session.exec(
                 select(Activity).where(
                     Activity.garmin_activity_id == garmin_id,
-                    Activity.user_id == UUID(user_id),
+                    Activity.user_id == user_uuid,
                 )
             ).first()
         except (ValueError, TypeError):

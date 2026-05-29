@@ -6,10 +6,12 @@ Le worker background tourne en continu (asyncio.Task) et depile la queue
 en respectant les quotas Strava (via RedisQuotaManager).
 """
 import asyncio
+import json
 import logging
 from typing import Dict, Any, Optional
 from datetime import datetime
 from sqlmodel import Session, select
+from sqlalchemy import String, cast, or_
 from uuid import UUID
 
 from app.core.database import get_session
@@ -31,6 +33,19 @@ WORKER_IDLE_TIMEOUT = 300
 QUOTA_15MIN_WAIT = 60
 # Pause apres une erreur inattendue (secondes)
 ERROR_WAIT = 30
+
+
+def _has_usable_streams(raw: Any) -> bool:
+    if raw is None:
+        return False
+    if isinstance(raw, str):
+        if raw.strip().lower() == "null":
+            return False
+        try:
+            raw = json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            return False
+    return isinstance(raw, dict) and bool(raw)
 
 
 class AutoEnrichmentService:
@@ -193,7 +208,7 @@ class AutoEnrichmentService:
                 logger.warning(f"Activite {activity_id} non trouvee")
                 return False
 
-            if activity.streams_data:
+            if _has_usable_streams(activity.streams_data):
                 logger.info(f"Activite {activity_id} deja enrichie")
                 return True
 
@@ -236,7 +251,10 @@ class AutoEnrichmentService:
                 select(Activity).where(
                     Activity.user_id == UUID(user_id),
                     Activity.strava_id.is_not(None),
-                    Activity.streams_data.is_(None)
+                    or_(
+                        Activity.streams_data.is_(None),
+                        cast(Activity.streams_data, String) == "null",
+                    )
                 ).order_by(Activity.start_date.desc())
             ).all()
 

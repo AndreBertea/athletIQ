@@ -29,6 +29,21 @@ class ActivityType(str, Enum):
     RIDE = "Ride"
     SWIM = "Swim"
     WALK = "Walk"
+    RACKET_SPORT = "RacketSport"
+    TENNIS = "Tennis"
+    BADMINTON = "Badminton"
+    SQUASH = "Squash"
+    PADEL = "Padel"
+    WEIGHT_TRAINING = "WeightTraining"
+    ROCK_CLIMBING = "RockClimbing"
+    HIKING = "Hiking"
+    YOGA = "Yoga"
+    PILATES = "Pilates"
+    CROSSFIT = "Crossfit"
+    GYM = "Gym"
+    VIRTUAL_RUN = "VirtualRun"
+    VIRTUAL_RIDE = "VirtualRide"
+    OTHER = "Other"
 
 
 class ActivityBase(SQLModel):
@@ -50,14 +65,21 @@ class ActivityBase(SQLModel):
 
 class Activity(ActivityBase, table=True):
     """Entité Activity complète pour la base de données"""
+    __table_args__ = (
+        sa.UniqueConstraint("user_id", "strava_id", name="uq_activity_user_strava_id"),
+    )
+
     id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True)
     user_id: UUID = Field(foreign_key="user.id")
     
     # Source de l'activité
     source: str = Field(default=ActivitySource.STRAVA.value, index=True)
 
+    # Correction manuelle du type (si l'utilisateur corrige manuellement)
+    activity_type_override: Optional[ActivityType] = Field(default=None, description="Type d'activité corrigé manuellement ou depuis Garmin")
+
     # Identifiants externes
-    strava_id: Optional[int] = Field(sa_column=Column(BigInteger, unique=True, index=True))
+    strava_id: Optional[int] = Field(sa_column=Column(BigInteger, index=True))
     garmin_activity_id: Optional[int] = Field(sa_column=Column(BigInteger, unique=True, index=True))
     external_id: Optional[str] = None
     

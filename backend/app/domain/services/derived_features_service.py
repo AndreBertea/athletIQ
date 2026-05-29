@@ -14,7 +14,7 @@ from uuid import UUID
 from sqlmodel import Session, select
 from sqlalchemy import func
 
-from app.domain.entities.activity import Activity
+from app.domain.entities.activity import Activity, ActivitySource
 from app.domain.entities.garmin_daily import GarminDaily
 from app.domain.entities.segment import Segment
 from app.domain.entities.segment_features import SegmentFeatures
@@ -210,7 +210,12 @@ def compute_all_segment_features(
 
     Retourne {processed, skipped, errors}.
     """
-    query = select(Segment.activity_id).distinct()
+    query = (
+        select(Segment.activity_id)
+        .join(Activity, Segment.activity_id == Activity.id)
+        .where(Activity.source == ActivitySource.GARMIN.value)
+        .distinct()
+    )
     if user_id:
         query = query.where(Segment.user_id == user_id)
     activity_ids = session.exec(query).all()
@@ -266,6 +271,7 @@ def _get_user_max_hr(session: Session, user_id: UUID) -> Optional[float]:
     result = session.exec(
         select(func.max(Activity.max_heartrate)).where(
             Activity.user_id == user_id,
+            Activity.source == ActivitySource.GARMIN.value,
             Activity.max_heartrate.is_not(None),
         )
     ).one()
@@ -374,6 +380,7 @@ def _get_daily_edwards_trimp(
     activities = session.exec(
         select(Activity).where(
             Activity.user_id == user_id,
+            Activity.source == ActivitySource.GARMIN.value,
             Activity.start_date >= start_dt,
             Activity.start_date < end_dt,
         )
@@ -408,6 +415,7 @@ def _get_daily_trimp(session: Session, user_id: UUID, target_date: date_type) ->
     activities = session.exec(
         select(Activity).where(
             Activity.user_id == user_id,
+            Activity.source == ActivitySource.GARMIN.value,
             Activity.start_date >= start_dt,
             Activity.start_date < end_dt,
         )
@@ -581,7 +589,10 @@ def ensure_training_load_for_range(
 
     # Trouver la plus ancienne activite de l'utilisateur
     min_activity_dt = session.exec(
-        select(func.min(Activity.start_date)).where(Activity.user_id == user_id)
+        select(func.min(Activity.start_date)).where(
+            Activity.user_id == user_id,
+            Activity.source == ActivitySource.GARMIN.value,
+        )
     ).one()
     if not min_activity_dt:
         return {"computed": False, "reason": "no_activities"}

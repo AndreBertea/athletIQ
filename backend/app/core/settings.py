@@ -6,6 +6,7 @@ from pydantic_settings import BaseSettings
 from pydantic import Field, model_validator
 from typing import List
 from functools import lru_cache
+import json
 
 
 class Settings(BaseSettings):
@@ -48,6 +49,10 @@ class Settings(BaseSettings):
         default="",
         description="ID de la subscription webhook Strava (si configuré, les événements avec un subscription_id différent sont rejetés)"
     )
+    STRAVA_INTEGRATION_ENABLED: bool = Field(
+        default=False,
+        description="Autorise les nouvelles connexions, synchronisations et enrichissements Strava",
+    )
     
     # Google Calendar OAuth
     GOOGLE_CLIENT_ID: str = Field(
@@ -74,9 +79,14 @@ class Settings(BaseSettings):
     )
 
     # CORS
-    ALLOWED_ORIGINS: List[str] = Field(
-        default=[],
-        description="Origines autorisées pour CORS (configuré automatiquement selon ENVIRONMENT si vide)"
+    # Champ stocke en str brut (lit ALLOWED_ORIGINS depuis env) pour eviter
+    # le decodage JSON automatique de pydantic-settings (qui casse sur valeurs
+    # vides ou format CSV). La List[str] resolue est exposee via la property
+    # ALLOWED_ORIGINS plus bas.
+    ALLOWED_ORIGINS_RAW: str = Field(
+        default="",
+        alias="ALLOWED_ORIGINS",
+        description="Origines CORS, format JSON ['a','b'] ou CSV 'a,b' ou vide pour defaults selon ENVIRONMENT"
     )
 
     # Monitoring (Sentry)
@@ -117,17 +127,28 @@ class Settings(BaseSettings):
             self.GOOGLE_REDIRECT_URI = f"{self.BACKEND_URL.rstrip('/')}/api/v1/auth/google/callback"
         return self
 
-    @model_validator(mode="after")
-    def _set_default_origins(self) -> "Settings":
-        """Définit les origines CORS par défaut selon ENVIRONMENT si non configurées."""
-        if not self.ALLOWED_ORIGINS:
+    @property
+    def ALLOWED_ORIGINS(self) -> List[str]:
+        """Liste des origines CORS resolue depuis ALLOWED_ORIGINS_RAW + defaults."""
+        raw = (self.ALLOWED_ORIGINS_RAW or "").strip()
+        parsed: List[str] = []
+        if raw:
+            if raw.startswith("["):
+                try:
+                    parsed = json.loads(raw)
+                except json.JSONDecodeError:
+                    parsed = []
+            else:
+                parsed = [item.strip() for item in raw.split(",") if item.strip()]
+
+        if not parsed:
             if self.ENVIRONMENT == "production":
-                self.ALLOWED_ORIGINS = [
+                parsed = [
                     "https://athletiq.vercel.app",
                     "https://athlet-iq-beta.vercel.app",
                 ]
             else:
-                self.ALLOWED_ORIGINS = [
+                parsed = [
                     "http://localhost:3000",
                     "http://127.0.0.1:3000",
                     "http://localhost:4000",
@@ -135,9 +156,9 @@ class Settings(BaseSettings):
                 ]
         # Toujours inclure FRONTEND_URL dans les origines autorisees
         frontend = self.FRONTEND_URL.rstrip("/")
-        if frontend and frontend not in self.ALLOWED_ORIGINS:
-            self.ALLOWED_ORIGINS.append(frontend)
-        return self
+        if frontend and frontend not in parsed:
+            parsed.append(frontend)
+        return parsed
     
     # Encryption (pour les tokens Strava stockés)
     ENCRYPTION_KEY: str = Field(
@@ -147,6 +168,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"  # Utiliser le fichier .env principal
         case_sensitive = True
+        populate_by_name = True  # Permet l'alias ALLOWED_ORIGINS -> ALLOWED_ORIGINS_RAW
 
 
 def get_settings() -> Settings:

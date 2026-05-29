@@ -34,7 +34,16 @@ class GarminDaily(SQLModel, table=True):
     resting_hr: Optional[int] = None
     stress_score: Optional[float] = None
     spo2: Optional[float] = None
+    total_steps: Optional[int] = None
+    total_kilocalories: Optional[int] = None
+    active_kilocalories: Optional[int] = None
     vo2max_estimated: Optional[float] = None
+    lactate_threshold_speed_mps: Optional[float] = None
+    lactate_threshold_hr: Optional[int] = None
+    race_prediction_5k_seconds: Optional[float] = None
+    race_prediction_10k_seconds: Optional[float] = None
+    race_prediction_half_seconds: Optional[float] = None
+    race_prediction_marathon_seconds: Optional[float] = None
     weight_kg: Optional[float] = None
     body_battery_max: Optional[int] = None
     body_battery_min: Optional[int] = None
@@ -65,7 +74,16 @@ class GarminDailyRead(SQLModel):
     resting_hr: Optional[int]
     stress_score: Optional[float]
     spo2: Optional[float]
+    total_steps: Optional[int]
+    total_kilocalories: Optional[int]
+    active_kilocalories: Optional[int]
     vo2max_estimated: Optional[float]
+    lactate_threshold_speed_mps: Optional[float]
+    lactate_threshold_hr: Optional[int]
+    race_prediction_5k_seconds: Optional[float]
+    race_prediction_10k_seconds: Optional[float]
+    race_prediction_half_seconds: Optional[float]
+    race_prediction_marathon_seconds: Optional[float]
     weight_kg: Optional[float]
     body_battery_max: Optional[int]
     body_battery_min: Optional[int]

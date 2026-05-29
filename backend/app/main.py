@@ -20,6 +20,7 @@ from app.api.routers import router, limiter
 from app.core.database import create_db_and_tables
 from app.core.redis import check_redis_health
 from app.domain.services.auto_enrichment_service import auto_enrichment_service
+from app.domain.services.livetrack_worker import livetrack_poller
 
 settings = get_settings()
 
@@ -84,15 +85,26 @@ async def lifespan(app: FastAPI):
     else:
         logger.warning("⚠️  Redis non disponible — les fonctionnalités dépendant de Redis seront dégradées")
 
-    # Demarrer le worker d'enrichissement en arriere-plan
-    auto_enrichment_service.start_worker()
-    logger.info("✅ Worker d'enrichissement demarre (idle jusqu'a reception d'items)")
+    # Le worker est reserve au connecteur Strava lorsqu'il est explicitement actif.
+    if settings.STRAVA_INTEGRATION_ENABLED:
+        auto_enrichment_service.start_worker()
+        logger.info("✅ Worker d'enrichissement Strava demarre (idle jusqu'a reception d'items)")
+    else:
+        logger.info("Integration Strava suspendue: worker d'enrichissement desactive")
+
+    # Relancer les sessions LiveTrack actives (apres redemarrage backend)
+    await livetrack_poller.restart_active_sessions()
+    logger.info("✅ LiveTrack poller initialise")
 
     yield
 
     # Shutdown
-    auto_enrichment_service.stop_worker()
-    logger.info("🛑 Worker d'enrichissement arrete")
+    if settings.STRAVA_INTEGRATION_ENABLED:
+        auto_enrichment_service.stop_worker()
+        logger.info("🛑 Worker d'enrichissement Strava arrete")
+
+    livetrack_poller.shutdown()
+    logger.info("🛑 LiveTrack poller arrete")
 
 app = FastAPI(
     title="AthlétIQ API",
@@ -109,16 +121,38 @@ app.state.limiter = limiter
 
 async def _custom_rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
     """Retourne un 429 propre avec headers Retry-After et X-RateLimit-*."""
+    import re
+
+    # Extraire le limite et la fenêtre temporelle depuis le detail
+    # Ex: "3 per 1 hour"
+    match = re.search(r"(\d+)\s+per\s+(\d+)\s+(\w+)", exc.detail)
+    retry_after = "3600"  # Par défaut 1 heure en secondes
+
+    if match:
+        count, window, unit = match.groups()
+        if unit.lower() == "hour" or unit.lower() == "hours":
+            retry_after = str(int(window) * 3600)
+        elif unit.lower() == "minute" or unit.lower() == "minutes":
+            retry_after = str(int(window) * 60)
+
     response = JSONResponse(
         status_code=429,
         content={
-            "detail": "Trop de requetes",
-            "message": f"Rate limit exceeded: {exc.detail}",
+            "detail": "Trop de requetes - Connexion Garmin limitée à 5/heure pour sécurité",
+            "message": f"Réessayez dans {retry_after} secondes",
+            "retry_after": int(retry_after),
         },
     )
-    response = request.app.state.limiter._inject_headers(
-        response, request.state.view_rate_limit
-    )
+    response.headers["Retry-After"] = retry_after
+
+    try:
+        if hasattr(request.state, 'view_rate_limit'):
+            response = request.app.state.limiter._inject_headers(
+                response, request.state.view_rate_limit
+            )
+    except Exception as e:
+        logger.warning(f"Impossible d'injecter les headers de rate limit: {e}")
+
     return response
 
 
@@ -166,7 +200,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
     expose_headers=["*"],
 )
