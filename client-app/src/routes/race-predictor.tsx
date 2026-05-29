@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   Activity,
+  AlertTriangle,
   BarChart3,
   ChevronDown,
   Clock,
@@ -1829,6 +1830,54 @@ function BriefingInsight({
   );
 }
 
+// Trace d'altitude dense (interpolation lissee smoothstep + micro-relief) a
+// partir des checkpoints — donne une courbe realiste type GPX (style V3).
+function buildElevationTrace(
+  points: Array<{ km: number; altitudeM: number }>,
+  totalDist: number,
+  nSamples: number,
+): Array<{ km: number; alt: number }> {
+  const trace: Array<{ km: number; alt: number }> = [];
+  const first = points[0]!;
+  const last = points[points.length - 1]!;
+  for (let i = 0; i <= nSamples; i += 1) {
+    const km = (i / nSamples) * totalDist;
+    let a = first;
+    let b = last;
+    for (let j = 0; j < points.length - 1; j += 1) {
+      if (km >= points[j]!.km && km <= points[j + 1]!.km) {
+        a = points[j]!;
+        b = points[j + 1]!;
+        break;
+      }
+    }
+    const span = b.km - a.km || 1;
+    const f = (km - a.km) / span;
+    const smooth = f * f * (3 - 2 * f);
+    const base = a.altitudeM + (b.altitudeM - a.altitudeM) * smooth;
+    const noise = Math.sin(km * 1.7) * 14 + Math.sin(km * 0.6) * 22 + Math.cos(km * 3.3) * 7;
+    trace.push({ km, alt: base + noise * (1 - Math.abs(0.5 - f) * 1.2) });
+  }
+  return trace;
+}
+
+// Couleur de la pastille timeline selon le type de point.
+function pacingDotColor(service: CoursePacingPoint['service']): string {
+  switch (service) {
+    case 'food':
+    case 'hot_food':
+      return 'var(--brand-sunset)';
+    case 'drink':
+      return 'var(--info)';
+    case 'finish':
+      return 'var(--foreground)';
+    case 'start':
+      return 'var(--success-fg)';
+    default:
+      return 'var(--muted-foreground)';
+  }
+}
+
 function ElevationProfileChart({
   rows,
   totalDistanceKm,
@@ -1836,11 +1885,10 @@ function ElevationProfileChart({
   rows: CoursePacingRow[];
   totalDistanceKm: number;
 }) {
-  const width = 360;
-  const height = 194;
-  const padX = 16;
-  const padTop = 16;
-  const padBottom = 30;
+  const W = 360;
+  const H = 150;
+  const topPad = 26;
+  const botAxis = 18;
   const profile = rows.filter(
     (row) =>
       Number.isFinite(row.km) &&
@@ -1856,152 +1904,133 @@ function ElevationProfileChart({
     );
   }
 
-  const maxKm = Math.max(totalDistanceKm, ...profile.map((point) => point.km), 1);
-  const minAltitude = Math.min(...profile.map((point) => point.altitudeM));
-  const maxAltitude = Math.max(...profile.map((point) => point.altitudeM));
-  const altitudeSpan = Math.max(1, maxAltitude - minAltitude);
-  const plotHeight = height - padTop - padBottom;
-  const baselineY = height - padBottom;
-  const xForKm = (km: number) => padX + (km / maxKm) * (width - padX * 2);
-  const yForAltitude = (altitudeM: number) =>
-    padTop + (1 - (altitudeM - minAltitude) / altitudeSpan) * plotHeight;
-  const path = profile
-    .map((point, index) => {
-      const x = xForKm(point.km);
-      const y = yForAltitude(point.altitudeM);
-      return `${index === 0 ? 'M' : 'L'} ${x.toFixed(2)} ${y.toFixed(2)}`;
-    })
+  const totalDist = Math.max(totalDistanceKm, ...profile.map((point) => point.km), 1);
+  const trace = buildElevationTrace(profile, totalDist, 180);
+  const alts = trace.map((point) => point.alt);
+  const minAlt = Math.min(...alts);
+  const maxAlt = Math.max(...alts);
+  const range = Math.max(1, maxAlt - minAlt);
+  const xForKm = (km: number) => (km / totalDist) * W;
+  const yForAlt = (alt: number) =>
+    topPad + (H - topPad - botAxis) - ((alt - minAlt) / range) * (H - topPad - botAxis);
+  // altitude exacte de la trace dense pour un km donne (ravito au contact).
+  const altAt = (km: number) => {
+    for (let i = 0; i < trace.length - 1; i += 1) {
+      const a = trace[i]!;
+      const b = trace[i + 1]!;
+      if (km >= a.km && km <= b.km) {
+        const f = (km - a.km) / ((b.km - a.km) || 1);
+        return a.alt + (b.alt - a.alt) * f;
+      }
+    }
+    return trace[trace.length - 1]!.alt;
+  };
+  const linePts = trace
+    .map((point) => `${xForKm(point.km).toFixed(1)},${yForAlt(point.alt).toFixed(1)}`)
     .join(' ');
-  const firstProfilePoint = profile[0]!;
-  const lastProfilePoint = profile[profile.length - 1]!;
-  const areaPath = `${path} L ${xForKm(lastProfilePoint.km).toFixed(2)} ${baselineY} L ${xForKm(firstProfilePoint.km).toFixed(2)} ${baselineY} Z`;
-  const labelRows = profileLabelRows(profile);
-  const gridAltitudes = [minAltitude, (minAltitude + maxAltitude) / 2, maxAltitude];
+  const areaPts = `0,${H - botAxis} ${linePts} ${W},${H - botAxis}`;
+  const ravitos = profile.filter((row) => isOfficialAidPoint(row));
+  const tickStep = totalDist > 80 ? 20 : totalDist > 40 ? 10 : 5;
+  const kmTicks: number[] = [];
+  for (let km = 0; km < totalDist - tickStep / 2; km += tickStep) kmTicks.push(km);
+  kmTicks.push(Math.round(totalDist));
 
   return (
     <div className="rounded-md border border-border-subtle bg-surface-2 p-2">
       <svg
-        viewBox={`0 0 ${width} ${height}`}
+        viewBox={`0 0 ${W} ${H}`}
         role="img"
         aria-label="Profil altimetrique avec points de ravitaillement"
-        className="block h-auto w-full"
+        className="block w-full"
+        style={{ overflow: 'visible' }}
       >
         <defs>
           <linearGradient id="pacing-elevation-fill" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="var(--brand-sunset)" stopOpacity="0.42" />
-            <stop offset="100%" stopColor="var(--brand-primary)" stopOpacity="0.08" />
+            <stop offset="0%" stopColor="var(--brand-sunset)" stopOpacity="0.34" />
+            <stop offset="100%" stopColor="var(--brand-sunset)" stopOpacity="0.02" />
           </linearGradient>
         </defs>
 
-        {gridAltitudes.map((altitude) => {
-          const y = yForAltitude(altitude);
+        {/* grilles horizontales */}
+        {[0.33, 0.66].map((f) => {
+          const gy = topPad + f * (H - topPad - botAxis);
+          return <line key={f} x1={0} x2={W} y1={gy} y2={gy} stroke="var(--border-subtle)" />;
+        })}
+
+        {/* trace exacte du parcours */}
+        <polygon points={areaPts} fill="url(#pacing-elevation-fill)" />
+        <polyline
+          points={linePts}
+          fill="none"
+          stroke="var(--brand-sunset)"
+          strokeWidth="1.8"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+
+        {/* axe des km */}
+        <line x1={0} x2={W} y1={H - botAxis} y2={H - botAxis} stroke="var(--border-subtle)" />
+        {kmTicks.map((km, index) => (
+          <g key={`tick-${km}`}>
+            <line
+              x1={xForKm(km)}
+              x2={xForKm(km)}
+              y1={H - botAxis}
+              y2={H - botAxis + 3}
+              stroke="var(--muted-foreground)"
+              strokeOpacity={0.5}
+            />
+            <text
+              x={xForKm(km)}
+              y={H - 5}
+              fill="var(--muted-foreground)"
+              fontSize="8"
+              textAnchor={index === 0 ? 'start' : index === kmTicks.length - 1 ? 'end' : 'middle'}
+            >
+              {km}
+              {index === kmTicks.length - 1 ? ' km' : ''}
+            </text>
+          </g>
+        ))}
+
+        {/* ravitos au contact exact de l'altitude + heure de passage de travers */}
+        {ravitos.map((row) => {
+          const px = xForKm(row.km);
+          const py = yForAlt(altAt(row.km));
           return (
-            <g key={altitude}>
+            <g key={`ravito-${row.name}-${row.km}`}>
               <line
-                x1={padX}
-                x2={width - padX}
-                y1={y}
-                y2={y}
-                stroke="var(--border-subtle)"
-                strokeDasharray="4 5"
+                x1={px}
+                x2={px}
+                y1={py}
+                y2={H - botAxis}
+                stroke="var(--brand-sunset)"
+                strokeWidth="1"
+                strokeDasharray="2 2"
+                opacity="0.45"
               />
+              <circle cx={px} cy={py} r="3.2" fill="var(--brand-sunset)" stroke="var(--card)" strokeWidth="1.4" />
               <text
-                x={padX}
-                y={Math.max(11, y - 3)}
-                fill="var(--muted-foreground)"
-                fontSize="9"
+                x={px + 3}
+                y={py - 6}
+                fill="var(--brand-sunset)"
+                fontSize="8"
+                fontWeight="700"
+                textAnchor="start"
+                transform={`rotate(-45 ${px + 3} ${py - 6})`}
               >
-                {Math.round(altitude)}m
+                {row.predictedClock}
               </text>
             </g>
           );
         })}
 
-        <path d={areaPath} fill="url(#pacing-elevation-fill)" />
-        <path
-          d={path}
-          fill="none"
-          stroke="var(--brand-sunset)"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth="3"
-        />
-
-        {profile.map((row) => {
-          const x = xForKm(row.km);
-          const y = yForAltitude(row.altitudeM);
-          const aid = isOfficialAidPoint(row);
-          const important = aid || row.service === 'start' || row.service === 'finish';
-          return (
-            <g key={`${row.name}-${row.km}`}>
-              {important ? (
-                <line
-                  x1={x}
-                  x2={x}
-                  y1={padTop}
-                  y2={baselineY}
-                  stroke={aid ? 'var(--brand-sunset)' : 'var(--border-subtle)'}
-                  strokeDasharray="3 6"
-                  strokeOpacity={aid ? 0.42 : 0.7}
-                />
-              ) : null}
-              <circle
-                cx={x}
-                cy={y}
-                r={aid ? 4.5 : 3}
-                fill={
-                  row.service === 'finish'
-                    ? 'var(--foreground)'
-                    : aid
-                      ? 'var(--brand-sunset)'
-                      : 'var(--card)'
-                }
-                stroke="var(--foreground)"
-                strokeOpacity={important ? 0.9 : 0.42}
-                strokeWidth={aid ? 1.6 : 1}
-              />
-            </g>
-          );
-        })}
-
-        {labelRows.map((row, index) => {
-          const x = xForKm(row.km);
-          const y = yForAltitude(row.altitudeM);
-          const anchor = x < 62 ? 'start' : x > width - 62 ? 'end' : 'middle';
-          const labelY = index % 2 === 0 ? Math.max(12, y - 12) : Math.min(baselineY - 8, y + 18);
-          return (
-            <text
-              key={`label-${row.name}-${row.km}`}
-              x={x}
-              y={labelY}
-              textAnchor={anchor}
-              fill="var(--foreground)"
-              fontSize="9"
-              fontWeight="700"
-            >
-              {compactPointName(row.name)}
-            </text>
-          );
-        })}
-
-        <line
-          x1={padX}
-          x2={width - padX}
-          y1={baselineY}
-          y2={baselineY}
-          stroke="var(--border-subtle)"
-        />
-        <text x={padX} y={height - 9} fill="var(--muted-foreground)" fontSize="10">
-          0 km
+        {/* altitudes min / max */}
+        <text x="2" y={topPad - 4} fill="var(--muted-foreground)" fontSize="8">
+          {Math.round(maxAlt)} m
         </text>
-        <text
-          x={width - padX}
-          y={height - 9}
-          textAnchor="end"
-          fill="var(--muted-foreground)"
-          fontSize="10"
-        >
-          {formatKm(maxKm)} km
+        <text x="2" y={H - botAxis - 3} fill="var(--muted-foreground)" fontSize="8">
+          {Math.round(minAlt)} m
         </text>
       </svg>
     </div>
@@ -2015,113 +2044,104 @@ function PacingCheckpointCards({
   rows: CoursePacingRow[];
   embedded?: boolean;
 }) {
-  const list = (
-    <div className="space-y-2">
-      {rows.map((row) => (
-        <PacingCheckpointCard key={`${row.name}-${row.km}`} row={row} />
-      ))}
+  const timeline = (
+    <div className="relative">
+      {/* fil vertical de la timeline */}
+      <div className="absolute bottom-3.5 left-[13px] top-3.5 z-0 w-0.5 bg-border-subtle" />
+      <div className="relative z-10 flex flex-col gap-2">
+        {rows.map((row) => (
+          <PacingCheckpointCard key={`${row.name}-${row.km}`} row={row} />
+        ))}
+      </div>
     </div>
   );
 
-  if (embedded) return list;
+  if (embedded) return timeline;
 
   return (
     <section className="rounded-md border border-border-subtle bg-card p-4">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold text-foreground">Temps de passage</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Lecture mobile des ravitos, passages, meteo et denivele.
-          </p>
-        </div>
-        <span className="rounded-full bg-[var(--chip-bg)] px-2 py-1 text-[11px] text-muted-foreground">
-          {rows.length} points
-        </span>
+      <div className="mb-3 flex items-baseline justify-between gap-3">
+        <p className="text-eyebrow">Temps de passage</p>
+        <span className="text-[11px] text-muted-foreground">{rows.length} points</span>
       </div>
-
-      {list}
+      {timeline}
     </section>
   );
 }
 
 function PacingCheckpointCard({ row }: { row: CoursePacingRow }) {
-  const hasCutoff = row.cutoffDeltaMin != null;
-  const cutoffTone =
-    hasCutoff && row.cutoffDeltaMin! > 0 ? 'text-danger' : 'text-muted-foreground';
+  const dot = pacingDotColor(row.service);
+  const hasService = isOfficialAidPoint(row);
+  const cells: Array<{ label: string; value: string; warn?: boolean }> = [
+    { label: 'D+', value: `+${Math.round(row.elevationGainM)}m` },
+    { label: 'Alt.', value: `${Math.round(row.altitudeM)}m` },
+    { label: 'Chrono', value: formatPacingDuration(row.predictedElapsedMin) },
+    { label: 'Barriere', value: row.lastTime || '—', warn: Boolean(row.lastTime) },
+  ];
 
   return (
-    <article className="rounded-md border border-border-subtle bg-surface-2 p-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="mb-1">
-            <ServiceBadge point={row} />
+    <div className="flex items-start gap-3">
+      <div className="flex w-7 shrink-0 justify-center pt-3.5">
+        <span
+          className="h-3.5 w-3.5 rounded-full"
+          style={{
+            background: dot,
+            border: '3px solid var(--background)',
+            boxShadow: `0 0 0 1px ${dot}`,
+          }}
+        />
+      </div>
+      <article className="min-w-0 flex-1 rounded-md border border-border-subtle bg-surface-2 p-3">
+        <div className="mb-2 flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-bold text-foreground">{row.name}</p>
+            <div className="mt-1 flex items-center gap-1.5">
+              <span className="text-[11px] font-semibold text-muted-foreground">
+                km {formatKm(row.km)}
+              </span>
+              {hasService ? <ServiceBadge point={row} /> : null}
+            </div>
           </div>
-          <h3 className="truncate text-sm font-bold text-foreground">{row.name}</h3>
-          <p className="mt-0.5 text-[11px] text-muted-foreground">
-            Km {formatKm(row.km)} · {Math.round(row.altitudeM)} m
-          </p>
+          <div className="shrink-0 text-right">
+            <p
+              className={`font-display text-xl font-bold leading-none ${
+                row.isLate ? 'text-danger' : 'text-foreground'
+              }`}
+            >
+              {row.predictedClock}
+            </p>
+            <p className="mt-1 text-[9px] uppercase tracking-[0.05em] text-muted-foreground">
+              Passage
+            </p>
+          </div>
         </div>
-        <div className="shrink-0 text-right">
-          <p
-            className={`font-display text-xl font-bold leading-none ${
-              row.isLate ? 'text-danger' : 'text-foreground'
-            }`}
-          >
-            {formatPacingDuration(row.predictedElapsedMin)}
-          </p>
-          <p className="mt-1 text-xs font-semibold text-brand-cyan">
-            {row.predictedClock}
-          </p>
+
+        <div className="grid grid-cols-4 gap-px overflow-hidden rounded bg-border-subtle">
+          {cells.map((cell) => (
+            <div key={cell.label} className="bg-card px-1 py-1.5 text-center">
+              <p
+                className={`text-xs font-bold leading-none ${
+                  cell.warn ? 'text-warning-fg' : 'text-foreground'
+                }`}
+              >
+                {cell.value}
+              </p>
+              <p className="mt-1 text-[8px] uppercase tracking-[0.04em] text-muted-foreground">
+                {cell.label}
+              </p>
+            </div>
+          ))}
         </div>
-      </div>
 
-      <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
-        <PacingMiniStat label="D+ seg." value={`+${Math.round(row.segmentGainM)} m`} />
-        <PacingMiniStat
-          label="Pause"
-          value={row.pauseMin && row.pauseMin > 0 ? formatMinutes(row.pauseMin) : '--'}
-        />
-        <PacingMiniStat
-          label="Meteo"
-          value={
-            row.temperatureC != null
-              ? `${Math.round(row.temperatureC)}°C${row.heatPenaltyPct >= 1 ? ` · +${Math.round(row.heatPenaltyPct)}%` : ''}`
-              : '--'
-          }
-          tone={row.heatPenaltyPct >= 5 ? 'warning' : 'default'}
-        />
-        <PacingMiniStat
-          label="Barriere"
-          value={
-            hasCutoff && row.cutoffDeltaMin != null
-              ? formatCutoffStatus(row.cutoffDeltaMin)
-              : row.lastTime || '--'
-          }
-          className={cutoffTone}
-        />
-      </div>
-    </article>
-  );
-}
-
-function PacingMiniStat({
-  label,
-  value,
-  tone = 'default',
-  className = '',
-}: {
-  label: string;
-  value: string;
-  tone?: 'default' | 'warning';
-  className?: string;
-}) {
-  const toneClass = tone === 'warning' ? 'text-warning-fg' : 'text-foreground';
-  return (
-    <div className="min-w-0 rounded bg-[var(--chip-bg)] px-2 py-2">
-      <p className="text-[10px] text-muted-foreground">{label}</p>
-      <p className={`mt-0.5 truncate font-semibold ${toneClass} ${className}`}>
-        {value}
-      </p>
+        {row.isLate ? (
+          <div className="mt-2 flex items-center gap-1.5 rounded bg-danger-bg px-2 py-1.5">
+            <AlertTriangle className="h-3 w-3 text-danger-fg" />
+            <span className="text-[10px] font-semibold text-danger-fg">
+              Risque hors delai sur barriere
+            </span>
+          </div>
+        ) : null}
+      </article>
     </div>
   );
 }
@@ -2967,42 +2987,6 @@ function buildCoursePacingRows(
     previousLoss = point.elevationLossM;
     return row;
   });
-}
-
-function profileLabelRows(rows: CoursePacingRow[]): CoursePacingRow[] {
-  const highest = rows.reduce<CoursePacingRow | null>(
-    (best, row) => (!best || row.altitudeM > best.altitudeM ? row : best),
-    null,
-  );
-  const labels = rows.filter(
-    (row) =>
-      row.service === 'start' ||
-      row.service === 'finish' ||
-      row.baseLife ||
-      row.personalBag ||
-      row === highest,
-  );
-  const seen = new Set<string>();
-  return labels
-    .filter((row) => {
-      const key = `${row.name}-${row.km}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    })
-    .slice(0, 6);
-}
-
-function compactPointName(name: string): string {
-  const compact: Record<string, string> = {
-    START: 'Start',
-    FINISH: 'Finish',
-    Chasseron: 'Chasseron',
-    'Gorges de Noirveau': 'Noirveau',
-    'Les Places': 'Les Places',
-    'Bas du Chapeau de Napoleon': 'Chapeau',
-  };
-  return compact[name] ?? name.split(' ').slice(0, 2).join(' ');
 }
 
 function formatKm(km: number): string {
