@@ -5,14 +5,11 @@
  * (composant `ScreenProfile`, l. 1294).
  *
  * Sections :
- *   1. Header : avatar + nom + email mockée.
- *   2. Notifications : heure de check-in (lecture profile.notif_local_time)
+ *   1. Garmin : connexion et imports dans une modale dediee.
+ *   2. Header : avatar + nom + email réelle.
+ *   3. Notifications : heure de check-in (lecture profile.notif_local_time)
  *      + bouton Pause 7 jours (V1 : visuel uniquement, pas de side-effect).
- *   3. Affichage : toggle "Afficher mon score" (déjà géré par le gating
- *      J14, mais l'utilisateur peut masquer) + toggle streak.
- *   4. Données / Intégrations : 2 cards (Apple Health / Garmin) qui
- *      ouvrent ComingSoonModal. Whoop et Oura retirés en V1.
- *   5. Compte : Se déconnecter → signOut() + redirect /.
+ *   4. Compte : Se déconnecter → signOut() + redirect /.
  *
  * Deux exports :
  *   - `ProfileContent` (named) : contenu interne SANS AppShell, utilisé
@@ -21,18 +18,14 @@
  *     conservé pour rétro-compatibilité.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { MouseEvent, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from 'next-themes';
-import { AlertTriangle, CheckCircle, Download, Monitor, Moon, RefreshCw, ShieldCheck, Sun, Trash2, Watch } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Download, Monitor, Moon, RefreshCw, ShieldCheck, Sun, Trash2, Watch, X } from 'lucide-react';
 import { AppShell } from '@/components/shared/AppShell';
-import {
-  ComingSoonModal,
-  WEARABLE_SERVICES,
-  type WearableService,
-} from '@/components/profile/ComingSoonModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProfile } from '@/hooks/useProfile';
 import { useUpdateProfile } from '@/hooks/useUpdateProfile';
@@ -58,10 +51,11 @@ export function ProfileContent() {
   const profileQuery = useProfile();
   const updateProfile = useUpdateProfile();
   const queryClient = useQueryClient();
-  const [activeService, setActiveService] = useState<WearableService | null>(null);
   const [paused, setPaused] = useState(false);
+  const [garminModalOpen, setGarminModalOpen] = useState(false);
   const [garminEmail, setGarminEmail] = useState('');
   const [garminPassword, setGarminPassword] = useState('');
+  const [garminMessage, setGarminMessage] = useState<string | null>(null);
   const [settingsMessage, setSettingsMessage] = useState<string | null>(null);
   const [garminMfaCode, setGarminMfaCode] = useState('');
   const [garminNeedsMfa, setGarminNeedsMfa] = useState(false);
@@ -79,10 +73,6 @@ export function ProfileContent() {
   const notifTime = profile?.notif_local_time
     ? formatTimeShort(profile.notif_local_time)
     : '07:30';
-  const streakVisible = profile?.streak_visible ?? true;
-  // V1 : "afficher mon score" est inféré (toujours true pour les phases stable+).
-  // On expose un toggle local cosmétique en attendant un vrai champ profil.
-  const [scoreVisible, setScoreVisible] = useState(true);
   // V1 : toggle local "Notifications on/off". Si off, on cache les
   // sous-réglages (heure, pause). En V1.1 ça sera un vrai champ profile.
   const [notifEnabled, setNotifEnabled] = useState(true);
@@ -91,15 +81,12 @@ export function ProfileContent() {
     queryFn: () => agonApi.getGarminStatus(),
     staleTime: 30_000,
   });
+  const garminConnected = garminStatus.data?.connected === true;
   const enrichmentStatus = useQuery({
     queryKey: ['agon', 'garmin-enrichment-status'],
     queryFn: () => agonApi.getGarminEnrichmentStatus(),
     staleTime: 60_000,
-  });
-  const weatherStatus = useQuery({
-    queryKey: ['agon', 'weather-status'],
-    queryFn: () => agonApi.getWeatherStatus(),
-    staleTime: 60_000,
+    enabled: garminConnected,
   });
 
   const garminLogin = useMutation({
@@ -107,21 +94,21 @@ export function ProfileContent() {
     onSuccess: (result) => {
       if (result.needs_mfa) {
         setGarminNeedsMfa(true);
-        setSettingsMessage('Code Garmin MFA requis.');
+        setGarminMessage('Code Garmin MFA requis.');
         return;
       }
       setGarminPassword('');
       setGarminMfaCode('');
       setGarminNeedsMfa(false);
-      setSettingsMessage('Garmin connecte.');
+      setGarminMessage('Garmin connecte.');
       void queryClient.invalidateQueries({ queryKey: ['agon'] });
     },
-    onError: (error) => setSettingsMessage(error instanceof Error ? error.message : 'Connexion Garmin impossible.'),
+    onError: (error) => setGarminMessage(error instanceof Error ? error.message : 'Connexion Garmin impossible.'),
   });
   const disconnectGarmin = useMutation({
     mutationFn: () => agonApi.disconnectGarmin(),
     onSuccess: () => {
-      setSettingsMessage('Garmin deconnecte.');
+      setGarminMessage('Garmin deconnecte.');
       void queryClient.invalidateQueries({ queryKey: ['agon'] });
     },
   });
@@ -139,11 +126,6 @@ export function ProfileContent() {
     },
   });
 
-  const handleStreakToggle = (next: boolean) => {
-    if (!profile) return;
-    updateProfile.mutate({ patch: { streak_visible: next } });
-  };
-
   const handleSignOut = async () => {
     await signOut();
     navigate('/', { replace: true });
@@ -152,6 +134,15 @@ export function ProfileContent() {
   return (
     <>
       <div className="pt-2 pb-4">
+        <div className="px-4 pt-2 pb-3">
+          <GarminAccessButton
+            connected={garminConnected}
+            loading={garminStatus.isLoading}
+            importRunning={importState.status === 'running'}
+            onClick={() => setGarminModalOpen(true)}
+          />
+        </div>
+
         {/* Header utilisateur */}
         <div className="flex items-center gap-4 px-4 py-4">
           <div
@@ -248,75 +239,6 @@ export function ProfileContent() {
           ) : null}
         </Section>
 
-        {/* Section Affichage */}
-        <Section
-          title={t('profile.sections.display')}
-          note={t('profile.sections.displayNote')}
-        >
-          <SettingsRow
-            label={t('profile.rows.scoreVisible.label')}
-            hint={t('profile.rows.scoreVisible.hint')}
-            right={<Toggle on={scoreVisible} onChange={setScoreVisible} />}
-          />
-          <SettingsRow
-            label={t('profile.rows.streakVisible.label')}
-            hint={t('profile.rows.streakVisible.hint')}
-            isLast
-            right={
-              <Toggle
-                on={streakVisible}
-                onChange={(next) => handleStreakToggle(next)}
-                disabled={updateProfile.isPending || !profile}
-              />
-            }
-          />
-        </Section>
-
-        {/* Section Intégrations */}
-        <Section title={t('profile.sections.integrations')}>
-          <GarminSettings
-            connected={garminStatus.data?.connected === true}
-            email={garminEmail}
-            password={garminPassword}
-            mfaCode={garminMfaCode}
-            needsMfa={garminNeedsMfa}
-            onEmailChange={setGarminEmail}
-            onPasswordChange={setGarminPassword}
-            onMfaCodeChange={setGarminMfaCode}
-            onConnect={() => garminLogin.mutate()}
-            onDisconnect={() => disconnectGarmin.mutate()}
-            onImport={() => void startGarminImport(importDaysBack).catch(() => undefined)}
-            importDaysBack={importDaysBack}
-            onImportDaysBackChange={setImportDaysBack}
-            loading={garminLogin.isPending || importState.status === 'running' || disconnectGarmin.isPending}
-            importState={importState}
-            enrichedCount={enrichmentStatus.data?.enriched_activities ?? null}
-            pendingFit={enrichmentStatus.data?.pending_activities ?? null}
-            weatherCount={weatherStatus.data?.with_weather ?? null}
-            weatherEligible={weatherStatus.data?.eligible_weather_activities ?? weatherStatus.data?.with_coordinates ?? null}
-            weatherTimelineCount={weatherStatus.data?.with_weather_timeline ?? null}
-          />
-          {(Object.keys(WEARABLE_SERVICES) as WearableService[]).map(
-            (svc, idx, arr) => {
-              if (svc === 'garmin' || svc === 'apple_health') return null;
-              return (
-                <SettingsRow
-                  key={svc}
-                  label={t(`profile.integrations.${svc}.label`)}
-                  hint={t(`profile.integrations.${svc}.description`)}
-                  isLast={idx === arr.length - 1}
-                  onClick={() => setActiveService(svc)}
-                  right={
-                    <span className="rounded-full bg-[var(--chip-bg)] px-2 py-1 text-[11px] font-medium text-muted-foreground">
-                      {t('profile.integrations.soonBadge')}
-                    </span>
-                  }
-                />
-              );
-            },
-          )}
-        </Section>
-
         <Section title="Données et confidentialité">
           <SettingsRow
             label="Exporter mes donnees"
@@ -364,9 +286,27 @@ export function ProfileContent() {
         </p>
       </div>
 
-      <ComingSoonModal
-        service={activeService}
-        onClose={() => setActiveService(null)}
+      <GarminModal
+        open={garminModalOpen}
+        onClose={() => setGarminModalOpen(false)}
+        connected={garminConnected}
+        email={garminEmail}
+        password={garminPassword}
+        mfaCode={garminMfaCode}
+        needsMfa={garminNeedsMfa}
+        onEmailChange={setGarminEmail}
+        onPasswordChange={setGarminPassword}
+        onMfaCodeChange={setGarminMfaCode}
+        onConnect={() => garminLogin.mutate()}
+        onDisconnect={() => disconnectGarmin.mutate()}
+        onImport={() => void startGarminImport(importDaysBack).catch(() => undefined)}
+        importDaysBack={importDaysBack}
+        onImportDaysBackChange={setImportDaysBack}
+        loading={garminLogin.isPending || importState.status === 'running' || disconnectGarmin.isPending}
+        importState={importState}
+        enrichedCount={enrichmentStatus.data?.enriched_activities ?? null}
+        pendingFit={enrichmentStatus.data?.pending_activities ?? null}
+        message={garminMessage}
       />
     </>
   );
@@ -402,7 +342,7 @@ interface SectionProps {
   title: string;
   /** Annotation discrète à droite du titre (ex. "non fonctionnel"). */
   note?: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }
 
 function Section({ title, note, children }: SectionProps) {
@@ -467,6 +407,150 @@ function ThemeSelector() {
   );
 }
 
+function GarminAccessButton({
+  connected,
+  loading,
+  importRunning,
+  onClick,
+}: {
+  connected: boolean;
+  loading: boolean;
+  importRunning: boolean;
+  onClick: () => void;
+}) {
+  const statusLabel = loading
+    ? 'Verification...'
+    : importRunning
+      ? 'Import en cours'
+      : connected
+        ? 'Connecte'
+        : 'A connecter';
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'border-border-subtle bg-card flex w-full items-center justify-between gap-3 rounded-md border px-4 py-3 text-left transition',
+        'shadow-sm hover:bg-[var(--hover-overlay)]',
+      )}
+    >
+      <span className="flex min-w-0 items-center gap-3">
+        <span className="border-border-subtle bg-surface-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border">
+          <Watch className="h-5 w-5 text-brand-cyan" />
+        </span>
+        <span className="min-w-0">
+          <span className="text-foreground block text-sm font-semibold">
+            {connected ? 'Garmin (connecte)' : 'Connexion Garmin'}
+          </span>
+          <span className="text-muted-foreground mt-0.5 block text-xs">
+            {connected ? 'Imports et fichiers FIT' : 'Connecter ton compte Garmin'}
+          </span>
+        </span>
+      </span>
+      <span className="flex shrink-0 items-center gap-2">
+        <span
+          className={cn(
+            'rounded-full px-2 py-1 text-[11px] font-semibold',
+            connected ? 'bg-success-bg text-success-fg' : 'bg-[var(--chip-bg)] text-muted-foreground',
+          )}
+        >
+          {statusLabel}
+        </span>
+        <ChevronRight />
+      </span>
+    </button>
+  );
+}
+
+function GarminModal({
+  open,
+  onClose,
+  ...settingsProps
+}: {
+  open: boolean;
+  onClose: () => void;
+} & GarminSettingsProps) {
+  const dialogRef = useRef<HTMLDialogElement | null>(null);
+
+  useEffect(() => {
+    const dlg = dialogRef.current;
+    if (!dlg) return;
+    if (open && !dlg.open) {
+      dlg.showModal();
+    } else if (!open && dlg.open) {
+      dlg.close();
+    }
+  }, [open]);
+
+  useEffect(() => {
+    const dlg = dialogRef.current;
+    if (!dlg) return;
+    const handleCancel = (event: Event) => {
+      event.preventDefault();
+      onClose();
+    };
+    dlg.addEventListener('cancel', handleCancel);
+    return () => dlg.removeEventListener('cancel', handleCancel);
+  }, [onClose]);
+
+  const handleBackdropClick = (event: MouseEvent<HTMLDialogElement>) => {
+    const dlg = event.currentTarget;
+    const rect = dlg.getBoundingClientRect();
+    const inDialog =
+      rect.top <= event.clientY &&
+      event.clientY <= rect.top + rect.height &&
+      rect.left <= event.clientX &&
+      event.clientX <= rect.left + rect.width;
+    if (!inDialog) onClose();
+  };
+
+  return (
+    <dialog
+      ref={dialogRef}
+      onClick={handleBackdropClick}
+      className={cn(
+        'w-[calc(100vw-2rem)] max-w-[390px] rounded-lg p-0 backdrop:bg-black/65 backdrop:backdrop-blur-sm',
+        'bg-transparent open:flex open:flex-col',
+      )}
+      aria-labelledby="garmin-modal-title"
+    >
+      <div className="border-border-subtle bg-card relative overflow-hidden rounded-lg border shadow-glow-primary">
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Fermer Garmin"
+          className="absolute top-3 right-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-surface-2 text-muted-foreground transition hover:text-foreground"
+        >
+          <X className="h-4 w-4" />
+        </button>
+        <GarminSettings {...settingsProps} />
+      </div>
+    </dialog>
+  );
+}
+
+interface GarminSettingsProps {
+  connected: boolean;
+  email: string;
+  password: string;
+  mfaCode: string;
+  needsMfa: boolean;
+  onEmailChange: (value: string) => void;
+  onPasswordChange: (value: string) => void;
+  onMfaCodeChange: (value: string) => void;
+  onConnect: () => void;
+  onDisconnect: () => void;
+  onImport: () => void;
+  importDaysBack: number;
+  onImportDaysBackChange: (value: number) => void;
+  loading: boolean;
+  importState: GarminImportState;
+  enrichedCount: number | null;
+  pendingFit: number | null;
+  message: string | null;
+}
+
 function GarminSettings({
   connected,
   email,
@@ -485,36 +569,8 @@ function GarminSettings({
   importState,
   enrichedCount,
   pendingFit,
-  weatherCount,
-  weatherEligible,
-  weatherTimelineCount,
-}: {
-  connected: boolean;
-  email: string;
-  password: string;
-  mfaCode: string;
-  needsMfa: boolean;
-  onEmailChange: (value: string) => void;
-  onPasswordChange: (value: string) => void;
-  onMfaCodeChange: (value: string) => void;
-  onConnect: () => void;
-  onDisconnect: () => void;
-  onImport: () => void;
-  importDaysBack: number;
-  onImportDaysBackChange: (value: number) => void;
-  loading: boolean;
-  importState: GarminImportState;
-  enrichedCount: number | null;
-  pendingFit: number | null;
-  weatherCount: number | null;
-  weatherEligible: number | null;
-  weatherTimelineCount: number | null;
-}) {
-  const weatherValue = weatherCount == null
-    ? '—'
-    : weatherEligible != null
-      ? `${weatherCount}/${weatherEligible}`
-      : String(weatherCount);
+  message,
+}: GarminSettingsProps) {
   const importRunning = importState.status === 'running';
   const importSucceeded = importState.status === 'success' && importState.daysBack === importDaysBack;
   const importErrored = importState.status === 'error' && importState.daysBack === importDaysBack;
@@ -534,8 +590,6 @@ function GarminSettings({
   const periodActivities = readStatusNumber(periodRecord, 'totalActivities', 'total_activities');
   const periodFitDone = readStatusNumber(periodRecord, 'fitDone', 'fit_done');
   const periodFitTotal = readStatusNumber(periodRecord, 'fitTotal', 'fit_total');
-  const periodWeatherDone = readStatusNumber(periodRecord, 'weatherDone', 'weather_done');
-  const periodWeatherTotal = readStatusNumber(periodRecord, 'weatherTotal', 'weather_total');
   const periodFitPending = readStatusNumber(periodRecord, 'fitPending', 'fit_pending');
   const periodActivityValue = periodActivities == null ? '—' : String(periodActivities);
   const remainingValue = periodFitPending != null
@@ -548,17 +602,12 @@ function GarminSettings({
     : enrichedCount == null
       ? '—'
       : String(enrichedCount);
-  const weatherPeriodValue = periodWeatherDone != null && periodWeatherTotal != null
-    ? `${periodWeatherDone}/${periodWeatherTotal}`
-    : weatherTimelineCount != null
-      ? String(weatherTimelineCount)
-      : weatherValue;
 
   return (
-    <div className="border-border-subtle border-b p-4">
-      <div className="mb-3 flex items-start justify-between gap-3">
+    <div className="p-4">
+      <div className="mb-3 flex items-start justify-between gap-3 pr-9">
         <div>
-          <p className="text-foreground flex items-center gap-2 text-sm font-semibold">
+          <p id="garmin-modal-title" className="text-foreground flex items-center gap-2 text-sm font-semibold">
             <Watch className="h-4 w-4 text-brand-cyan" />
             Garmin Connect
           </p>
@@ -604,6 +653,11 @@ function GarminSettings({
           >
             {needsMfa ? 'Valider le code Garmin' : 'Connecter Garmin'}
           </button>
+          {message ? (
+            <p className="border-border-subtle bg-surface-2 rounded-md border px-3 py-2 text-xs text-muted-foreground">
+              {message}
+            </p>
+          ) : null}
         </div>
       ) : (
         <div className="space-y-3">
@@ -629,11 +683,10 @@ function GarminSettings({
             </p>
           </div>
 
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <MiniStatus label="Activites" value={periodActivityValue} />
-            <MiniStatus label="FIT" value={fitValue} />
-            <MiniStatus label="Meteo 10m" value={weatherPeriodValue} />
-            <MiniStatus label="Restant" value={remainingValue} />
+            <MiniStatus label="FIT traites" value={fitValue} />
+            <MiniStatus label="FIT restants" value={remainingValue} />
           </div>
           {importState.status !== 'idle' ? <ImportStatusCard state={importState} /> : null}
           <div className="grid grid-cols-2 gap-2">
@@ -662,6 +715,11 @@ function GarminSettings({
           <p className="text-muted-foreground text-[11px] leading-relaxed">
             L'import peut rester ouvert longtemps : le bouton continue a tourner apres navigation et une validation s'affiche quand les phases sont terminees.
           </p>
+          {message ? (
+            <p className="border-border-subtle bg-surface-2 rounded-md border px-3 py-2 text-xs text-muted-foreground">
+              {message}
+            </p>
+          ) : null}
         </div>
       )}
     </div>
@@ -698,9 +756,6 @@ function ImportStatusCard({ state }: { state: GarminImportState }) {
         </div>
         <p className="text-success-fg/80 mt-1 text-[11px]">
           {formatImportPeriod(state.daysBack)} · {finalStatus.total_activities} activite(s) · FIT {finalStatus.fit_done}/{finalStatus.fit_total}
-        </p>
-        <p className="text-success-fg/70 mt-1 text-[11px]">
-          Meteo 10 min : {finalStatus.weather_done}/{finalStatus.weather_total}, a lancer depuis chaque activite si besoin.
         </p>
         {remaining > 0 ? (
           <p className="text-success-fg/70 mt-1 text-[11px]">

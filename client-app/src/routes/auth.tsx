@@ -89,9 +89,9 @@ export default function AuthRoute() {
         {/* Logo + titre */}
         <div className="mb-8 text-center">
           <img
-            src="/agon-icon.png"
+            src="/agon-auth.png"
             alt="AGON"
-            className="mx-auto mb-5 h-24 w-24 object-contain drop-shadow-[0_8px_32px_rgba(160,67,46,0.55)]"
+            className="mx-auto mb-5 h-24 w-24 rounded-3xl object-contain drop-shadow-[0_8px_32px_rgba(160,67,46,0.55)]"
           />
           <h1 className="text-3xl font-extrabold text-foreground tracking-wide" style={{ fontFamily: 'var(--font-display)' }}>
             {isSignup ? 'Creer un compte' : 'Bienvenue sur AGON'}

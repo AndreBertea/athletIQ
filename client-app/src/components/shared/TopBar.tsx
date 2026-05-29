@@ -14,6 +14,7 @@
 
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { useTheme } from 'next-themes';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -46,6 +47,11 @@ export function TopBar({
 }: TopBarProps) {
   const { t } = useTranslation();
   const { user } = useAuth();
+  const { resolvedTheme } = useTheme();
+  // Logo wordmark adaptatif : clair = logo sombre sur fond ivoire ;
+  // sinon (dark / indéfini au 1er paint) = logo blanc. Fond détouré (PNG transparent).
+  const logoSrc =
+    resolvedTheme === 'light' ? '/agon-header-light.png' : '/agon-header-dark.png';
   const showDots = dotsTotal != null && dotsTotal > 0;
 
   // Initiale = override > user.displayName[0] > "?"
@@ -72,14 +78,8 @@ export function TopBar({
         {back ? (
           <BackButton {...(onBack ? { onBack } : {})} />
         ) : (
-          <Link to="/home" className="flex items-center gap-2" aria-label="AGON">
-            <img src="/agon-icon.png" alt="" className="block h-9 w-9 object-contain" />
-            <span
-              className="text-xl font-extrabold tracking-wide text-foreground"
-              style={{ fontFamily: 'var(--font-display)' }}
-            >
-              AGON
-            </span>
+          <Link to="/home" className="flex items-center" aria-label="AGON">
+            <img src={logoSrc} alt="AGON" className="block h-8 w-auto object-contain" />
           </Link>
         )}
         {title ? (

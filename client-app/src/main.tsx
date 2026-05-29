@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider } from 'next-themes';
+import { registerSW } from 'virtual:pwa-register';
 
 // Loading order matters — see web/src/styles/globals.css header.
 import './styles/design-system.css';
@@ -14,6 +15,20 @@ import './i18n';
 
 import App from './App';
 import { ThemedToaster } from './components/shared/ThemedToaster';
+
+const updateServiceWorker = registerSW({
+  immediate: true,
+  onNeedRefresh() {
+    void updateServiceWorker(true);
+  },
+  onRegisteredSW(_swUrl, registration) {
+    if (!registration) return;
+    void registration.update();
+    window.setInterval(() => {
+      void registration.update();
+    }, 5 * 60 * 1000);
+  },
+});
 
 const queryClient = new QueryClient({
   defaultOptions: {

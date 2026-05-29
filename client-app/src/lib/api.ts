@@ -55,6 +55,68 @@ function daysAgo(days: number): string {
   return date.toISOString();
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Le login Garmin est traite par le relais maison (worker sur IP residentielle).
+// On suit le sync_jobs lie jusqu'a un etat terminal. La forme du retour reste
+// compatible avec le flow existant : { needs_mfa } ou { connected }.
+async function pollGarminLogin(
+  jobId: string,
+): Promise<{ connected?: boolean; needs_mfa?: boolean; message?: string }> {
+  const deadline = Date.now() + 180_000; // 3 min : laisse le relais faire le login + MFA
+  while (Date.now() < deadline) {
+    await sleep(2000);
+    const { data, error } = await supabase
+      .from('sync_jobs')
+      .select('status,stage,message,error')
+      .eq('id', jobId)
+      .maybeSingle();
+    if (error) throw new ApiError(error.message, 500);
+    if (!data) continue;
+    if (data.stage === 'mfa_required') {
+      return { needs_mfa: true, message: data.message ?? 'Code Garmin MFA requis.' };
+    }
+    if (data.status === 'succeeded') {
+      return { connected: true, message: data.message ?? 'Garmin connecte.' };
+    }
+    if (data.status === 'failed' || data.status === 'cancelled') {
+      throw new ApiError(data.error || data.message || 'Connexion Garmin impossible.', 400);
+    }
+  }
+  throw new ApiError(
+    "Le relais Garmin ne repond pas. Verifie qu'il tourne a la maison, puis reessaie.",
+    504,
+  );
+}
+
+// Les prédictions V2/V3 sont calculées par le vrai moteur Python sur le 2e Mac
+// (worker prédiction). L'Edge enfile un prediction_job ; on suit le job jusqu'au
+// résultat complet, qu'on renvoie tel quel (forme RacePredictionResult attendue
+// par la page predictor).
+async function pollPrediction(jobId: string): Promise<unknown> {
+  const deadline = Date.now() + 180_000; // 3 min
+  while (Date.now() < deadline) {
+    await sleep(2000);
+    const { data, error } = await supabase
+      .from('prediction_jobs')
+      .select('status,result,error')
+      .eq('id', jobId)
+      .maybeSingle();
+    if (error) throw new ApiError(error.message, 500);
+    if (!data) continue;
+    if (data.status === 'done') return data.result;
+    if (data.status === 'failed') {
+      throw new ApiError(data.error || 'Prédiction échouée.', 400);
+    }
+  }
+  throw new ApiError(
+    "Le moteur de prédiction (2e Mac) ne répond pas. Vérifie qu'il tourne, puis réessaie.",
+    504,
+  );
+}
+
 function mapActivity(row: DbRow): DbRow {
   return {
     ...row,
@@ -366,6 +428,8 @@ async function get<T = any>(url: string, options: ApiOptions = {}): Promise<ApiR
     return response({ activity_id: data.id, streams, streams_data: streams, laps_data: laps ?? [] } as T);
   }
 
+  if (path === '/weather/status') return response(await getWeatherStatus() as T);
+
   const weather = path.match(/^\/weather\/([^/]+)$/);
   if (weather) {
     const { data, error } = await supabase
@@ -377,8 +441,6 @@ async function get<T = any>(url: string, options: ApiOptions = {}): Promise<ApiR
     if (error) throw error;
     return response(data as T);
   }
-
-  if (path === '/weather/status') return response(await getWeatherStatus() as T);
 
   const fit = path.match(/^\/garmin\/activities\/([^/]+)\/fit-metrics$/);
   if (fit) {
@@ -425,14 +487,9 @@ async function get<T = any>(url: string, options: ApiOptions = {}): Promise<ApiR
   }
 
   if (path === '/garmin/activities/import-preview') {
-    const rows = await selectActivities({ date_from: daysAgo(asNumber(params.days_back, 30)) });
-    return response({
-      days_back: asNumber(params.days_back, 30),
-      period_started_at: daysAgo(asNumber(params.days_back, 30)),
-      total_activities: rows.length,
-      existing_activities: rows.filter((row) => row.has_garmin).length,
-      missing_activities: 0,
-    } as T);
+    return response(await invokeFunction<T>('garmin-activities-sync', {
+      body: { days_back: asNumber(params.days_back, 30), preview: true },
+    }));
   }
 
   if (path === '/garmin/activities/import-status') {
@@ -634,17 +691,28 @@ async function post<T = any>(url: string, body?: any, options: ApiOptions = {}):
 
   if (path === '/auth/strava/login') return response(await invokeFunction<T>('strava-oauth-start'));
   if (path === '/sync/strava') return response(await invokeFunction<T>('strava-sync', { body: params }));
-  if (path === '/sync/garmin' || path === '/sync/garmin/activities' || path === '/garmin/activities/enrich-fit') {
-    return response({ message: 'Sync Garmin complète reportée sur le MVP Supabase; historique migré disponible.' } as T);
+  if (path === '/sync/garmin') return response(await invokeFunction<T>('garmin-sync', { body: params }));
+  if (path === '/sync/garmin/activities') {
+    return response(await invokeFunction<T>('garmin-activities-sync', { body: params }));
+  }
+  if (path === '/garmin/activities/enrich-fit') {
+    return response(await invokeFunction<T>('garmin-fit-enrich', { body: params }));
   }
 
   const singleFit = path.match(/^\/garmin\/activities\/([^/]+)\/enrich-fit$/);
   if (singleFit) {
-    return response({ status: 'skipped', activity_id: singleFit[1], fit_metrics_stored: false } as T);
+    return response(await invokeFunction<T>('garmin-fit-enrich', { body: { activity_id: singleFit[1] } }));
   }
 
   if (path === '/auth/garmin/login') {
-    throw new ApiError('Connexion Garmin native non disponible dans le MVP Supabase. Reconnexion à traiter après week-end.', 501);
+    const result = await invokeFunction<Record<string, unknown>>('garmin-login', { body });
+    // Reponse immediate (deja connecte) : on relaie telle quelle.
+    if (result?.connected || result?.already_connected) return response(result as T);
+    // Sinon la connexion est traitee en asynchrone par le relais maison :
+    // on suit le sync_jobs jusqu'au resultat (connecte / MFA requis / echec).
+    const jobId = result?.job_id ? String(result.job_id) : null;
+    if (!jobId) return response(result as T);
+    return response(await pollGarminLogin(jobId) as T);
   }
 
   if (path === '/user/me/athletic-profile') {
@@ -654,7 +722,18 @@ async function post<T = any>(url: string, body?: any, options: ApiOptions = {}):
   }
 
   if ((path.includes('/prediction/') && path.endsWith('/gpx')) || path === '/prediction/gpx-pace-prediction') {
-    return response(await invokeFunction<T>('predict-race', { body }));
+    // v1 = MVP inline (Edge) ; v2/v3 = vrai moteur Python sur le 2e Mac (via job).
+    const engine = path === '/prediction/gpx-pace-prediction'
+      ? 'v1'
+      : path.includes('/v2/')
+        ? 'v2'
+        : 'v3';
+    if (body instanceof FormData) body.append('engine', engine);
+    const result = await invokeFunction<Record<string, unknown>>('predict-race', { body });
+    if (result?.pending && result?.job_id) {
+      return response(await pollPrediction(String(result.job_id)) as T);
+    }
+    return response(result as T);
   }
 
   if (path === '/gpx-routes') {

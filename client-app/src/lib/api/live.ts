@@ -1,11 +1,15 @@
-import axios from 'axios'
-
-const VITE_API_URL = (import.meta as any).env?.VITE_API_URL
-const API_BASE_URL = VITE_API_URL ? `${VITE_API_URL}/api/v1` : '/api/v1'
-const WS_BASE_URL = (() => {
-  const base = VITE_API_URL || window.location.origin
-  return base.replace(/^http/, 'ws') + '/api/v1'
-})()
+// LiveTrack via Supabase (migration de l'ancien backend Render).
+//
+// - createSession : parse l'URL LiveTrack et insere une ligne dans live_sessions.
+//   Le relais maison (worker H24) la detecte, scrape la page Garmin et insere les
+//   trackpoints dans live_trackpoints.
+// - followSession : abonnement Supabase Realtime (INSERT sur live_trackpoints +
+//   changement de statut sur live_sessions) — remplace l'ancien WebSocket.
+//
+// L'interface publique (types + methodes du LiveService) est conservee a
+// l'identique : les pages live.tsx / live-session.tsx / live-shared.tsx et les
+// composants n'ont pas besoin de changer.
+import { supabase } from '@/lib/supabase'
 
 export type LiveSessionSource = 'livetrack' | 'connect_iq'
 export type LiveSessionStatus = 'active' | 'finished' | 'stopped'
@@ -51,42 +55,109 @@ export type LiveWsMessage =
   | { type: 'points'; points: LiveTrackpoint[] }
   | { type: 'ended'; status: LiveSessionStatus }
 
+const SESSION_COLS =
+  'id,user_id,source,label,status,started_at,ended_at,last_point_at,created_at,updated_at'
+
+// https://livetrack.garmin.com/session/{sessionId}/token/{token}
+const LIVETRACK_URL_RE = /livetrack\.garmin\.com\/session\/([^/?#]+)\/token\/([^/?#]+)/i
+
+function mapPoint(row: Record<string, unknown>): LiveTrackpoint {
+  return {
+    ts: Number(row.ts),
+    lat: row.lat == null ? null : Number(row.lat),
+    lng: row.lng == null ? null : Number(row.lng),
+    hr: row.hr == null ? null : Number(row.hr),
+    speed: row.speed == null ? null : Number(row.speed),
+    cadence: row.cadence == null ? null : Number(row.cadence),
+    power: row.power == null ? null : Number(row.power),
+    distance: row.distance == null ? null : Number(row.distance),
+    altitude: row.altitude == null ? null : Number(row.altitude),
+  }
+}
+
 class LiveService {
-  private api = axios.create({
-    baseURL: API_BASE_URL,
-    headers: { 'Content-Type': 'application/json' },
-    withCredentials: true,
-  })
+  private async currentUserId(): Promise<string> {
+    const { data, error } = await supabase.auth.getUser()
+    if (error || !data.user) throw new Error('Session requise.')
+    return data.user.id
+  }
 
   async createSession(url: string, label?: string): Promise<LiveSession> {
-    const { data } = await this.api.post<LiveSession>('/live/sessions', { url, label })
-    return data
+    const match = LIVETRACK_URL_RE.exec(url)
+    if (!match) {
+      throw new Error(
+        'URL LiveTrack invalide. Format attendu : ' +
+          'https://livetrack.garmin.com/session/{sessionId}/token/{token}',
+      )
+    }
+    const [, garminSessionId, garminToken] = match
+    const userId = await this.currentUserId()
+
+    // Reutilise une session active existante pour ce meme partage Garmin.
+    const { data: existing } = await supabase
+      .from('live_sessions')
+      .select(SESSION_COLS)
+      .eq('user_id', userId)
+      .eq('garmin_session_id', garminSessionId)
+      .eq('status', 'active')
+      .maybeSingle()
+    if (existing) return existing as LiveSession
+
+    const { data, error } = await supabase
+      .from('live_sessions')
+      .insert({
+        user_id: userId,
+        source: 'livetrack',
+        label: label ?? null,
+        status: 'active',
+        garmin_session_id: garminSessionId,
+        garmin_token: garminToken,
+      })
+      .select(SESSION_COLS)
+      .single()
+    if (error) throw new Error(error.message)
+    return data as LiveSession
   }
 
   async listSessions(): Promise<LiveSession[]> {
-    const { data } = await this.api.get<LiveSession[]>('/live/sessions')
-    return data
+    const { data, error } = await supabase
+      .from('live_sessions')
+      .select(SESSION_COLS)
+      .order('created_at', { ascending: false })
+    if (error) throw new Error(error.message)
+    return (data ?? []) as LiveSession[]
   }
 
   async getSession(id: string): Promise<LiveSessionDetail> {
-    const { data } = await this.api.get<LiveSessionDetail>(`/live/sessions/${id}`)
-    return data
+    const { data: session, error } = await supabase
+      .from('live_sessions')
+      .select(SESSION_COLS)
+      .eq('id', id)
+      .single()
+    if (error) throw new Error(error.message)
+    const { data: points } = await supabase
+      .from('live_trackpoints')
+      .select('ts,lat,lng,hr,speed,cadence,power,distance,altitude')
+      .eq('session_id', id)
+      .order('ts', { ascending: true })
+    return { ...(session as LiveSession), points: (points ?? []).map(mapPoint) }
   }
 
   async deleteSession(id: string): Promise<void> {
-    await this.api.delete(`/live/sessions/${id}`)
+    const { error } = await supabase.from('live_sessions').delete().eq('id', id)
+    if (error) throw new Error(error.message)
   }
 
+  // Fonctionnalite coach (sessions partagees) : non migree sur Supabase pour
+  // l'instant. Retourne une liste vide plutot que d'echouer.
   async listSharedActiveSessions(): Promise<SharedSessionEntry[]> {
-    const { data } = await this.api.get<SharedSessionEntry[]>('/live/shared/active-sessions')
-    return data
+    return []
   }
 
   /**
-   * Ouvre une WebSocket vers /live/follow/{id}, retourne un controleur avec
-   * close(). Reconnect automatique avec backoff exponentiel (max 30s).
-   * Sur reconnect, le snapshot initial est renvoye par le backend, donc le
-   * caller doit simplement remplacer ses points par le nouveau snapshot.
+   * Suit une session en temps reel via Supabase Realtime. Emet d'abord un
+   * 'snapshot' (etat + points existants), puis 'points' a chaque nouvel INSERT,
+   * et 'ended' quand le statut passe a finished/stopped. Retourne { close() }.
    */
   followSession(
     id: string,
@@ -95,66 +166,52 @@ class LiveService {
       onStatusChange?: (status: 'connecting' | 'open' | 'closed' | 'reconnecting') => void
     },
   ): { close: () => void } {
-    let ws: WebSocket | null = null
     let closed = false
-    let attempt = 0
-    let reconnectTimer: number | null = null
+    handlers.onStatusChange?.('connecting')
 
-    const connect = async () => {
-      if (closed) return
-      handlers.onStatusChange?.(attempt === 0 ? 'connecting' : 'reconnecting')
-
-      // 1. Recuperer un token JWT via XHR (cookie httpOnly envoye automatiquement)
-      //    Les navigateurs n'envoient pas les cookies SameSite=Lax sur les WS handshakes,
-      //    donc on doit passer le token en query param.
-      let token: string
-      try {
-        const { data } = await this.api.get<{ token: string }>('/live/ws-token')
-        token = data.token
-      } catch (e) {
-        // Si le user n'est pas auth, on ne peut pas ouvrir le WS. Retry plus tard.
-        attempt += 1
-        const delay = Math.min(1000 * 2 ** Math.min(attempt - 1, 5), 30000)
-        reconnectTimer = window.setTimeout(connect, delay)
-        return
-      }
-      if (closed) return
-
-      const url = `${WS_BASE_URL}/live/follow/${id}?token=${encodeURIComponent(token)}`
-      ws = new WebSocket(url)
-
-      ws.onopen = () => {
-        attempt = 0
-        handlers.onStatusChange?.('open')
-      }
-      ws.onmessage = (evt) => {
-        try {
-          const msg = JSON.parse(evt.data) as LiveWsMessage
-          handlers.onMessage(msg)
-        } catch {
-          // ignore non-JSON frames
-        }
-      }
-      ws.onerror = () => {
-        // onclose enchainera
-      }
-      ws.onclose = () => {
+    const channel = supabase
+      .channel(`live:${id}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'live_trackpoints', filter: `session_id=eq.${id}` },
+        (payload) => {
+          if (closed) return
+          handlers.onMessage({ type: 'points', points: [mapPoint(payload.new as Record<string, unknown>)] })
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'live_sessions', filter: `id=eq.${id}` },
+        (payload) => {
+          if (closed) return
+          const status = (payload.new as Record<string, unknown>).status as LiveSessionStatus
+          if (status && status !== 'active') handlers.onMessage({ type: 'ended', status })
+        },
+      )
+      .subscribe((status) => {
         if (closed) return
-        handlers.onStatusChange?.('closed')
-        attempt += 1
-        const delay = Math.min(1000 * 2 ** Math.min(attempt - 1, 5), 30000)
-        reconnectTimer = window.setTimeout(connect, delay)
-      }
-    }
-    connect()
+        if (status === 'SUBSCRIBED') {
+          handlers.onStatusChange?.('open')
+          // Snapshot initial une fois abonne (les points arrives entre-temps
+          // seront inclus dans le snapshot, le caller remplace son etat).
+          this.getSession(id)
+            .then((detail) => {
+              if (closed) return
+              const { points, ...session } = detail
+              handlers.onMessage({ type: 'snapshot', session, points })
+            })
+            .catch(() => {/* ignore : les points temps reel continueront */})
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          handlers.onStatusChange?.('reconnecting')
+        } else if (status === 'CLOSED') {
+          handlers.onStatusChange?.('closed')
+        }
+      })
 
     return {
       close: () => {
         closed = true
-        if (reconnectTimer !== null) window.clearTimeout(reconnectTimer)
-        if (ws) {
-          try { ws.close() } catch {/* ignore */}
-        }
+        supabase.removeChannel(channel)
       },
     }
   }

@@ -42,6 +42,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { useProfile } from '@/hooks/useProfile';
 import { supabase } from '@/lib/supabase';
+import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
 import AuthRoute from '@/routes/auth';
 import OnboardingRoute from '@/routes/onboarding';
 import CheckinRoute from '@/routes/checkin';
@@ -63,33 +64,35 @@ export default function App() {
     <AuthProvider>
       <RealtimeBridge />
       <BrowserRouter>
-        <Suspense fallback={<RouteFallback />}>
-          <Routes>
-            <Route path="/" element={<AuthRoute />} />
-            <Route element={<RequireAuth />}>
-              <Route element={<RouteDispatcher />}>
-                <Route path="/onboarding" element={<OnboardingRoute />} />
-                <Route path="/checkin" element={<CheckinRoute />} />
-                {/* Legacy : /checkin-done redirige vers /home. */}
-                <Route
-                  path="/checkin-done"
-                  element={<Navigate to="/home" replace />}
-                />
-                <Route path="/home" element={<HomeRoute />} />
-                <Route path="/activities" element={<ActivitiesRoute />} />
-                <Route path="/activities/:id" element={<ActivityDetailRoute />} />
-                <Route path="/profile" element={<ProfileRoute />} />
-                <Route path="/settings" element={<Navigate to="/profile" replace />} />
-                <Route path="/race-predictor" element={<RacePredictor />} />
-                {/* Live tracking — 3 routes lazy-loadées. */}
-                <Route path="/live" element={<Live />} />
-                <Route path="/live/shared" element={<LiveShared />} />
-                <Route path="/live/:id" element={<LiveSession />} />
+        <ErrorBoundary>
+          <Suspense fallback={<RouteFallback />}>
+            <Routes>
+              <Route path="/" element={<AuthRoute />} />
+              <Route element={<RequireAuth />}>
+                <Route element={<RouteDispatcher />}>
+                  <Route path="/onboarding" element={<OnboardingRoute />} />
+                  <Route path="/checkin" element={<CheckinRoute />} />
+                  {/* Legacy : /checkin-done redirige vers /home. */}
+                  <Route
+                    path="/checkin-done"
+                    element={<Navigate to="/home" replace />}
+                  />
+                  <Route path="/home" element={<HomeRoute />} />
+                  <Route path="/activities" element={<ActivitiesRoute />} />
+                  <Route path="/activities/:id" element={<ActivityDetailRoute />} />
+                  <Route path="/profile" element={<ProfileRoute />} />
+                  <Route path="/settings" element={<Navigate to="/profile" replace />} />
+                  <Route path="/race-predictor" element={<RacePredictor />} />
+                  {/* Live tracking — 3 routes lazy-loadées. */}
+                  <Route path="/live" element={<Live />} />
+                  <Route path="/live/shared" element={<LiveShared />} />
+                  <Route path="/live/:id" element={<LiveSession />} />
+                </Route>
               </Route>
-            </Route>
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </Suspense>
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Suspense>
+        </ErrorBoundary>
       </BrowserRouter>
     </AuthProvider>
   );
