@@ -9,30 +9,37 @@
 
 /* ----- 2. DESIGN TOKENS ----- */
 :root {
-  /* --- Brand AGON Violet ---
-   * Direction validee : violet primary (cercle du logo) + moss + stone
-   * + orchid + deep night.
-   * Reference : couleur exacte du cercle du logo AGON (#9C49F5).
+  /* === SYSTEME D'ACCENT COMMUTABLE (data-accent sur <html>) ===
+   * Principe : le violet PUR du logo (--spark) reste l'etincelle RARE
+   * (focus ring, point du logo) ; la couleur de TRAVAIL (--action) porte
+   * boutons / CTA / onglet actif / liens et peut etre commutee.
+   * Tout le reste (glows, gradients, halos) derive de --action-rgb.
    *
-   * Rampe violette (ancre = #9C49F5, hue ~269) :
-   *   50 #F5EEFE · 100 #E9DBFD · 200 #D4BAFB · 300 #BE96F9 · 400 #AC73F7
-   *   500 #9C49F5 (LOGO) · 600 #8A2BE2 · 700 #7321C4 · 800 #5B1A9B
-   *   900 #421372 · 950 #2A0B4D
-   */
-  --brand-primary:  #9C49F5;   /* VIOLET -- couleur signature AGON (cercle du logo) */
+   * Defaut : "Amethyste minerale" (prune desature, cousin du logo).
+   * Variantes : [data-accent="aubergine"], [data-accent="braise"] (plus bas).
+   * Valeurs DARK ici ; valeurs LIGHT dans [data-theme="light"]. */
+  --spark:              #9C49F5;        /* violet pur du logo (etincelle) */
+  --spark-rgb:          156, 73, 245;
+  --action:             #7E4FA6;        /* amethyste minerale (dark) */
+  --action-rgb:         126, 79, 166;
+  --action-link:        #C3A1E8;        /* lien / actif sur night (8.1:1) */
+  --action-link-hover:  #D9C6F2;
+
+  /* --- Brand AGON (re-route sur l'accent commutable) --- */
+  --brand-primary:  var(--action);   /* couleur de travail (boutons/CTA/actif) */
   --brand-moss:     #3E4F35;   /* vert mousse, success / forest */
   --brand-stone:    #A8A192;   /* neutre minerale */
-  --brand-sunset:   #C77DFF;   /* orchid, accent vif secondaire */
+  --brand-sunset:   #C77DFF;   /* orchid, accent data-viz (independant de l'action) */
   --brand-night:    #191815;   /* nuit profonde, base dark */
   --brand-ivory:    #F5EFE0;   /* ivoire chaud, texte sur dark */
 
-  /* Retro-compat (anciens noms du PDS readiness -> remappes AGON violet) */
-  --brand-navy:     #2A0B4D;   /* violet profond */
-  --brand-teal:     #5B1A9B;   /* violet deep */
-  --brand-cyan:     #BE96F9;   /* violet clair (utilise dans actifs/hover/liens) */
-  --brand-sky:      #D4BAFB;   /* violet clair (hover liens) */
+  /* Retro-compat (anciens noms du PDS readiness -> remappes accent) */
+  --brand-navy:     #2A0B4D;
+  --brand-teal:     #5B1A9B;
+  --brand-cyan:     var(--action-link);        /* lien / etat actif */
+  --brand-sky:      var(--action-link-hover);  /* hover lien */
   --brand-lavender: #F5EFE0;   /* ivory */
-  --brand-coral:    #C77DFF;   /* orchid */
+  --brand-coral:    #C77DFF;   /* orchid (data-viz) */
 
   /* --- Surfaces (dark, base : deep night #191815) --- */
   --background:        #191815;
@@ -51,7 +58,7 @@
   --border:            #3D3833;
   --border-subtle:     rgba(245, 239, 224, 0.10);
   --input-border:      #3D3833;
-  --ring:              #9C49F5;
+  --ring:              var(--spark);
 
   /* --- Semantic --- */
   --success:           #10B981;
@@ -73,7 +80,7 @@
   --success-bg:        rgba(16, 185, 129, 0.15);
   --warning-bg:        rgba(245, 158, 11, 0.15);
   --danger-bg:         rgba(239, 68, 68, 0.15);
-  --brand-primary-bg:  rgba(156, 73, 245, 0.18); /* halo accent radial home */
+  --brand-primary-bg:  rgba(var(--action-rgb), 0.18); /* halo accent radial home */
 
   /* --- Data viz palette AGON (ordered, harmonieuse violet) --- */
   --chart-1: #9C49F5;   /* violet (primary) */
@@ -116,10 +123,10 @@
   --glass-tile:         rgba(232, 223, 207, 0.06);
 
   /* Chrome navigation (TopBar / BottomNav) */
-  --topbar-bg:        linear-gradient(180deg, rgba(156, 73, 245, 0.20) 0%, rgba(25, 24, 21, 0.55) 100%);
+  --topbar-bg:        linear-gradient(180deg, rgba(var(--action-rgb), 0.20) 0%, rgba(25, 24, 21, 0.55) 100%);
   --bottomnav-bg:     rgba(20, 14, 34, 0.45);
-  --bottomnav-image:  radial-gradient(120% 180% at 50% 100%, rgba(156, 73, 245, 0.22) 0%, rgba(123, 33, 196, 0.18) 28%, rgba(20, 14, 34, 0.10) 60%);
-  --bottomnav-shadow: 0 -8px 32px rgba(156, 73, 245, 0.18);
+  --bottomnav-image:  radial-gradient(120% 180% at 50% 100%, rgba(var(--action-rgb), 0.24) 0%, rgba(var(--action-rgb), 0.14) 28%, rgba(20, 14, 34, 0.10) 60%);
+  --bottomnav-shadow: 0 -8px 32px rgba(var(--action-rgb), 0.18);
 
   /* Tons pastel des tuiles/pills/badges (KPI, insights, sport-type).
    * DARK = teintes -200 sur tint 10% (lisibles sur night). Surcharge
@@ -194,8 +201,8 @@
   --shadow-sm:    0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-md:    0 4px 12px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-lg:    0 12px 32px rgba(0, 0, 0, 0.45);
-  --glow-primary: 0 0 0 1px rgba(156, 73, 245, 0.32), 0 8px 24px rgba(156, 73, 245, 0.22);
-  --glow-cyan:    0 0 24px rgba(199, 125, 255, 0.28);  /* glow orchid */
+  --glow-primary: 0 0 0 1px rgba(var(--action-rgb), 0.32), 0 8px 24px rgba(var(--action-rgb), 0.22);
+  --glow-cyan:    0 0 24px rgba(var(--action-rgb), 0.28);  /* glow accent */
   --glow-success: 0 0 0 1px rgba(16, 185, 129, 0.35), 0 4px 12px rgba(16, 185, 129, 0.15);
   --glow-danger:  0 0 0 1px rgba(239, 68, 68, 0.35), 0 4px 12px rgba(239, 68, 68, 0.15);
 
@@ -232,6 +239,12 @@
 [data-theme="light"], .light {
   color-scheme: light;
 
+  /* --- Accent commutable, valeurs LIGHT (defaut = amethyste minerale) --- */
+  --action:             #59347E;        /* amethyste minerale (light) */
+  --action-rgb:         89, 52, 126;
+  --action-link:        #59347E;        /* lien sur ivoire (8.26:1) */
+  --action-link-hover:  #7C4FA8;
+
   /* --- Surfaces (ivoire chaud dominant, jamais blanc pur) --- */
   --background:        #F5EFE0;   /* ivoire chaud signature AGON */
   --surface-1:         #EFE7D5;
@@ -249,15 +262,13 @@
   --border:            #D8CEB9;
   --border-subtle:     rgba(25, 24, 21, 0.10);
   --input-border:      #D2C7AF;
-  --ring:              #7321C4;
+  --ring:              var(--spark);
 
-  /* --- Accent interactif : violet fonce en clair ---
-   * En dark, brand-cyan = violet clair (bon contraste sur night). Sur ivoire,
-   * un violet clair manque de contraste pour texte/etats actifs → on bascule
-   * l'accent interactif (liens, onglets actifs, pastilles) sur violet fonce.
-   * brand-sunset reste orchid pour highlights / graphes. */
-  --brand-cyan:        #6D28D9;   /* violet fonce (liens / actifs) */
-  --brand-sky:         #8A2BE2;   /* violet (hover liens) */
+  /* --- Accent interactif en clair : pilote par --action (defini plus haut) ---
+   * brand-cyan/sky suivent l'accent commutable ; brand-sunset reste orchid
+   * pour les highlights / graphes. */
+  --brand-cyan:        var(--action-link);        /* lien / etat actif */
+  --brand-sky:         var(--action-link-hover);  /* hover lien */
 
   /* --- Semantic (assombri pour lisibilite sur ivoire) --- */
   --success:           #15803D;
@@ -270,7 +281,7 @@
   --success-bg:        rgba(21, 128, 61, 0.12);
   --warning-bg:        rgba(180, 83, 9, 0.12);
   --danger-bg:         rgba(220, 38, 38, 0.10);
-  --brand-primary-bg:  rgba(156, 73, 245, 0.10);
+  --brand-primary-bg:  rgba(var(--action-rgb), 0.10);
 
   /* --- Data viz : ivoire (chart-8) devient night pour rester visible --- */
   --chart-8:           #191815;
@@ -279,8 +290,8 @@
   --shadow-sm:    0 1px 2px rgba(25, 24, 21, 0.08);
   --shadow-md:    0 4px 12px rgba(25, 24, 21, 0.10), 0 1px 2px rgba(25, 24, 21, 0.06);
   --shadow-lg:    0 12px 32px rgba(25, 24, 21, 0.16);
-  --glow-primary: 0 0 0 1px rgba(156, 73, 245, 0.22), 0 8px 24px rgba(156, 73, 245, 0.16);
-  --glow-cyan:    0 0 18px rgba(199, 125, 255, 0.30);
+  --glow-primary: 0 0 0 1px rgba(var(--action-rgb), 0.22), 0 8px 24px rgba(var(--action-rgb), 0.16);
+  --glow-cyan:    0 0 18px rgba(var(--action-rgb), 0.30);
 
   /* --- Overlays adaptatifs (night a faible opacite sur ivoire) --- */
   --hover-overlay:   rgba(25, 24, 21, 0.04);
@@ -301,10 +312,10 @@
   --glass-panel-muted:  rgba(25, 24, 21, 0.55);
   --glass-tile:         rgba(25, 24, 21, 0.05);
 
-  /* --- Chrome navigation → ivoire frosted, accent violet discret --- */
-  --topbar-bg:        linear-gradient(180deg, rgba(156, 73, 245, 0.12) 0%, rgba(245, 239, 224, 0.80) 100%);
+  /* --- Chrome navigation → ivoire frosted, accent discret --- */
+  --topbar-bg:        linear-gradient(180deg, rgba(var(--action-rgb), 0.12) 0%, rgba(245, 239, 224, 0.80) 100%);
   --bottomnav-bg:     rgba(245, 239, 224, 0.78);
-  --bottomnav-image:  radial-gradient(120% 180% at 50% 100%, rgba(156, 73, 245, 0.14) 0%, rgba(123, 33, 196, 0.08) 30%, rgba(245, 239, 224, 0) 60%);
+  --bottomnav-image:  radial-gradient(120% 180% at 50% 100%, rgba(var(--action-rgb), 0.14) 0%, rgba(var(--action-rgb), 0.08) 30%, rgba(245, 239, 224, 0) 60%);
   --bottomnav-shadow: 0 -6px 24px rgba(25, 24, 21, 0.08);
 
   /* Tons pastel → teintes -700 saturees, lisibles sur ivoire */
@@ -314,6 +325,44 @@
   --tone-violet-fg:  #6D28D9;  --tone-violet-bg:  rgba(124, 58, 237, 0.10); --tone-violet-bd:  rgba(124, 58, 237, 0.22);
   --tone-rose-fg:    #BE123C;  --tone-rose-bg:    rgba(190, 18, 60, 0.10);  --tone-rose-bd:    rgba(190, 18, 60, 0.22);
   --tone-red-fg:     #B91C1C;  --tone-red-bg:     rgba(185, 28, 28, 0.10);  --tone-red-bd:     rgba(185, 28, 28, 0.22);
+}
+
+/* ============================================================
+ * ACCENTS COMMUTABLES (data-accent sur <html>)
+ * Amethyste = defaut (valeurs dans :root / [data-theme="light"]).
+ * Chaque variante ne redefinit QUE --action* ; glows, gradients,
+ * halos, nav, focus en derivent automatiquement via --action-rgb.
+ * --spark (violet pur du logo) reste constant dans tous les accents.
+ * ============================================================ */
+
+/* Aubergine d'encre — pourpre profond desature, le plus premium/anti-crypto */
+[data-accent="aubergine"] {
+  --action:             #7A4A6E;
+  --action-rgb:         122, 74, 110;
+  --action-link:        #D6A9C8;   /* 8.77:1 sur night */
+  --action-link-hover:  #E7C9DC;
+}
+[data-theme="light"][data-accent="aubergine"] {
+  --action:             #5C3352;
+  --action-rgb:         92, 51, 82;
+  --action-link:        #5C3352;   /* 8.93:1 sur ivoire */
+  --action-link-hover:  #7E4A70;
+}
+
+/* Braise & Sommet — brique/argile chaude + etincelle violette froide.
+ * En dark, la brique est illisible en TEXTE : les liens passent sur le
+ * violet clair (#C77DFF) pour garder le contraste. */
+[data-accent="braise"] {
+  --action:             #BE5638;
+  --action-rgb:         190, 86, 56;
+  --action-link:        #C77DFF;   /* 6.60:1 sur night */
+  --action-link-hover:  #DAB0FF;
+}
+[data-theme="light"][data-accent="braise"] {
+  --action:             #A8452B;
+  --action-rgb:         168, 69, 43;
+  --action-link:        #A8452B;   /* 5.15:1 sur ivoire */
+  --action-link-hover:  #C25E40;
 }
 
 /* ----- 3. RESET & BASE ----- */
@@ -375,7 +424,7 @@ a {
 a:hover { color: var(--brand-sky); }
 
 ::selection {
-  background: rgba(156, 73, 245, 0.35);
+  background: rgba(var(--action-rgb), 0.35);
   color: var(--foreground);
 }
 
@@ -400,13 +449,14 @@ a:hover { color: var(--brand-sky); }
 
 /* ----- 4. SIGNATURE GRADIENTS ----- */
 .bg-signature {
-  background: radial-gradient(
-    120% 60% at 50% 120%,
-    #C77DFF 0%,
-    #7321C4 30%,
-    #1B0E2E 50%,
-    #0E0717 65%
-  );
+  background:
+    radial-gradient(
+      120% 70% at 50% 120%,
+      rgba(var(--action-rgb), 0.60) 0%,
+      rgba(var(--action-rgb), 0.24) 32%,
+      rgba(var(--action-rgb), 0) 60%
+    ),
+    var(--background);
 }
 
 .bg-halo {
@@ -419,8 +469,8 @@ a:hover { color: var(--brand-sky); }
   inset: 0;
   z-index: -1;
   background:
-    radial-gradient(circle at 30% 20%, rgba(156, 73, 245, 0.12), transparent 60%),
-    radial-gradient(circle at 70% 80%, rgba(123, 33, 196, 0.08), transparent 60%);
+    radial-gradient(circle at 30% 20%, rgba(var(--action-rgb), 0.12), transparent 60%),
+    radial-gradient(circle at 70% 80%, rgba(var(--action-rgb), 0.08), transparent 60%);
   pointer-events: none;
 }
 
@@ -502,7 +552,7 @@ a:hover { color: var(--brand-sky); }
               transform   var(--duration-base) var(--ease-out);
 }
 .card:hover {
-  border-color: rgba(156, 73, 245, 0.25);
+  border-color: rgba(var(--action-rgb), 0.25);
 }
 
 .card--glass {
@@ -637,7 +687,7 @@ a:hover { color: var(--brand-sky); }
 .select:focus {
   outline: none;
   border-color: var(--brand-primary);
-  box-shadow: 0 0 0 3px rgba(156, 73, 245, 0.25);
+  box-shadow: 0 0 0 3px rgba(var(--spark-rgb), 0.25);
 }
 
 .textarea {
@@ -674,7 +724,7 @@ a:hover { color: var(--brand-sky); }
 .badge--success { background: rgba(16, 185, 129, 0.15); color: #34D399; }
 .badge--warning { background: rgba(245, 158, 11, 0.15); color: #FCD34D; }
 .badge--danger  { background: rgba(239, 68, 68, 0.15);  color: #FCA5A5; }
-.badge--brand   { background: rgba(156, 73, 245, 0.15); color: var(--brand-cyan); }
+.badge--brand   { background: rgba(var(--action-rgb), 0.15); color: var(--brand-cyan); }
 
 /* ----- 11. NAVIGATION ----- */
 .topbar {
@@ -718,7 +768,7 @@ a:hover { color: var(--brand-sky); }
   color: var(--foreground);
 }
 .nav-item--active {
-  background-color: rgba(156, 73, 245, 0.12);
+  background-color: rgba(var(--action-rgb), 0.12);
   color: var(--brand-cyan);
 }
 

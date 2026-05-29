@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import RouteMapTiler, { type RouteMapTrack } from '@/components/map/RouteMapTiler';
 import type { LiveTrackpoint } from '@/lib/api/live';
+import { actionColor } from '@/lib/accent';
 
 interface Props {
   points: LiveTrackpoint[];
@@ -10,7 +11,7 @@ export default function LiveMap({ points }: Props) {
   const track = useMemo<RouteMapTrack>(
     () => ({
       id: 'live-session',
-      color: '#9C49F5',
+      color: actionColor(),
       width: 4,
       points: points
         .filter((point) => point.lat != null && point.lng != null)

@@ -35,6 +35,13 @@
           var meta = document.querySelector('meta[name="theme-color"]');
           if (meta)
             meta.setAttribute('content', resolved === 'light' ? '#F5EFE0' : '#191815');
+          // Accent commutable (cf. src/lib/accent.ts) — applique avant paint
+          // pour eviter un flash de l'accent par defaut.
+          var accent = localStorage.getItem('agon-accent');
+          document.documentElement.setAttribute(
+            'data-accent',
+            accent === 'amethyste' || accent === 'aubergine' ? accent : 'braise',
+          );
         } catch (e) {}
       })();
     </script>

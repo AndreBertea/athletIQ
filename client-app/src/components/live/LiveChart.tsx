@@ -53,7 +53,7 @@ export default function LiveChart({ points }: Props) {
             onClick={() => setMode('time')}
             className={`inline-flex items-center gap-1 px-3 py-1 ${
               mode === 'time'
-                ? 'bg-primary-600 text-white'
+                ? 'bg-brand-primary text-white'
                 : 'text-gray-600 hover:bg-gray-50'
             }`}
           >
@@ -65,7 +65,7 @@ export default function LiveChart({ points }: Props) {
             onClick={() => setMode('distance')}
             className={`inline-flex items-center gap-1 px-3 py-1 border-l border-gray-200 ${
               mode === 'distance'
-                ? 'bg-primary-600 text-white'
+                ? 'bg-brand-primary text-white'
                 : 'text-gray-600 hover:bg-gray-50'
             }`}
           >

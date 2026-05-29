@@ -31,6 +31,7 @@ import { useProfile } from '@/hooks/useProfile';
 import { useUpdateProfile } from '@/hooks/useUpdateProfile';
 import { LanguageSwitcher } from '@/i18n/LanguageSwitcher';
 import { agonApi } from '@/lib/api/agon';
+import { ACCENT_META, ACCENTS, getAccent, setAccent, type Accent } from '@/lib/accent';
 import {
   DEFAULT_IMPORT_DAYS_BACK,
   IMPORT_PERIOD_OPTIONS,
@@ -134,17 +135,8 @@ export function ProfileContent() {
   return (
     <>
       <div className="pt-2 pb-4">
-        <div className="px-4 pt-2 pb-3">
-          <GarminAccessButton
-            connected={garminConnected}
-            loading={garminStatus.isLoading}
-            importRunning={importState.status === 'running'}
-            onClick={() => setGarminModalOpen(true)}
-          />
-        </div>
-
-        {/* Header utilisateur */}
-        <div className="flex items-center gap-4 px-4 py-4">
+        {/* Bulle profil — tout en haut de la page */}
+        <div className="flex items-center gap-4 px-4 pt-2 pb-3">
           <div
             className={cn(
               'bg-brand-primary flex h-16 w-16 items-center justify-center rounded-full',
@@ -161,6 +153,16 @@ export function ProfileContent() {
           </div>
         </div>
 
+        {/* Connexion Garmin — juste sous la bulle profil */}
+        <div className="px-4 pb-3">
+          <GarminAccessButton
+            connected={garminConnected}
+            loading={garminStatus.isLoading}
+            importRunning={importState.status === 'running'}
+            onClick={() => setGarminModalOpen(true)}
+          />
+        </div>
+
         {/* Section Langue — sélecteur drapeaux 🇫🇷 / 🇬🇧. Persistance
             via i18n-browser-languagedetector (clé `enduraw.lang`). */}
         <Section title={t('profile.sections.language')}>
@@ -172,10 +174,13 @@ export function ProfileContent() {
           </div>
         </Section>
 
-        {/* Section Apparence — sélecteur de thème Sombre / Clair / Système.
-            Persistance via next-themes (clé localStorage `agon-theme`). */}
+        {/* Section Apparence — thème (Sombre/Clair/Système) + accent fusionnés
+            dans un seul bloc pour gagner de la place. Persistance : next-themes
+            (`agon-theme`) et localStorage `agon-accent` (cf. lib/accent.ts). */}
         <Section title={t('profile.theme.section')}>
           <ThemeSelector />
+          <div className="border-t border-border-subtle" />
+          <AccentSelector />
         </Section>
 
         {/* Section Notifications — toggle maître + sous-réglages
@@ -399,6 +404,46 @@ function ThemeSelector() {
             )}
           >
             <Icon className="h-4 w-4" />
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function AccentSelector() {
+  const [accent, setAccentState] = useState<Accent>(() => getAccent());
+
+  const choose = (value: Accent) => {
+    setAccent(value);
+    setAccentState(value);
+  };
+
+  return (
+    <div role="radiogroup" aria-label="Accent" className="grid grid-cols-3 gap-1 p-2">
+      {ACCENTS.map((value) => {
+        const active = accent === value;
+        const { label, swatch } = ACCENT_META[value];
+        return (
+          <button
+            key={value}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            onClick={() => choose(value)}
+            className={cn(
+              'flex h-11 flex-col items-center justify-center gap-1 rounded-md text-[11px] font-semibold transition',
+              active
+                ? 'bg-brand-primary text-white shadow-sm'
+                : 'text-muted-foreground hover:bg-[var(--hover-overlay)] hover:text-foreground',
+            )}
+          >
+            <span
+              className="h-4 w-4 rounded-full border border-white/25"
+              style={{ background: swatch }}
+              aria-hidden="true"
+            />
             {label}
           </button>
         );

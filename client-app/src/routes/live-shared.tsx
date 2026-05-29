@@ -6,6 +6,7 @@ import LiveSharedMap from '@/components/live/LiveSharedMap';
 import type { AthleteTrack } from '@/components/live/LiveSharedMap';
 import { AppShell } from '@/components/shared/AppShell';
 import { trackColorForIndex } from '@/components/shared/avatar-colors';
+import { actionColor } from '@/lib/accent';
 import { liveService } from '@/lib/api/live';
 import type { LiveSession, LiveSessionStatus, LiveTrackpoint, LiveWsMessage } from '@/lib/api/live';
 import {
@@ -298,7 +299,7 @@ function AthleteChips({
 }) {
   return (
     <div className="scrollbar-hide flex shrink-0 gap-1.5 overflow-x-auto px-5 pb-3">
-      <Chip label="Tous" color="#9C49F5" active={selectedId === 'all'} onClick={() => onSelect('all')} />
+      <Chip label="Tous" color={actionColor()} active={selectedId === 'all'} onClick={() => onSelect('all')} />
       {states.map((state) => (
         <Chip
           key={state.sessionId}

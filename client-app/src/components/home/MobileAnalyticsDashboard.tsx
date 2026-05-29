@@ -20,9 +20,9 @@ import {
 } from 'lucide-react';
 import {
   Area,
-  AreaChart,
   Bar,
   CartesianGrid,
+  Cell,
   ComposedChart,
   Line,
   LineChart,
@@ -146,7 +146,8 @@ const metricConfigByKey: Record<
   distance: {
     label: 'Distance',
     shortLabel: 'km',
-    color: 'var(--chart-2)',
+    // Orange sunset (agonV2 --accent) : le violet faisait trop pour la distance.
+    color: '#E89E5A',
     icon: Gauge,
   },
   duration: {
@@ -164,7 +165,8 @@ const metricConfigByKey: Record<
   elevation: {
     label: 'D+',
     shortLabel: 'm',
-    color: 'var(--warning)',
+    // Violet du logo (l'etincelle / le sommet) pour le denivele positif.
+    color: '#9C49F5',
     icon: TrendingUp,
   },
 };
@@ -667,6 +669,46 @@ function KpiTile({
   );
 }
 
+function ChartTypeToggle({
+  value,
+  onChange,
+}: {
+  value: 'bar' | 'line';
+  onChange: (value: 'bar' | 'line') => void;
+}) {
+  const options = [
+    { value: 'bar' as const, Icon: BarChart3, label: 'Barres' },
+    { value: 'line' as const, Icon: LineChartIcon, label: 'Courbe' },
+  ];
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Type de graphique"
+      className="flex items-center gap-0.5 rounded-md border border-border-subtle bg-card p-0.5"
+    >
+      {options.map(({ value: optionValue, Icon, label }) => (
+        <button
+          key={optionValue}
+          type="button"
+          role="radio"
+          aria-checked={value === optionValue}
+          aria-label={label}
+          title={label}
+          onClick={() => onChange(optionValue)}
+          className={cn(
+            'flex h-6 w-6 items-center justify-center rounded transition',
+            value === optionValue
+              ? 'bg-brand-cyan/15 text-brand-cyan'
+              : 'text-muted-foreground hover:text-foreground',
+          )}
+        >
+          <Icon className="h-3.5 w-3.5" />
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function PerformancePanel({
   data,
   loading,
@@ -682,6 +724,8 @@ function PerformancePanel({
 }) {
   const metric = metricConfigByKey[selectedMetric];
   const MetricIcon = metric.icon;
+  // Choix utilisateur : barres (defaut, style agonV2) ou courbe (aire lissee).
+  const [chartType, setChartType] = useState<'bar' | 'line'>('bar');
 
   return (
     <div className="space-y-3">
@@ -689,6 +733,7 @@ function PerformancePanel({
         title="Évolution des performances"
         subtitle={`Toutes les activités - ${granularityLabel(granularity)}`}
         Icon={MetricIcon}
+        action={<ChartTypeToggle value={chartType} onChange={setChartType} />}
       />
 
       <div className="grid grid-cols-4 gap-1.5">
@@ -720,13 +765,7 @@ function PerformancePanel({
           minHeight={1}
           initialDimension={{ width: 1, height: 1 }}
         >
-          <AreaChart data={data} margin={{ top: 12, right: 10, bottom: 0, left: -24 }}>
-            <defs>
-              <linearGradient id="performance-area" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={metric.color} stopOpacity={0.34} />
-                <stop offset="100%" stopColor={metric.color} stopOpacity={0} />
-              </linearGradient>
-            </defs>
+          <ComposedChart data={data} margin={{ top: 12, right: 10, bottom: 0, left: -24 }} barCategoryGap="22%">
             <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
             <XAxis
               dataKey="label"
@@ -742,23 +781,54 @@ function PerformancePanel({
               tickFormatter={(value: number) => formatAxisValue(selectedMetric, value)}
             />
             <Tooltip
-              cursor={{ stroke: 'var(--chart-cursor)' }}
+              cursor={
+                chartType === 'bar'
+                  ? { fill: 'var(--chart-cursor)', fillOpacity: 0.12 }
+                  : { stroke: 'var(--chart-cursor)' }
+              }
               contentStyle={tooltipStyle}
               labelStyle={tooltipLabelStyle}
               formatter={(value: unknown) =>
                 formatMetricValue(selectedMetric, toNumber(value))
               }
             />
-            <Area
-              type="monotone"
-              dataKey={selectedMetric}
-              stroke={metric.color}
-              strokeWidth={2.5}
-              fill="url(#performance-area)"
-              isAnimationActive={false}
-              dot={false}
-            />
-          </AreaChart>
+            {chartType === 'line' ? (
+              <>
+                <defs>
+                  <linearGradient id="performance-area" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={metric.color} stopOpacity={0.34} />
+                    <stop offset="100%" stopColor={metric.color} stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <Area
+                  type="monotone"
+                  dataKey={selectedMetric}
+                  stroke={metric.color}
+                  strokeWidth={2.5}
+                  fill="url(#performance-area)"
+                  isAnimationActive={false}
+                  dot={false}
+                />
+              </>
+            ) : (
+              // Barres style agonV2 : derniere barre (periode courante) mise en
+              // avant a pleine opacite, les precedentes en retrait.
+              <Bar
+                dataKey={selectedMetric}
+                fill={metric.color}
+                radius={[3, 3, 0, 0]}
+                maxBarSize={26}
+                isAnimationActive={false}
+              >
+                {data.map((_, index) => (
+                  <Cell
+                    key={index}
+                    fillOpacity={index === data.length - 1 ? 0.95 : 0.5}
+                  />
+                ))}
+              </Bar>
+            )}
+          </ComposedChart>
         </ResponsiveContainer>
       </ChartFrame>
     </div>
@@ -1500,10 +1570,13 @@ function PanelHeader({
   title,
   subtitle,
   Icon,
+  action,
 }: {
   title: string;
   subtitle: string;
   Icon: IconType;
+  /** Contrôle discret optionnel (ex. toggle courbe/barres) à gauche de l'icône. */
+  action?: ReactNode;
 }) {
   return (
     <div className="flex items-center justify-between gap-3">
@@ -1511,9 +1584,12 @@ function PanelHeader({
         <h2 className="text-sm font-bold text-foreground">{title}</h2>
         <p className="mt-0.5 text-[11px] text-muted-foreground">{subtitle}</p>
       </div>
-      <span className="border-brand-cyan/20 bg-brand-cyan/10 rounded-md border p-1.5 text-brand-cyan">
-        <Icon className="h-3.5 w-3.5" />
-      </span>
+      <div className="flex items-center gap-2">
+        {action}
+        <span className="border-brand-cyan/20 bg-brand-cyan/10 rounded-md border p-1.5 text-brand-cyan">
+          <Icon className="h-3.5 w-3.5" />
+        </span>
+      </div>
     </div>
   );
 }

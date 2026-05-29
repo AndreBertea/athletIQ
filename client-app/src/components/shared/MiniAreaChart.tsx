@@ -1,5 +1,6 @@
 import { useId } from 'react';
 import { cn } from '@/lib/utils';
+import { actionColor } from '@/lib/accent';
 
 interface MiniAreaChartProps {
   data: Array<number | null | undefined>;
@@ -10,7 +11,7 @@ interface MiniAreaChartProps {
 
 export default function MiniAreaChart({
   data,
-  color = '#9C49F5',
+  color = actionColor(),
   height = 64,
   className,
 }: MiniAreaChartProps) {
