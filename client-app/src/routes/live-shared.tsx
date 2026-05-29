@@ -298,7 +298,7 @@ function AthleteChips({
 }) {
   return (
     <div className="scrollbar-hide flex shrink-0 gap-1.5 overflow-x-auto px-5 pb-3">
-      <Chip label="Tous" color="#A0432E" active={selectedId === 'all'} onClick={() => onSelect('all')} />
+      <Chip label="Tous" color="#9C49F5" active={selectedId === 'all'} onClick={() => onSelect('all')} />
       {states.map((state) => (
         <Chip
           key={state.sessionId}

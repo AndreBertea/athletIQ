@@ -232,7 +232,7 @@ export default function ActivityDetailRoute() {
                 </p>
                 <MiniAreaChart
                   data={streamData.map((point) => point.altitude)}
-                  color="#A0432E"
+                  color="#9C49F5"
                   height={72}
                   className="bg-[var(--glass-tile)]"
                 />
@@ -1209,7 +1209,7 @@ function buildRouteTrack(
   if (routePoints.length === 0) return null;
   return {
     id: String(activity.activity_id ?? activity.id ?? 'activity'),
-    color: '#A0432E',
+    color: '#9C49F5',
     width: 4,
     points: routePoints.map(([lng, lat]) => ({ lat, lng })),
   };

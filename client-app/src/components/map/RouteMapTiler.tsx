@@ -344,7 +344,7 @@ function ensurePulseStyles() {
 
 function hexToRgba(color: string, opacity: number): string {
   if (!color.startsWith('#') || (color.length !== 7 && color.length !== 4)) {
-    return 'rgba(232,158,90,.18)';
+    return 'rgba(156,73,245,.18)';
   }
   const hex =
     color.length === 4
@@ -393,7 +393,7 @@ function MapFallback({
         <path
           d="M 28 548 Q 55 522 82 494 Q 112 462 140 432 Q 165 404 188 372 Q 212 338 240 300 Q 268 260 294 225 Q 316 198 338 178 Q 356 164 372 156"
           fill="none"
-          stroke="#A0432E"
+          stroke="#9C49F5"
           strokeWidth="4"
           strokeLinecap="round"
           strokeLinejoin="round"

@@ -10,7 +10,7 @@ interface MiniAreaChartProps {
 
 export default function MiniAreaChart({
   data,
-  color = '#A0432E',
+  color = '#9C49F5',
   height = 64,
   className,
 }: MiniAreaChartProps) {

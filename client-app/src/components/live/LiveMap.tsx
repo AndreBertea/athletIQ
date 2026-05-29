@@ -10,7 +10,7 @@ export default function LiveMap({ points }: Props) {
   const track = useMemo<RouteMapTrack>(
     () => ({
       id: 'live-session',
-      color: '#A0432E',
+      color: '#9C49F5',
       width: 4,
       points: points
         .filter((point) => point.lat != null && point.lng != null)

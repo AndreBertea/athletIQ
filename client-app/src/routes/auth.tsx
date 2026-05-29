@@ -16,6 +16,7 @@ import { z } from 'zod'
 import { toast } from 'sonner'
 import { Eye, EyeOff, AlertCircle, Loader2 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
+import { useTheme } from 'next-themes'
 
 const loginSchema = z.object({
   email: z.string().email('Email invalide'),
@@ -39,7 +40,13 @@ export default function AuthRoute() {
   const [loading, setLoading] = useState(false)
 
   const { user, signIn, signUp, isLoading: authLoading } = useAuth()
+  const { resolvedTheme } = useTheme()
   const navigate = useNavigate()
+
+  // Icone AGON adaptee au theme : triangle blanc/fond navy en sombre,
+  // triangle fonce/fond clair en clair (sinon le badge clair jure sur le night).
+  const logoSrc =
+    resolvedTheme === 'light' ? '/agon-auth-light.png' : '/agon-auth-dark.png'
 
   const loginForm = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema as any),
@@ -81,19 +88,27 @@ export default function AuthRoute() {
   }
 
   return (
-    <div className="relative min-h-full w-full overflow-hidden bg-background">
-      {/* Gradient signature orange en fond */}
+    <div className="relative min-h-full w-full overflow-y-auto bg-background">
+      {/* Gradient signature violet en fond */}
       <div aria-hidden="true" className="bg-signature pointer-events-none absolute inset-0" />
 
-      <div className="relative z-10 mx-auto flex min-h-full w-full max-w-md flex-col justify-center px-6 py-10">
+      <div
+        className="relative z-10 mx-auto flex min-h-full w-full max-w-md flex-col justify-center px-6"
+        style={{
+          // Coiffe la notch / safe-area iOS pour que le logo reste visible,
+          // tout en gardant le contenu centre quand il y a de la place.
+          paddingTop: 'max(1.25rem, env(safe-area-inset-top))',
+          paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))',
+        }}
+      >
         {/* Logo + titre */}
-        <div className="mb-8 text-center">
+        <div className="mb-6 text-center">
           <img
-            src="/agon-auth.png"
+            src={logoSrc}
             alt="AGON"
-            className="mx-auto mb-5 h-24 w-24 rounded-3xl object-contain drop-shadow-[0_8px_32px_rgba(160,67,46,0.55)]"
+            className="mx-auto mb-4 h-20 w-20 rounded-3xl object-contain drop-shadow-[0_8px_32px_rgba(156,73,245,0.55)]"
           />
-          <h1 className="text-3xl font-extrabold text-foreground tracking-wide" style={{ fontFamily: 'var(--font-display)' }}>
+          <h1 className="text-2xl font-extrabold text-foreground tracking-wide" style={{ fontFamily: 'var(--font-display)' }}>
             {isSignup ? 'Creer un compte' : 'Bienvenue sur AGON'}
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
@@ -115,7 +130,7 @@ export default function AuthRoute() {
 
         {/* Card glass */}
         <form
-          className="glass space-y-5 rounded-2xl p-6"
+          className="glass space-y-4 rounded-2xl p-5"
           noValidate
           onSubmit={
             isSignup
@@ -223,7 +238,7 @@ export default function AuthRoute() {
           </button>
         </form>
 
-        <p className="mt-6 text-center text-xs text-muted-foreground">
+        <p className="mt-5 text-center text-xs text-muted-foreground">
           AGON PWA — connecte a Supabase.
         </p>
       </div>

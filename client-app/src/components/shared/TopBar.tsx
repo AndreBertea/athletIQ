@@ -108,7 +108,7 @@ export function TopBar({
           className={cn(
             'flex h-9 w-9 items-center justify-center overflow-hidden rounded-full',
             'bg-[var(--brand-primary)] text-sm font-semibold tracking-wide text-white',
-            'shadow-[0_0_0_1px_rgba(255,255,255,0.12),0_4px_12px_rgba(234,88,12,0.35)] transition',
+            'shadow-[0_0_0_1px_rgba(255,255,255,0.12),0_4px_12px_rgba(156,73,245,0.35)] transition',
             'hover:brightness-110',
           )}
         >

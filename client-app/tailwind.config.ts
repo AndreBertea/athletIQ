@@ -1,6 +1,6 @@
 /**
- * Tailwind config AGON — Direction Trail Organique.
- * Palette : terra red primary + moss + stone + sunset + deep night.
+ * Tailwind config AGON — Direction Violet.
+ * Palette : violet primary (logo) + moss + stone + orchid + deep night.
  */
 import type { Config } from 'tailwindcss'
 import forms from '@tailwindcss/forms'
@@ -40,19 +40,19 @@ const config: Config = {
           cyan: 'var(--brand-sunset)',
           coral: 'var(--brand-sunset)',
         },
-        // Palette primary 50-900 derivee de terra red #A0432E
+        // Palette primary 50-900 derivee du violet du logo #9C49F5
         primary: {
-          50: '#fdf3f0',
-          100: '#fae0d8',
-          200: '#f4bca9',
-          300: '#ec947a',
-          400: '#df694b',
-          500: '#c75636',
-          600: '#A0432E',   // <- AGON terra red
-          700: '#823525',
-          800: '#66291e',
-          900: '#4a1f17',
-          DEFAULT: '#A0432E',
+          50: '#f5eefe',
+          100: '#e9dbfd',
+          200: '#d4bafb',
+          300: '#be96f9',
+          400: '#ac73f7',
+          500: '#9C49F5',   // <- AGON violet (cercle du logo)
+          600: '#8a2be2',
+          700: '#7321c4',
+          800: '#5b1a9b',
+          900: '#421372',
+          DEFAULT: '#9C49F5',
         },
         success: {
           DEFAULT: 'var(--success)',

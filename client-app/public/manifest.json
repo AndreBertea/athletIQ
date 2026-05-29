@@ -6,7 +6,7 @@
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#191815",
-  "theme_color": "#A0432E",
+  "theme_color": "#9C49F5",
   "icons": [
     { "src": "/agon-app-icon.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "/agon-app-icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
