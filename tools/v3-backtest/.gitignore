@@ -1,0 +1,4 @@
+# Artefacts generes par le harness de backtest (ne pas committer)
+*.db
+*.json
+cache/

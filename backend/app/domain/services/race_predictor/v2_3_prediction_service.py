@@ -77,7 +77,9 @@ from app.domain.services.race_predictor.environment_service import (
 from app.domain.services.race_predictor.gpx_analyzer import analyze_gpx
 from app.domain.services.race_predictor.observation_aggregator import (
     aggregate_observations,
+    compute_kappa_flat,
 )
+from app.core.settings import get_settings
 from app.domain.services.race_predictor.physics_engine import (
     minetti_run_cost,
     predict_segments,
@@ -111,6 +113,13 @@ from app.domain.services.race_predictor.uncertainty_service import (
 logger = logging.getLogger(__name__)
 
 ENGINE_VERSION = "v2_3_1_bayesian"
+
+# V3 final — kappa(duree) : le headroom intensite-course (kappa_flat) est applique
+# en plein pour les efforts courts (<= T_FULL) et decroit lineairement vers 1.0
+# (aucun headroom) au-dela de T_ZERO, ou l'athlete court a sa puissance steady.
+# Calibre sur backtest leave-one-out + couverture P10/P90 (cf. tools/v3-backtest).
+KAPPA_DURATION_T_FULL_MIN: float = 150.0
+KAPPA_DURATION_T_ZERO_MIN: float = 420.0
 #: Engine label of the V2.3 release (pre-V2.3.1 fixes). Kept exported for the
 #: Analytics filter and migration scripts that still need to read predictions
 #: saved with the legacy label without flattening them to the V1 default.
@@ -894,6 +903,53 @@ def predict_v2_3(
     trail_surface_factor = (
         trail_cost_factor_mean if resolved_analysis_mode == "trail" else None
     )
+
+    # --- 7bis. V3 final : kappa(duree) ---------------------------------------
+    # Le headroom intensite-course (kappa_flat) est applique a p_run, module par
+    # la duree predite : plein pour les efforts courts, decroissant vers 1.0 pour
+    # les ultras (ou l'athlete court a sa puissance steady). Une pre-passe a kappa=1
+    # fournit la duree de reference (pas de circularite). Le posterior transmis au
+    # Monte Carlo est scale du meme facteur pour que P10/P90 suivent kappa_eff.
+    mc_calibration_posterior = p_ref_steady_posterior
+    if get_settings().RACE_PREDICTOR_KAPPA_DURATION:
+        kappa_info = compute_kappa_flat(
+            session, user_id, as_of_date=effective_as_of_date,
+            history_start_date=history_start_date,
+            excluded_activity_ids=excluded_set,
+        )
+        kappa_flat = float(kappa_info.get("kappa_flat") or 1.0)
+        calibration["kappa_flat"] = round(kappa_flat, 4)
+        calibration["kappa_flat_source"] = kappa_info.get("source")
+        if kappa_flat > 1.0:
+            try:
+                base_pass = predict_segments(
+                    segments, calibration=calibration, environment=environment,
+                    fatigue_profile=fatigue_profile, trail_surface_factor=trail_surface_factor,
+                    analysis_mode=resolved_analysis_mode, effort_mode=effort_mode,
+                )
+                t_base = float(base_pass["moving_time_min"])
+            except Exception:
+                t_base = 0.0
+            if t_base <= KAPPA_DURATION_T_FULL_MIN:
+                decay_f = 1.0
+            elif t_base >= KAPPA_DURATION_T_ZERO_MIN:
+                decay_f = 0.0
+            else:
+                decay_f = (KAPPA_DURATION_T_ZERO_MIN - t_base) / (
+                    KAPPA_DURATION_T_ZERO_MIN - KAPPA_DURATION_T_FULL_MIN
+                )
+            kappa_eff = 1.0 + (kappa_flat - 1.0) * decay_f
+            calibration["kappa_eff"] = round(kappa_eff, 4)
+            calibration["kappa_t_base_min"] = round(t_base, 1)
+            if kappa_eff > 1.0 and t_base > 0.0:
+                p_run_wkg = p_run_wkg * kappa_eff
+                p_run_std = p_run_std * kappa_eff
+                calibration["p_run_wkg"] = round(p_run_wkg, 3)
+                # Scale le posterior pour la coherence du Monte Carlo (P10/P90).
+                mc_calibration_posterior = dict(p_ref_steady_posterior)
+                mc_calibration_posterior["mean"] = float(p_ref_steady_posterior["mean"]) * kappa_eff
+                mc_calibration_posterior["std"] = float(p_ref_steady_posterior["std"]) * kappa_eff
+
     physics_result = predict_segments(
         segments,
         calibration=calibration,
@@ -957,7 +1013,7 @@ def predict_v2_3(
     )
     uncertainty = monte_carlo_uncertainty(
         gpx_analysis=gpx_analysis,
-        calibration_posterior=p_ref_steady_posterior,
+        calibration_posterior=mc_calibration_posterior,
         fatigue_posterior=durability_alpha_posterior,
         trail_factor_posterior=trail_cost_factor_posterior,
         environment=environment,

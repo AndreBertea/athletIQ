@@ -2139,6 +2139,89 @@ def _extract_flat_speed_samples_in_band(
     return samples
 
 
+# --- V3 final: kappa_flat (headroom intensite course sur le plat) -------------
+#: Bandes FC pour kappa_flat. REF = bande tempo Z3 (identique a p_ref).
+#: RACE = intensite course soutenue. kappa_flat = v_race / v_ref sur le plat.
+KAPPA_FLAT_REF_BAND: tuple[float, float] = (0.72, 0.78)
+KAPPA_FLAT_RACE_BAND: tuple[float, float] = (0.85, 0.90)
+#: Plafond de securite (anti sur-estimation pour les profils a tres grosse reserve).
+KAPPA_FLAT_CAP: float = 1.20
+#: Echantillons minimaux par bande, sinon kappa=1.0 (garde-fou nouveaux athletes).
+KAPPA_FLAT_MIN_SAMPLES: int = 200
+
+
+def compute_kappa_flat(
+    session,
+    user_id,
+    *,
+    as_of_date,
+    history_start_date=None,
+    excluded_activity_ids=None,
+) -> dict[str, Any]:
+    """Facteur personnel de headroom course sur le plat.
+
+    ``kappa_flat = median(vitesse plate en bande course) / median(vitesse plate
+    en bande tempo Z3)`` sur les activites ROUTE de reference. Mesure le rapport
+    entre l'allure course soutenue et l'allure de reference qui sert a p_ref.
+    Terrain-agnostique (meme filtre de pente que p_ref). Plafonne, et par defaut
+    1.0 quand le signal haute-intensite est trop maigre (nouvel athlete).
+    """
+    excluded_set = set(excluded_activity_ids or [])
+    lower = history_start_date or (as_of_date - timedelta(days=DEFAULT_HISTORY_WINDOW_DAYS))
+    if lower > as_of_date:
+        lower = as_of_date
+    activities = _fetch_user_activities(
+        session, user_id, as_of_date=as_of_date,
+        excluded_ids=excluded_set, history_start_date=lower,
+    )
+    validation = _fetch_validation_index(
+        session, user_id, activity_ids={a.id for a in activities if a.id is not None}
+    )
+    categorised: list[tuple[Activity, str]] = []
+    for activity in activities:
+        v = validation.get(activity.id) if activity.id else None
+        category = categorize_activity(activity, v)
+        if category == "non_scoring":
+            continue
+        categorised.append((activity, category))
+
+    fcmax = _estimate_fcmax_from_history(categorised, debug_trace={})
+    if not fcmax or not (110.0 <= float(fcmax) <= 230.0):
+        return {"kappa_flat": 1.0, "source": "no_fcmax"}
+
+    lo_r, hi_r = KAPPA_FLAT_REF_BAND[0] * fcmax, KAPPA_FLAT_REF_BAND[1] * fcmax
+    lo_c, hi_c = KAPPA_FLAT_RACE_BAND[0] * fcmax, KAPPA_FLAT_RACE_BAND[1] * fcmax
+    ref_speeds: list[float] = []
+    race_speeds: list[float] = []
+    for activity, _category in categorised:
+        if not _is_road_reference_activity(activity):
+            continue
+        streams = _normalize_streams(activity.streams_data)
+        if streams is None:
+            continue
+        ref_speeds.extend(
+            _extract_flat_speed_samples_in_band(activity, streams, low_hr=lo_r, high_hr=hi_r)
+        )
+        race_speeds.extend(
+            _extract_flat_speed_samples_in_band(activity, streams, low_hr=lo_c, high_hr=hi_c)
+        )
+
+    if len(ref_speeds) < KAPPA_FLAT_MIN_SAMPLES or len(race_speeds) < KAPPA_FLAT_MIN_SAMPLES:
+        return {
+            "kappa_flat": 1.0, "source": "insufficient_high_intensity_evidence",
+            "ref_samples": len(ref_speeds), "race_samples": len(race_speeds),
+            "fcmax_bpm": round(float(fcmax), 1),
+        }
+
+    kappa = statistics.median(race_speeds) / statistics.median(ref_speeds)
+    kappa = max(1.0, min(KAPPA_FLAT_CAP, kappa))
+    return {
+        "kappa_flat": round(kappa, 4), "source": "measured",
+        "ref_samples": len(ref_speeds), "race_samples": len(race_speeds),
+        "fcmax_bpm": round(float(fcmax), 1),
+    }
+
+
 def _build_p_ref_steady_observations(
     categorised: list[tuple[Activity, str]],
     *,

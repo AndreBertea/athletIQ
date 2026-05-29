@@ -101,6 +101,10 @@ class Settings(BaseSettings):
         description="URL de connexion Redis (requis en production pour les quotas Strava)"
     )
 
+    # Race Predictor V3 final : applique kappa(duree) (headroom intensite course
+    # decroissant avec la duree). Desactivable via env pour comparer V3 prec./finale.
+    RACE_PREDICTOR_KAPPA_DURATION: bool = Field(default=True)
+
     # Application
     DEBUG: bool = Field(default=False)
     ENVIRONMENT: str = Field(default="development")
