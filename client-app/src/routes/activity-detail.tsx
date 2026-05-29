@@ -121,10 +121,6 @@ export default function ActivityDetailRoute() {
     () => (activity ? buildRouteTrack(activity, streamsQuery.data?.streams) : null),
     [activity, streamsQuery.data?.streams],
   );
-  const peakElevation = useMemo(
-    () => resolvePeakElevation(streamData, activity),
-    [activity, streamData],
-  );
   const sport = activity ? getSportPresentation(activity.sport_type) : null;
   const pace = activity ? speedToPace(activity.avg_speed_m_s ?? activity.avg_speed_mps ?? null) : null;
   const weather = weatherEnrich.data ?? weatherQuery.data;
@@ -158,15 +154,12 @@ export default function ActivityDetailRoute() {
             </button>
 
             <div className="absolute left-6 top-[calc(max(14px,env(safe-area-inset-top))+50px)] z-[5]">
-              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.09em] text-[var(--glass-panel-muted)]">
-                Altitude max
-              </p>
               <p className="font-display text-[42px] font-medium leading-none tracking-tight text-[var(--glass-panel-fg)]">
-                {peakElevation != null ? Math.round(peakElevation) : '—'}{' '}
-                <span className="text-lg font-normal text-[var(--glass-panel-muted)]">m</span>
+                {formatDistance(activity.distance_m)}{' '}
+                <span className="text-lg font-normal text-[var(--glass-panel-muted)]">km</span>
               </p>
-              <p className="mt-2 text-[15px] font-semibold text-brand-primary">
-                ▲ {activity.elev_gain_m != null ? Math.round(activity.elev_gain_m) : 0} m D+
+              <p className="mt-2 text-[15px] font-semibold text-[var(--glass-panel-muted)]">
+                {formatDuration(activity.moving_time_s)}
               </p>
             </div>
 
@@ -208,7 +201,11 @@ export default function ActivityDetailRoute() {
               </div>
 
               <div className="grid shrink-0 grid-cols-[1fr_1px_1fr] px-7 pb-3 pt-4">
-                <ActivityHeroMetric label="Distance" value={formatDistance(activity.distance_m)} unit="KM" />
+                <ActivityHeroMetric
+                  label="Rythme moyen"
+                  value={pace ? formatPace(pace).replace('/km', '') : '—'}
+                  unit="/KM"
+                />
                 <div className="bg-[var(--glass-panel-border)]" />
                 <ActivityHeroMetric
                   label="D+"
@@ -1225,16 +1222,6 @@ function buildRouteTrack(
   };
 }
 
-function resolvePeakElevation(
-  streamData: StreamPoint[],
-  activity: EnrichedActivity | undefined,
-): number | null {
-  const altitudeValues = streamData
-    .map((point) => point.altitude)
-    .filter((value): value is number => value != null && Number.isFinite(value));
-  if (altitudeValues.length > 0) return Math.max(...altitudeValues);
-  return activity?.elev_gain_m ?? null;
-}
 
 function decodePolyline(encoded: string): [number, number][] {
   let index = 0;
