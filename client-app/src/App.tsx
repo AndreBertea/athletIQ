@@ -43,6 +43,7 @@ import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { useProfile } from '@/hooks/useProfile';
 import { supabase } from '@/lib/supabase';
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
+import { PageTransition } from '@/components/shared/PageTransition';
 import AuthRoute from '@/routes/auth';
 import OnboardingRoute from '@/routes/onboarding';
 import CheckinRoute from '@/routes/checkin';
@@ -171,7 +172,7 @@ function RouteDispatcher() {
     return <Navigate to="/onboarding" replace />;
   }
 
-  return <Outlet />;
+  return <PageTransition />;
 }
 
 function RouteFallback() {
