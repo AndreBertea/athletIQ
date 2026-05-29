@@ -1176,7 +1176,15 @@ function buildRoutePoints(
   streams?: ActivityStreamsResponse['streams'],
 ): [number, number][] {
   const latlng = streamArray<[number, number]>(streams?.latlng)
-    .filter(([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng))
+    // Les streams GPS réels contiennent des trous : certains éléments sont
+    // `null`. On valide la paire AVANT de la déstructurer, sinon
+    // `const [lat, lng] = null` jette "object null is not iterable".
+    .filter(
+      (pair): pair is [number, number] =>
+        Array.isArray(pair) &&
+        Number.isFinite(pair[0]) &&
+        Number.isFinite(pair[1]),
+    )
     .map(([lat, lng]) => [lng, lat] as [number, number]);
   if (latlng.length > 1) return latlng;
 
